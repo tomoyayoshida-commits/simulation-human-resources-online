@@ -1,0 +1,34 @@
+{
+  "name": "simulation-human-resources",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build && electron-builder",
+    "preview": "vite preview",
+    "test": "node --experimental-strip-types --test test/*.test.ts",
+    "lint": "oxlint"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "electron": "^43.4.0",
+    "electron-builder": "^26.15.3",
+    "oxlint": "^1.78.0",
+    "typescript": "~6.0.3",
+    "vite": "^8.2.1",
+    "vite-plugin-electron": "^1.1.1"
+  },
+  "build": {
+    "appId": "com.pathoslogos.simulation-human-resources",
+    "productName": "人材配置シミュレーター",
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*"
+    ],
+    "directories": {
+      "output": "release"
+    }
+  }
+}
