@@ -12,7 +12,9 @@
 ## 2. 何を作っているか
 
 100名（採用後110名）を A/B/C 事業部へ配置し、売上・利益を最適化するデスクトップアプリ。
-Electron + TypeScript。**外部API・ネットワーク通信・数理最適化ライブラリは使わない**（課題の絶対制約）。
+Electron + TypeScript。**外部API・ネットワーク通信は行わない／数理最適化ライブラリは本番コードで使わない**。
+※これは**課題の制約ではなく自主的な設計判断**（出典 `設計書_AI向け.md:11`「サイズが小さく自前実装で十分高速」）。
+課題原文の「制約条件」は全社売上>58億と各事業部の最低人数の2つのみ。変更したい場合は禁止事項ではなく §9 の再合意対象。
 「配置結果」に加え「配置方針とその理由」の出力が評価対象。
 
 ## 3. 開発環境
@@ -29,7 +31,7 @@ Electron + TypeScript。**外部API・ネットワーク通信・数理最適化
 | コマンド | 内容 |
 |---|---|
 | `npm run dev` | Vite + Electron 起動（WSLg 経由で Windows 側に表示）。HMR あり |
-| `npm test` | `node:test` + 型ストリップ。全20件・約11秒 |
+| `npm test` | `node:test` + 型ストリップ。全30件・約17秒 |
 | `npm run test:one -- --test-name-pattern='<正規表現>' <ファイル>` | 1件だけ実行。約0.1秒。例：`npm run test:one -- --test-name-pattern='境界は上側' test/calcEngine.test.ts`。注意は§8 |
 | `npm run lint` | oxlint |
 | `npm run build` | `tsc -b` → `vite build` → `electron-builder`（**未実行**） |
@@ -38,23 +40,24 @@ Electron + TypeScript。**外部API・ネットワーク通信・数理最適化
 
 ```
 src/
-  main/main.ts          38行  Electronエントリ。BrowserWindow生成のみ。IPC・ファイルI/Oなし
+  main/main.ts          55行  Electronエントリ。BrowserWindow生成のみ。IPC・ファイルI/Oなし
   renderer/
-    index.html         354行  画面骨格。#p0〜#p5 の6パネル（モックv2から移植）
-    styles.css         111行  モック由来のスタイル
-    renderer.ts        176行  ★結線層。状態保持・画面遷移go()・CSV取込UI・実行/出力ボタン
+    index.html         198行  画面骨格。#p0〜#p5 の6パネル（モック由来の静的サンプル値は撤去し「未実行」プレースホルダに置換済み）
+    styles.css         120行  モック由来のスタイル
+    renderer.ts        222行  ★結線層。状態保持・画面遷移go()・CSV取込UI・実行/出力ボタン
     types.ts            58行  型定義のみ
     constants.ts        77行  ★全定数の単一の置き場。重み・売上・ペナルティ表・COLUMN_MAP・round2()
-    csv.ts             152行  CSVパース/エクスポート/採用データマージ
-    validation.ts       57行  範囲・件数チェック。ValidationError[]を返す純粋関数
+    csv.ts             161行  CSVパース/エクスポート/採用データマージ
+    validation.ts       74行  範囲・件数チェック。ValidationError[]を返す純粋関数
     calcEngine.ts      150行  ★貢献度→能力値→売上→コスト→利益。全て純粋関数
     assignment.ts      149行  最小費用流(SSP+Johnsonポテンシャル+Dijkstra)。内側の割当を厳密解
-    optimizer.ts       134行  ★人数配分の全列挙×割当。課題1〜4の目的関数と辞書式合成
+    optimizer.ts       194行  ★人数配分の全列挙×割当。課題1〜4の目的関数と辞書式合成
     reasonText.ts       45行  配置方針テキスト生成
-    dashboard.ts       190行  #p3 のDOM更新
-    compareTasks.ts    117行  #p4 の4課題横断比較カード
-    compareHiring.ts    72行  #p5 の採用前後比較＋ROI表
-test/                          node:test。calcEngine / csv / optimizer の3ファイル・20テスト
+    dashboard.ts       221行  #p3 のDOM更新
+    compareTasks.ts    165行  #p4 の4課題横断比較カード。事業部別バーは売上/利益の切替式（docs/solver-oracle-plan.mdとは無関係、A-1のUI改善）
+    compareHiring.ts    75行  #p5 の採用前後比較＋ROI表
+test/                          node:test。calcEngine / csv / optimizer / assignment.oracle の4ファイル・30テスト
+  helpers/lpOracle.ts          assignment.oracle 用のHiGHS(MILP)ラッパー（テスト専用。src/からimportしない）
 ```
 
 - ★＝ロジックの中核。仕様変更時はまずこの4ファイルを見る。
@@ -93,9 +96,14 @@ test/                          node:test。calcEngine / csv / optimizer の3フ�
 - **コストの単位換算**：人件費(1〜20)は百万円、売上は億円。`COST_UNIT_DIVISOR = 100` で換算する。
   忘れると全社利益が -2000億円級の赤字になる（実データで発生済み）。
   適用箇所は `calcEngine.unitCostTotal` / `optimizer.profitValue` / `compareHiring` のROI表の3つ。
+  （`optimizer.profitValue` は事前計算した `EmployeeBase.cost`（生の人件費）を受け取り、除算はこの関数内で行う）
   **人件費に触るコードを書くときは必ずこの除算を通す。**
 - **CSVヘッダは「社員番号」**（「社員ID」ではない）。`COLUMN_MAP` が単一の参照点。
-- **最適化は遅い**：4課題で約10秒。高速化案は `設計書_AI向け.md §5.3`。着手時は現行実装との結果一致をテストで確認してから差し替える。
+- **最適化の速度は解決済み**：実データ4課題で**約1.2秒**（課題1 329ms / 2 112ms / 3 137ms / 4 573ms、110名の課題1 449ms）。
+  `docs/pruning-plan.md` の branch-and-bound で約10秒から短縮済み。「10秒かかる」は枝刈り導入前の古い情報。
+  `npm test` の18秒はアプリではなく `枝刈り…完全一致` テスト1本（**15.5秒**）が占める。基準実装 `bruteForceOptimize` が枝刈りなしで861候補×MCMFを回すため。
+  CPUプロファイル内訳：`MinCostFlow.run` 60% / `upperBoundRawTotal` 11% / `buildValues` 10% / GC 6%。
+  **pruning-plan.md の①貢献度の事前計算は実装済み**（`optimizer.buildEmployeeBases`）。**②UBのquickselect化は未実装**（`upperBoundRawTotal` は今も全ソート）。さらに縮めるならここ。
 - **`--test-name-pattern` はマッチ0件でも exit 0**（§4 `test:one`）。1件も実行されていないのに成功に見える。
   出力の `✔ <テスト名>` で狙ったテストが実際に走ったことを毎回確認する。
   - パターンは**正規表現**。テスト名の**半角**括弧はエスケープが要る：`全探索\(5名` か `全探索.5名`。

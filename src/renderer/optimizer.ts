@@ -8,8 +8,23 @@ import type {
   TaskId,
   UnitId,
 } from './types.ts'
-import { BASE_REVENUE, COST_MULTIPLIER, COST_UNIT_DIVISOR, GROWTH, MIN_HEADCOUNT, UNIT_IDS } from './constants.ts'
-import { computeSimulationResult, contribution, fulfillmentRate, shortageFactor, surplusFactor } from './calcEngine.ts'
+import {
+  BASE_REVENUE,
+  COST_MULTIPLIER,
+  COST_UNIT_DIVISOR,
+  GROWTH,
+  MIN_HEADCOUNT,
+  TASK_SPEC,
+  UNIT_IDS,
+} from './constants.ts'
+import {
+  computeSimulationResult,
+  contribution,
+  fulfillmentRate,
+  shortageFactor,
+  surplusFactor,
+  taskPrimaryValue,
+} from './calcEngine.ts'
 import { solveAssignment } from './assignment.ts'
 
 /** 辞書式合成の重み（§5.1）。primary の1単位差を secondary 総和が覆さない大きさ。 */
@@ -48,44 +63,64 @@ function effectiveFactors(counts: AllocationCounts): Record<UnitId, number> {
   return f
 }
 
+/**
+ * 人数配分に依存しない社員ごとの値を1回だけ計算したもの（docs/pruning-plan.md ①）。
+ *
+ * `contribution(e,unit)` は人数配分と無関係（重みと能力値だけで決まる）にもかかわらず、
+ * 従来は候補ごとに buildValues の中から呼び直していた。100名×3事業部×861候補×4課題で
+ * 約100万回の再計算になっていたため、runOptimization の先頭で1度だけ求めて使い回す。
+ */
+interface EmployeeBase {
+  id: string
+  /** contribution(e, unit) の事前計算値 */
+  contrib: Record<UnitId, number>
+  /** 人件費（生値。億円換算は profitValue が行う） */
+  cost: number
+}
+
+function buildEmployeeBases(employees: Employee[]): EmployeeBase[] {
+  return employees.map((e) => {
+    const contrib: Record<UnitId, number> = { A: 0, B: 0, C: 0 }
+    for (const unit of UNIT_IDS) contrib[unit] = contribution(e, unit)
+    return { id: e.id, contrib, cost: e.cost }
+  })
+}
+
 /** 売上寄与（§5.1） */
-function revValue(e: Employee, unit: UnitId, effFactor: number): number {
-  return (BASE_REVENUE[unit] * GROWTH[unit]) / 100 * effFactor * contribution(e, unit)
+function revValue(base: EmployeeBase, unit: UnitId, effFactor: number): number {
+  return (BASE_REVENUE[unit] * GROWTH[unit]) / 100 * effFactor * base.contrib[unit]
 }
 
 /** 利益寄与（§5.1）。コストは calcEngine.unitCostTotal と同じ換算（÷COST_UNIT_DIVISOR）で億円に揃える。 */
-function profitValue(e: Employee, unit: UnitId, effFactor: number): number {
-  return revValue(e, unit, effFactor) - (e.cost * COST_MULTIPLIER) / COST_UNIT_DIVISOR
+function profitValue(base: EmployeeBase, unit: UnitId, effFactor: number): number {
+  return revValue(base, unit, effFactor) - (base.cost * COST_MULTIPLIER) / COST_UNIT_DIVISOR
 }
 
 /**
  * 課題ごとの割当価値 value(i,X)（§5.1）を辞書式スカラーに合成して返す。
  * value = primary * LEX_WEIGHT + secondary
+ *
+ * 課題1（targetUnit=null）は全事業部の売上がそのまま primary で secondary を持たない。
+ * 課題2〜4 は対象事業部だけが primary を持ち、全事業部が secondary＝全社売上で評価される
+ * （§7-1：目的外事業部を価値0で放置すると顔ぶれが無差別になり制約判定がブレるため）。
  */
 function buildValues(
-  employees: Employee[],
+  bases: EmployeeBase[],
   task: TaskId,
   eff: Record<UnitId, number>,
 ): Record<string, Record<UnitId, number>> {
+  const { targetUnit, metric } = TASK_SPEC[task]
   const values: Record<string, Record<UnitId, number>> = {}
-  for (const e of employees) {
+  for (const base of bases) {
     const perUnit: Record<UnitId, number> = { A: 0, B: 0, C: 0 }
     for (const unit of UNIT_IDS) {
-      const rev = revValue(e, unit, eff[unit])
-      let primary: number
-      let secondary: number
-      if (task === 1) {
-        primary = rev
-        secondary = 0
-      } else {
-        secondary = rev // 全事業部共通で全社売上を第2優先
-        if (task === 2) primary = unit === 'A' ? profitValue(e, 'A', eff.A) : 0
-        else if (task === 3) primary = unit === 'B' ? rev : 0
-        else primary = unit === 'C' ? rev : 0
-      }
+      const rev = revValue(base, unit, eff[unit])
+      const isTarget = targetUnit === null || unit === targetUnit
+      const primary = !isTarget ? 0 : metric === 'profit' ? profitValue(base, unit, eff[unit]) : rev
+      const secondary = targetUnit === null ? 0 : rev
       perUnit[unit] = primary * LEX_WEIGHT + secondary
     }
-    values[e.id] = perUnit
+    values[base.id] = perUnit
   }
   return values
 }
@@ -98,13 +133,13 @@ function buildValues(
  * 有効な上界（＝ rawTotal(assignment) の上界。定数項は含まない。下の shiftConstant 参照）。
  */
 function upperBoundRawTotal(
-  employees: Employee[],
+  bases: EmployeeBase[],
   values: Record<string, Record<UnitId, number>>,
   counts: AllocationCounts,
 ): number {
   let total = 0
   for (const u of UNIT_IDS) {
-    const perUnit = employees.map((e) => values[e.id][u]).sort((a, b) => b - a)
+    const perUnit = bases.map((b) => values[b.id][u]).sort((a, b) => b - a)
     const take = counts[u]
     for (let i = 0; i < take && i < perUnit.length; i++) total += perUnit[i]
   }
@@ -127,30 +162,12 @@ function upperBoundRawTotal(
  */
 function shiftConstant(task: TaskId, eff: Record<UnitId, number>): number {
   const constAll = UNIT_IDS.reduce((sum, u) => sum + eff[u] * BASE_REVENUE[u], 0)
-  switch (task) {
-    case 1:
-      return constAll * LEX_WEIGHT
-    case 2:
-      return eff.A * BASE_REVENUE.A * LEX_WEIGHT + constAll
-    case 3:
-      return eff.B * BASE_REVENUE.B * LEX_WEIGHT + constAll
-    case 4:
-      return eff.C * BASE_REVENUE.C * LEX_WEIGHT + constAll
-  }
-}
-
-/** 課題の primary 指標（表示・選択用）を SimulationResult から取り出す */
-function primaryMetric(result: SimulationResult, task: TaskId): number {
-  switch (task) {
-    case 1:
-      return result.companyRevenue
-    case 2:
-      return result.units.A.profit
-    case 3:
-      return result.units.B.finalRevenue
-    case 4:
-      return result.units.C.finalRevenue
-  }
+  const { targetUnit } = TASK_SPEC[task]
+  // 課題2の primary は A利益だが、コストに定数項は無い（全額が社員ごとの値）ため
+  // 定数項は売上と同じ eff×BASE_REVENUE でよい。よって metric による分岐は要らない。
+  return targetUnit === null
+    ? constAll * LEX_WEIGHT
+    : eff[targetUnit] * BASE_REVENUE[targetUnit] * LEX_WEIGHT + constAll
 }
 
 /**
@@ -167,6 +184,9 @@ export function runOptimization(
     return { infeasible: true, reason: 'min_headcount' }
   }
 
+  // 人数配分に依存しない値は候補ループの外で1回だけ求める（docs/pruning-plan.md ①）
+  const bases = buildEmployeeBases(employees)
+
   let best: SimulationResult | null = null
   let bestKey: { primary: number; secondary: number; nA: number; nB: number } | null = null
   let bestScalar = -Infinity
@@ -179,9 +199,9 @@ export function runOptimization(
   // 小さくなるため打ち切ってよい。
   const prepared = candidates.map((counts) => {
     const eff = effectiveFactors(counts)
-    const values = buildValues(employees, task, eff)
-    const ub = upperBoundRawTotal(employees, values, counts) + shiftConstant(task, eff)
-    return { counts, eff, values, ub }
+    const values = buildValues(bases, task, eff)
+    const ub = upperBoundRawTotal(bases, values, counts) + shiftConstant(task, eff)
+    return { counts, values, ub }
   })
   prepared.sort((a, b) => b.ub - a.ub)
 
@@ -209,7 +229,7 @@ export function runOptimization(
     if (!result.feasible) continue
 
     const key = {
-      primary: primaryMetric(result, task),
+      primary: taskPrimaryValue(result, task),
       secondary: result.companyRevenue,
       nA: counts.A,
       nB: counts.B,

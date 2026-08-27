@@ -1,7 +1,7 @@
 // 設計書§9: 配置方針テキスト生成
 
 import type { SimulationResult, TaskId, UnitId } from './types.ts'
-import { OPTIMAL_HEADCOUNT, PREV_YEAR_REVENUE, round2, TASK_LABELS } from './constants.ts'
+import { OPTIMAL_HEADCOUNT, PREV_YEAR_REVENUE, round2, TASK_LABELS, taskTargetLabel } from './constants.ts'
 
 const UNIT_LABEL: Record<UnitId, string> = { A: 'A事業部', B: 'B事業部', C: 'C事業部' }
 
@@ -43,13 +43,8 @@ export function generateReasonText(result: SimulationResult, task: TaskId): stri
 
   // 4. 課題2〜4は辞書式方針の説明
   if (task !== 1) {
-    const target: Record<Exclude<TaskId, 1>, string> = {
-      2: 'A事業部の利益',
-      3: 'B事業部の売上',
-      4: 'C事業部の売上',
-    }
     bullets.push(
-      `本配置は${target[task]}を最優先で最大化したうえで、残りの人員は全社売上が最大となるよう配置している（目的外事業部を放置せず、二次目的として全社売上を確保）。`,
+      `本配置は${taskTargetLabel(task)}を最優先で最大化したうえで、残りの人員は全社売上が最大となるよう配置している（目的外事業部を放置せず、二次目的として全社売上を確保）。`,
     )
   }
 

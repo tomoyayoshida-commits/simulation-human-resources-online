@@ -8,6 +8,7 @@
 </head>
 <body>
 <div class="topbar">
+  <img class="brand-icon" src="./assets/samurai-fullmoon.png" alt="">
   <h1>人材配置<br>シミュレーター</h1>
   <button class="phasebtn active" data-tab="p0"><span class="num">🏠</span>トップ</button>
   <button class="phasebtn" data-tab="p1"><span class="num">1</span>データ取込</button>
@@ -61,25 +62,18 @@
     <div class="card">
       <table id="preview-100">
         <tr><th>社員ID</th><th class="num">営業力</th><th class="num">管理力</th><th class="num">開拓力</th><th class="num">育成力</th><th class="num">人件費</th></tr>
-        <tr><td>E001</td><td class="num">78</td><td class="num">62</td><td class="num">40</td><td class="num">55</td><td class="num">14</td></tr>
-        <tr><td>E002</td><td class="num">35</td><td class="num">28</td><td class="num">88</td><td class="num">30</td><td class="num">9</td></tr>
-        <tr><td>E003</td><td class="num">60</td><td class="num">70</td><td class="num">20</td><td class="num">45</td><td class="num">12</td></tr>
-        <tr><td>E004</td><td class="num">92</td><td class="num">40</td><td class="num">35</td><td class="num">25</td><td class="num">16</td></tr>
-        <tr><td>E005</td><td class="num">44</td><td class="num">33</td><td class="num">30</td><td class="num">81</td><td class="num">8</td></tr>
       </table>
     </div>
 
     <div class="section-title"><span class="addon-tag">追加機能 D-2</span>入力検証レポート</div>
     <div class="stat-row" id="validation-summary">
-      <div class="stat"><div class="k">取込件数</div><div class="v">100 / 100</div></div>
-      <div class="stat"><div class="k">エラー件数</div><div class="v" style="color:var(--critical);">2</div></div>
-      <div class="stat"><div class="k">判定</div><div class="v"><span class="pill crit">取込を保留</span></div></div>
+      <div class="stat"><div class="k">取込件数</div><div class="v">0 / 100</div></div>
+      <div class="stat"><div class="k">エラー件数</div><div class="v">0</div></div>
+      <div class="stat"><div class="k">判定</div><div class="v"><span class="pill warn">未取込</span></div></div>
     </div>
     <div class="card">
       <table class="errtable" id="validation-errors">
         <tr><th>行番号</th><th>社員ID</th><th>カラム</th><th class="num">実測値</th><th>期待範囲</th></tr>
-        <tr><td>37</td><td>E037</td><td>営業力</td><td class="num err">108</td><td>0〜100</td></tr>
-        <tr><td>82</td><td>E082</td><td>人件費</td><td class="num err">0</td><td>1〜20</td></tr>
       </table>
       <p class="note">エラー行が1件でもある場合、次のステップ（課題選択・実行）には進めない。該当行を修正して再取込。</p>
     </div>
@@ -103,14 +97,12 @@
   <!-- 3. 結果ダッシュボード（すべて1画面に集約） -->
   <section class="panel" id="p3">
     <h2>③ 結果ダッシュボード</h2>
-    <p class="subtitle" id="dashboard-subtitle">選択課題：<b>チェックパターン1（全社売上最大化）</b>の結果を、配置〜方針まで1画面で確認する</p>
+    <p class="subtitle" id="dashboard-subtitle">未実行：②で課題を選択し、シミュレーションを実行すると結果が表示される</p>
     <div class="hint">💡 ここが「結果」に関する情報のすべて。スクロールして配置人数→売上利益→制約→充足率→方針→CSV出力まで一続きで確認できる（画面遷移なし）。</div>
 
     <div class="section-title">全社サマリー</div>
     <div class="stat-row" id="company-summary">
-      <div class="stat"><div class="k">全社売上</div><div class="v">64.3億円</div><div class="d good">前年度比 +6.3億円</div></div>
-      <div class="stat"><div class="k">全社利益</div><div class="v">41.7億円</div><div class="d">コスト計 22.6億円</div></div>
-      <div class="stat"><div class="k">制約判定</div><div class="v"><span class="pill good">● すべて満たす</span></div></div>
+      <div class="stat"><div class="k">判定</div><div class="v"><span class="pill warn">未実行</span></div></div>
     </div>
 
     <div class="section-title">配置人数・タイプ別内訳</div>
@@ -121,95 +113,40 @@
         <span><i class="dot" style="background:var(--c);"></i>C事業部</span>
       </div>
       <div id="headcount-bars">
-        <div class="bar-row"><span class="label">A事業部</span><div class="bar-track"><div class="bar-fill" style="width:40%;background:var(--a);"></div></div><span class="val">40名（適正40）</span></div>
-        <div class="bar-row"><span class="label">B事業部</span><div class="bar-track"><div class="bar-fill" style="width:35%;background:var(--b);"></div></div><span class="val">35名（適正35）</span></div>
-        <div class="bar-row"><span class="label">C事業部</span><div class="bar-track"><div class="bar-fill" style="width:25%;background:var(--c);"></div></div><span class="val">25名（適正25）</span></div>
+        <p class="note">未実行</p>
       </div>
       <table style="margin-top:14px;" id="type-breakdown">
         <tr><th>事業部</th><th class="num">配置人数</th><th class="num">営業型</th><th class="num">管理型</th><th class="num">開拓型</th><th class="num">育成型</th></tr>
-        <tr><td>A事業部</td><td class="num">40</td><td class="num">22</td><td class="num">14</td><td class="num">2</td><td class="num">2</td></tr>
-        <tr><td>B事業部</td><td class="num">35</td><td class="num">13</td><td class="num">6</td><td class="num">12</td><td class="num">4</td></tr>
-        <tr><td>C事業部</td><td class="num">25</td><td class="num">4</td><td class="num">3</td><td class="num">15</td><td class="num">3</td></tr>
       </table>
     </div>
 
     <div class="section-title">事業部別 売上・利益</div>
     <div class="card" id="unit-revenue-profit">
-      <div class="bar-row"><span class="label">A 売上</span><div class="bar-track"><div class="bar-fill" style="width:50%;background:var(--a);"></div></div><span class="val">32.4億円</span></div>
-      <div class="bar-row"><span class="label">B 売上</span><div class="bar-track"><div class="bar-fill" style="width:37%;background:var(--b);"></div></div><span class="val">24.1億円</span></div>
-      <div class="bar-row"><span class="label">C 売上</span><div class="bar-track"><div class="bar-fill" style="width:12%;background:var(--c);"></div></div><span class="val">7.8億円</span></div>
-      <div style="height:10px;"></div>
-      <div class="bar-row"><span class="label">A 利益</span><div class="bar-track"><div class="bar-fill" style="width:52%;background:var(--a);opacity:.6;"></div></div><span class="val">21.6億円</span></div>
-      <div class="bar-row"><span class="label">B 利益</span><div class="bar-track"><div class="bar-fill" style="width:38%;background:var(--b);opacity:.6;"></div></div><span class="val">15.5億円</span></div>
-      <div class="bar-row"><span class="label">C 利益</span><div class="bar-track"><div class="bar-fill" style="width:10%;background:var(--c);opacity:.6;"></div></div><span class="val">4.6億円</span></div>
+      <p class="note">未実行</p>
     </div>
 
     <div class="section-title">制約条件チェック <span class="addon-tag" style="margin-left:2px;">＋B-2 余裕表示</span></div>
     <div class="card">
       <table id="constraint-check">
         <tr><th>制約</th><th>基準</th><th>結果</th><th>余裕</th><th>判定</th></tr>
-        <tr><td>全社売上</td><td>58.0億円超</td><td>64.3億円</td><td style="color:#006300;">+6.3億円</td><td><span class="pill good">● 満たす</span></td></tr>
-        <tr><td>A事業部 最低人数</td><td>30名以上</td><td>40名</td><td>+10名</td><td><span class="pill good">● 満たす</span></td></tr>
-        <tr><td>B事業部 最低人数</td><td>20名以上</td><td>35名</td><td>+15名</td><td><span class="pill good">● 満たす</span></td></tr>
-        <tr><td>C事業部 最低人数</td><td>10名以上</td><td>25名</td><td style="color:var(--warning);">+3名（注意）</td><td><span class="pill good">● 満たす</span></td></tr>
       </table>
       <p class="note">制約に違反する場合はこの表の該当行が赤警告となり、原因（最低人数／全社売上のどちらがボトルネックか）をここに表示する。</p>
     </div>
 
     <div class="section-title"><span class="addon-tag">追加機能 B-1</span>充足率・ペナルティ帯</div>
     <div class="card" id="fulfillment-gauges">
-      <div class="gauge-title">A事業部（飽和）　充足率 100% → 不足補正1.00／過剰補正1.00</div>
-      <div class="meter">
-        <div class="seg" style="width:20%;background:var(--critical);"></div>
-        <div class="seg" style="width:15%;background:var(--serious);"></div>
-        <div class="seg" style="width:10%;background:var(--warning);"></div>
-        <div class="seg" style="width:15%;background:#cfe8cf;"></div>
-        <div class="seg" style="width:40%;background:var(--good);"></div>
-        <div class="marker" style="left:60%;" data-label="現在 100%"></div>
-      </div>
-      <div class="band-labels"><span>&lt;70%（0.30）</span><span>70%（0.50）</span><span>80%（0.70）</span><span>90%（0.85）</span><span>100%以上（1.00）</span></div>
-
-      <div class="gauge-title">B事業部（成長）　充足率 100% → 不足補正1.00／過剰補正1.00</div>
-      <div class="meter">
-        <div class="seg" style="width:20%;background:var(--critical);"></div>
-        <div class="seg" style="width:15%;background:var(--serious);"></div>
-        <div class="seg" style="width:10%;background:var(--warning);"></div>
-        <div class="seg" style="width:15%;background:#cfe8cf;"></div>
-        <div class="seg" style="width:40%;background:var(--good);"></div>
-        <div class="marker" style="left:60%;" data-label="現在 100%"></div>
-      </div>
-      <div class="band-labels"><span>&lt;70%（0.50）</span><span>70%（0.65）</span><span>80%（0.80）</span><span>90%（0.90）</span><span>100%以上（1.00）</span></div>
-
-      <div class="gauge-title">C事業部（新規）　充足率 100% → 不足補正1.00／過剰補正1.00</div>
-      <div class="meter">
-        <div class="seg" style="width:20%;background:var(--serious);"></div>
-        <div class="seg" style="width:15%;background:var(--warning);"></div>
-        <div class="seg" style="width:10%;background:#f6e6b4;"></div>
-        <div class="seg" style="width:15%;background:#cfe8cf;"></div>
-        <div class="seg" style="width:40%;background:var(--good);"></div>
-        <div class="marker" style="left:60%;" data-label="現在 100%"></div>
-      </div>
-      <div class="band-labels"><span>&lt;70%（0.70）</span><span>70%（0.80）</span><span>80%（0.90）</span><span>90%（0.95）</span><span>100%以上（1.00）</span></div>
-      <p class="note">帯の境界付近（例：89%→90%）にある事業部は強調表示し、1名の増減が売上に与える影響を注意喚起する。</p>
+      <p class="note">未実行</p>
     </div>
 
     <div class="section-title">配置方針・理由</div>
     <div class="reason-box" id="reason-box">
-      <ul>
-        <li>各事業部を適正人数（A:40／B:35／C:25）に一致させ、不足・過剰ペナルティを共に発生させない配置とした。</li>
-        <li>営業力・管理力に優れる社員を優先的にA事業部へ、開拓力に優れる社員をC事業部へ配置し、事業部別評価重みに沿った貢献度の最大化を図った。</li>
-        <li>全社売上64.3億円は前年度売上（58.0億円）を6.3億円上回り、制約条件を満たしている。</li>
-        <li>C事業部は最低人数（10名）に対して余裕が3名と小さいため、欠員時は速やかな補充を推奨する。</li>
-      </ul>
+      <p class="note">未実行：シミュレーションを実行すると配置方針が表示される。</p>
     </div>
 
     <div class="section-title">配置結果の出力</div>
     <div class="card">
       <table id="assignment-preview">
         <tr><th>社員ID</th><th>配置先事業部</th><th class="num">貢献度</th><th>タイプ（参考）</th></tr>
-        <tr><td>E001</td><td>A事業部</td><td class="num">63.4</td><td>営業型</td></tr>
-        <tr><td>E002</td><td>C事業部</td><td class="num">55.1</td><td>開拓型</td></tr>
-        <tr><td>E003</td><td>A事業部</td><td class="num">58.0</td><td>管理型</td></tr>
       </table>
       <div style="margin-top:12px;"><button class="btn" id="export-csv">配置結果CSVをダウンロード ⭳</button></div>
     </div>
@@ -221,106 +158,16 @@
     <h2 style="margin-top:8px;">4課題横断比較ダッシュボード</h2>
     <p class="subtitle">4課題分の要約カードを並べ、目的間のトレードオフを見比べる</p>
 
-    <div class="compare-grid" id="compare-tasks-grid">
-
-      <div class="compare-card" style="border-color:var(--a);">
-        <div class="compare-head"><span class="compare-badge" style="background:var(--a);">課題1</span><h4>全社売上最大化</h4></div>
-        <div class="compare-primary">
-          <div class="k">全社売上（最大化対象）</div>
-          <div class="v" style="color:var(--a);">64.3<span class="unit">億円</span></div>
-          <div class="d good">前年度比 +6.3億円</div>
-        </div>
-        <div class="bars-label">配置人数（A/B/C・合計100名）</div>
-        <div class="compare-bars">
-          <div class="cbar-row"><span>A</span><div class="cbar-track"><div class="cbar-fill" style="width:40%;background:var(--a);"></div></div><b>40名</b></div>
-          <div class="cbar-row"><span>B</span><div class="cbar-track"><div class="cbar-fill" style="width:35%;background:var(--b);"></div></div><b>35名</b></div>
-          <div class="cbar-row"><span>C</span><div class="cbar-track"><div class="cbar-fill" style="width:25%;background:var(--c);"></div></div><b>25名</b></div>
-        </div>
-        <div class="bars-label">事業部別利益（共通スケール 0〜30億円）</div>
-        <div class="compare-bars">
-          <div class="cbar-row"><span>A</span><div class="cbar-track"><div class="cbar-fill" style="width:72%;background:var(--a);opacity:.6;"></div></div><b>21.6億</b></div>
-          <div class="cbar-row"><span>B</span><div class="cbar-track"><div class="cbar-fill" style="width:52%;background:var(--b);opacity:.6;"></div></div><b>15.5億</b></div>
-          <div class="cbar-row"><span>C</span><div class="cbar-track"><div class="cbar-fill" style="width:15%;background:var(--c);opacity:.6;"></div></div><b>4.6億</b></div>
-        </div>
-        <div class="compare-sub"><div><span class="cs-k">全社利益</span><span class="cs-v">41.7億円</span></div></div>
-        <div class="compare-status"><span class="pill good">● 制約を満たす</span></div>
-        <p class="compare-summary">人員を適正人数どおりに配置し、A・B・Cとも安定した利益を確保。特定事業部に偏らないバランス型の配置。</p>
-      </div>
-
-      <div class="compare-card">
-        <div class="compare-head"><span class="compare-badge" style="background:var(--a);">課題2</span><h4>A事業部利益最大化</h4></div>
-        <div class="compare-primary">
-          <div class="k">A事業部利益（最大化対象）</div>
-          <div class="v" style="color:var(--a);">26.4<span class="unit">億円</span></div>
-          <div class="d">課題1比 +4.8億円</div>
-        </div>
-        <div class="bars-label">配置人数（A/B/C・合計100名）</div>
-        <div class="compare-bars">
-          <div class="cbar-row"><span>A</span><div class="cbar-track"><div class="cbar-fill" style="width:55%;background:var(--a);"></div></div><b>55名</b></div>
-          <div class="cbar-row"><span>B</span><div class="cbar-track"><div class="cbar-fill" style="width:25%;background:var(--b);"></div></div><b>25名</b></div>
-          <div class="cbar-row"><span>C</span><div class="cbar-track"><div class="cbar-fill" style="width:20%;background:var(--c);"></div></div><b>20名</b></div>
-        </div>
-        <div class="bars-label">事業部別利益（共通スケール 0〜30億円）</div>
-        <div class="compare-bars">
-          <div class="cbar-row"><span>A</span><div class="cbar-track"><div class="cbar-fill" style="width:88%;background:var(--a);opacity:.6;"></div></div><b>26.4億</b></div>
-          <div class="cbar-row"><span>B</span><div class="cbar-track"><div class="cbar-fill" style="width:32%;background:var(--b);opacity:.6;"></div></div><b>9.7億</b></div>
-          <div class="cbar-row"><span>C</span><div class="cbar-track"><div class="cbar-fill" style="width:12%;background:var(--c);opacity:.6;"></div></div><b>3.7億</b></div>
-        </div>
-        <div class="compare-sub"><div><span class="cs-k">全社売上</span><span class="cs-v">61.0億円</span></div><div><span class="cs-k">全社利益</span><span class="cs-v">39.8億円</span></div></div>
-        <div class="compare-status"><span class="pill good">● 制約を満たす</span></div>
-        <p class="compare-summary">Aへ人員を厚く配置しA利益は全カード中最大の26.4億円。一方でB・Cへの投資が減り、全社利益は課題1より1.9億円低下。</p>
-      </div>
-
-      <div class="compare-card">
-        <div class="compare-head"><span class="compare-badge" style="background:var(--b);">課題3</span><h4>B事業部売上最大化</h4></div>
-        <div class="compare-primary">
-          <div class="k">B事業部売上（最大化対象）</div>
-          <div class="v" style="color:var(--b);">33.7<span class="unit">億円</span></div>
-          <div class="d">課題1比 +9.6億円</div>
-        </div>
-        <div class="bars-label">配置人数（A/B/C・合計100名）</div>
-        <div class="compare-bars">
-          <div class="cbar-row"><span>A</span><div class="cbar-track"><div class="cbar-fill" style="width:30%;background:var(--a);"></div></div><b>30名</b></div>
-          <div class="cbar-row"><span>B</span><div class="cbar-track"><div class="cbar-fill" style="width:52%;background:var(--b);"></div></div><b>52名</b></div>
-          <div class="cbar-row"><span>C</span><div class="cbar-track"><div class="cbar-fill" style="width:18%;background:var(--c);"></div></div><b>18名</b></div>
-        </div>
-        <div class="bars-label">事業部別利益（共通スケール 0〜30億円）</div>
-        <div class="compare-bars">
-          <div class="cbar-row"><span>A</span><div class="cbar-track"><div class="cbar-fill" style="width:46%;background:var(--a);opacity:.6;"></div></div><b>13.9億</b></div>
-          <div class="cbar-row"><span>B</span><div class="cbar-track"><div class="cbar-fill" style="width:62%;background:var(--b);opacity:.6;"></div></div><b>18.5億</b></div>
-          <div class="cbar-row"><span>C</span><div class="cbar-track"><div class="cbar-fill" style="width:13%;background:var(--c);opacity:.6;"></div></div><b>4.0億</b></div>
-        </div>
-        <div class="compare-sub"><div><span class="cs-k">全社売上</span><span class="cs-v">62.8億円</span></div><div><span class="cs-k">全社利益</span><span class="cs-v">36.4億円</span></div></div>
-        <div class="compare-status"><span class="pill good">● 制約を満たす</span></div>
-        <p class="compare-summary">Bへ人員を寄せてB自身の利益も18.5億円まで伸びるが、Aの人員を減らした分A利益が縮小し、全社利益は課題1より5.3億円低下。</p>
-      </div>
-
-      <div class="compare-card" style="border-color:var(--warning);">
-        <div class="compare-head"><span class="compare-badge" style="background:var(--c);">課題4</span><h4>C事業部売上最大化</h4></div>
-        <div class="compare-primary">
-          <div class="k">C事業部売上（最大化対象）</div>
-          <div class="v" style="color:var(--c);">15.2<span class="unit">億円</span></div>
-          <div class="d">課題1比 +7.4億円</div>
-        </div>
-        <div class="bars-label">配置人数（A/B/C・合計100名）</div>
-        <div class="compare-bars">
-          <div class="cbar-row"><span>A</span><div class="cbar-track"><div class="cbar-fill" style="width:30%;background:var(--a);"></div></div><b>30名</b></div>
-          <div class="cbar-row"><span>B</span><div class="cbar-track"><div class="cbar-fill" style="width:20%;background:var(--b);"></div></div><b>20名</b></div>
-          <div class="cbar-row"><span>C</span><div class="cbar-track"><div class="cbar-fill" style="width:50%;background:var(--c);"></div></div><b>50名</b></div>
-        </div>
-        <div class="bars-label">事業部別利益（共通スケール 0〜30億円）</div>
-        <div class="compare-bars">
-          <div class="cbar-row"><span>A</span><div class="cbar-track"><div class="cbar-fill" style="width:45%;background:var(--a);opacity:.6;"></div></div><b>13.5億</b></div>
-          <div class="cbar-row"><span>B</span><div class="cbar-track"><div class="cbar-fill" style="width:32%;background:var(--b);opacity:.6;"></div></div><b>9.7億</b></div>
-          <div class="cbar-row"><span>C</span><div class="cbar-track"><div class="cbar-fill" style="width:18%;background:var(--c);opacity:.6;"></div></div><b>5.3億</b></div>
-        </div>
-        <div class="compare-sub"><div><span class="cs-k">全社売上</span><span class="cs-v" style="color:var(--warning);font-weight:600;">58.9億円 ⚠</span></div><div><span class="cs-k">全社利益</span><span class="cs-v">28.5億円</span></div></div>
-        <div class="compare-status"><span class="pill warn">● 余裕+0.9億円のみ</span></div>
-        <p class="compare-summary">Cへ最も多くの人員（50名）を割くが、C事業部の基準売上自体が小さいため利益への跳ね返りは限定的。全社利益は4カード中最も低く、売上下限までの余裕も僅か。</p>
-      </div>
-
+    <div class="mode-toggle" id="compare-mode-toggle">
+      <span class="mode-toggle-label">事業部別バーの表示：</span>
+      <button class="mode-toggle-btn active" id="cmp-mode-profit" data-mode="profit">利益で見る</button>
+      <button class="mode-toggle-btn" id="cmp-mode-revenue" data-mode="revenue">売上で見る</button>
     </div>
-    <p class="note">「配置人数」バーは4カード共通で合計100名スケール、「事業部別利益」バーは4カード共通で0〜30億円スケールに揃えているため、カードを横に見比べるだけで人員シフトと利益への効き方の違いが分かる。各カード下部の一文は、その配置の狙いとトレードオフの要約。</p>
+
+    <div class="compare-grid" id="compare-tasks-grid">
+      <p class="note">未実行：①でデータを取り込んでから本画面に切り替えると、4課題分の結果が自動的に表示される。</p>
+    </div>
+    <p class="note">「配置人数」バーは4カード共通で合計100名スケール、「事業部別売上／利益」バーは上の切替で表示対象を選べ、いずれも4カード共通スケールに揃えているため、カードを横に見比べるだけで人員シフトと数値への効き方の違いが分かる。各カード下部の一文は配置の狙いとトレードオフの要約、「配置理由」欄は充足率・補正係数まで含めた詳細な根拠。</p>
   </section>
 
   <!-- 採用前後比較 -->
@@ -354,44 +201,16 @@
 
     <div class="compare-grid" id="compare-hiring-grid" style="grid-template-columns:1fr 1fr;">
       <div class="compare-before">
-        <div class="compare-head"><span class="compare-badge" style="background:var(--baseline);color:#0b0b0b;">採用前</span><h4>100名</h4></div>
-        <div class="compare-primary">
-          <div class="k">全社売上</div>
-          <div class="v">64.3<span class="unit">億円</span></div>
-        </div>
-        <div class="bars-label">事業部別利益（共通スケール 0〜30億円）</div>
-        <div class="compare-bars">
-          <div class="cbar-row"><span>A</span><div class="cbar-track"><div class="cbar-fill" style="width:72%;background:var(--a);opacity:.6;"></div></div><b>21.6億</b></div>
-          <div class="cbar-row"><span>B</span><div class="cbar-track"><div class="cbar-fill" style="width:52%;background:var(--b);opacity:.6;"></div></div><b>15.5億</b></div>
-          <div class="cbar-row"><span>C</span><div class="cbar-track"><div class="cbar-fill" style="width:15%;background:var(--c);opacity:.6;"></div></div><b>4.6億</b></div>
-        </div>
-        <div class="compare-sub"><div><span class="cs-k">全社利益</span><span class="cs-v">41.7億円</span></div></div>
-      </div>
-
-      <div class="compare-after">
-        <div class="compare-head"><span class="compare-badge" style="background:var(--good);">採用後</span><h4>110名</h4></div>
-        <div class="compare-primary">
-          <div class="k">全社売上</div>
-          <div class="v" style="color:var(--good);">68.9<span class="unit">億円</span></div>
-          <div class="d good">採用前比 +4.6億円</div>
-        </div>
-        <div class="bars-label">事業部別利益（共通スケール 0〜30億円）</div>
-        <div class="compare-bars">
-          <div class="cbar-row"><span>A</span><div class="cbar-track"><div class="cbar-fill" style="width:74%;background:var(--a);opacity:.6;"></div></div><b>22.3億</b></div>
-          <div class="cbar-row"><span>B</span><div class="cbar-track"><div class="cbar-fill" style="width:56%;background:var(--b);opacity:.6;"></div></div><b>16.8億</b></div>
-          <div class="cbar-row"><span>C</span><div class="cbar-track"><div class="cbar-fill" style="width:16%;background:var(--c);opacity:.6;"></div></div><b>4.7億</b></div>
-        </div>
-        <div class="compare-sub"><div><span class="cs-k">全社利益</span><span class="cs-v" style="color:var(--good);">43.8億円　<span style="font-size:11px;">(+2.1億円)</span></span></div></div>
+        <p class="note">未実行：上の2つの欄でCSVを取り込むと比較結果が表示される。</p>
       </div>
     </div>
 
-    <p class="compare-summary" id="hiring-summary" style="margin-bottom:14px;">新規採用10名は主にB事業部（成長事業）へ配置され、B利益は+1.3億円と最も伸びる。A利益も+0.7億円改善する一方、C事業部は基準売上そのものが小さく、増分は+0.1億円とごく僅か。全社利益は+2.1億円改善するが、追加の人件費コスト3.9億円を踏まえると、投資対効果はA・Bへの配置が中心という結果になっている。</p>
+    <p class="compare-summary" id="hiring-summary" style="margin-bottom:14px;"></p>
 
     <div class="card">
       <h3 style="font-size:14px;margin:0 0 10px;">採用ROI（参考）</h3>
       <table id="hiring-roi">
         <tr><th></th><th class="num">追加人件費コスト</th><th class="num">売上増分</th><th class="num">利益増分</th></tr>
-        <tr><td>10名採用の効果</td><td class="num">3.9億円</td><td class="num">4.6億円</td><td class="num">2.1億円</td></tr>
       </table>
     </div>
   </section>

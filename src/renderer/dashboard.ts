@@ -21,7 +21,7 @@ function $(id: string): HTMLElement | null {
 }
 
 function oku(n: number): string {
-  return `${n.toFixed(1)}億円`
+  return `${n.toFixed(2)}億円`
 }
 
 /** 充足率(rate) → メーター上の位置(%)（モックの帯幅 20/15/10/15/40 に対応） */
@@ -140,7 +140,7 @@ export function renderDashboard(
     const costTotal = round2(units.A.costTotal + units.B.costTotal + units.C.costTotal)
     const feasible = result.feasible
     summary.innerHTML = `
-      <div class="stat"><div class="k">全社売上</div><div class="v">${oku(result.companyRevenue)}</div><div class="d ${diff >= 0 ? 'good' : ''}">前年度比 ${diff >= 0 ? '+' : ''}${diff.toFixed(1)}億円</div></div>
+      <div class="stat"><div class="k">全社売上</div><div class="v">${oku(result.companyRevenue)}</div><div class="d ${diff >= 0 ? 'good' : ''}">前年度比 ${diff >= 0 ? '+' : ''}${diff.toFixed(2)}億円</div></div>
       <div class="stat"><div class="k">全社利益</div><div class="v">${oku(result.companyProfit)}</div><div class="d">コスト計 ${oku(costTotal)}</div></div>
       <div class="stat"><div class="k">制約判定</div><div class="v">${feasible ? pill('good', '● すべて満たす') : pill('crit', '● 未達あり')}</div></div>`
   }
@@ -205,7 +205,7 @@ function renderResultBody(result: SimulationResult, employees: Employee[]): void
     const revOk = result.companyRevenue > PREV_YEAR_REVENUE
     let html =
       '<tr><th>制約</th><th>基準</th><th>結果</th><th>余裕</th><th>判定</th></tr>'
-    html += `<tr><td>全社売上</td><td>${PREV_YEAR_REVENUE}.0億円超</td><td>${oku(result.companyRevenue)}</td><td style="color:${revOk ? '#006300' : 'var(--critical)'};">${revDiff >= 0 ? '+' : ''}${revDiff.toFixed(1)}億円</td><td>${revOk ? pill('good', '● 満たす') : pill('crit', '● 未達')}</td></tr>`
+    html += `<tr><td>全社売上</td><td>${PREV_YEAR_REVENUE}.0億円超</td><td>${oku(result.companyRevenue)}</td><td style="color:${revOk ? '#006300' : 'var(--critical)'};">${revDiff >= 0 ? '+' : ''}${revDiff.toFixed(2)}億円</td><td>${revOk ? pill('good', '● 満たす') : pill('crit', '● 未達')}</td></tr>`
     for (const u of UNIT_IDS) {
       const margin = headcount[u] - MIN_HEADCOUNT[u]
       const ok = margin >= 0
@@ -228,7 +228,10 @@ function renderResultBody(result: SimulationResult, employees: Employee[]): void
       const segs = SEG_WIDTHS.map(
         (w, idx) => `<div class="seg" style="width:${w}%;background:${band.colors[idx]};"></div>`,
       ).join('')
-      const labels = band.labels.map((l) => `<span>${l}</span>`).join('')
+      // ラベルは.meterのSEG_WIDTHS（不等幅）と揃えないと帯の境界とずれるため、同じ幅を明示する
+      const labels = band.labels
+        .map((l, idx) => `<span style="flex:0 0 ${SEG_WIDTHS[idx]}%;">${l}</span>`)
+        .join('')
       const pos = ratePosition(r.fulfillmentRate)
       const ratePct = Math.round(r.fulfillmentRate * 100)
       html += `<div class="gauge-title">${UNIT_NAME[u]}　充足率 ${ratePct}% → 不足補正${r.shortageFactor.toFixed(2)}／過剰補正${r.surplusFactor.toFixed(2)}</div>

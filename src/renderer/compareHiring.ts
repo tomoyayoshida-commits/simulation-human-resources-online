@@ -10,7 +10,7 @@ const PROFIT_SCALE = 30 // 億円
 function profitBars(r: SimulationResult): string {
   return UNIT_IDS.map((u) => {
     const w = Math.max(0, Math.min(100, (r.units[u].profit / PROFIT_SCALE) * 100))
-    return `<div class="cbar-row"><span>${u}</span><div class="cbar-track"><div class="cbar-fill" style="width:${w.toFixed(1)}%;background:${UNIT_VAR[u]};opacity:.6;"></div></div><b>${r.units[u].profit.toFixed(1)}億</b></div>`
+    return `<div class="cbar-row"><span>${u}</span><div class="cbar-track"><div class="cbar-fill" style="width:${w.toFixed(1)}%;background:${UNIT_VAR[u]};opacity:.6;"></div></div><b>${r.units[u].profit.toFixed(2)}億</b></div>`
   }).join('')
 }
 
@@ -18,10 +18,10 @@ function beforeCard(r: SimulationResult): string {
   return `
     <div class="compare-before">
       <div class="compare-head"><span class="compare-badge" style="background:var(--baseline);color:#0b0b0b;">採用前</span><h4>${r.headcount.A + r.headcount.B + r.headcount.C}名</h4></div>
-      <div class="compare-primary"><div class="k">全社売上</div><div class="v">${r.companyRevenue.toFixed(1)}<span class="unit">億円</span></div></div>
+      <div class="compare-primary"><div class="k">全社売上</div><div class="v">${r.companyRevenue.toFixed(2)}<span class="unit">億円</span></div></div>
       <div class="bars-label">事業部別利益（共通スケール 0〜${PROFIT_SCALE}億円）</div>
       <div class="compare-bars">${profitBars(r)}</div>
-      <div class="compare-sub"><div><span class="cs-k">全社利益</span><span class="cs-v">${r.companyProfit.toFixed(1)}億円</span></div></div>
+      <div class="compare-sub"><div><span class="cs-k">全社利益</span><span class="cs-v">${r.companyProfit.toFixed(2)}億円</span></div></div>
     </div>`
 }
 
@@ -31,10 +31,10 @@ function afterCard(r: SimulationResult, before: SimulationResult): string {
   return `
     <div class="compare-after">
       <div class="compare-head"><span class="compare-badge" style="background:var(--good);">採用後</span><h4>${r.headcount.A + r.headcount.B + r.headcount.C}名</h4></div>
-      <div class="compare-primary"><div class="k">全社売上</div><div class="v" style="color:var(--good);">${r.companyRevenue.toFixed(1)}<span class="unit">億円</span></div><div class="d good">採用前比 ${dRev >= 0 ? '+' : ''}${dRev.toFixed(1)}億円</div></div>
+      <div class="compare-primary"><div class="k">全社売上</div><div class="v" style="color:var(--good);">${r.companyRevenue.toFixed(2)}<span class="unit">億円</span></div><div class="d good">採用前比 ${dRev >= 0 ? '+' : ''}${dRev.toFixed(2)}億円</div></div>
       <div class="bars-label">事業部別利益（共通スケール 0〜${PROFIT_SCALE}億円）</div>
       <div class="compare-bars">${profitBars(r)}</div>
-      <div class="compare-sub"><div><span class="cs-k">全社利益</span><span class="cs-v" style="color:var(--good);">${r.companyProfit.toFixed(1)}億円　<span style="font-size:11px;">(${dProfit >= 0 ? '+' : ''}${dProfit.toFixed(1)}億円)</span></span></div></div>
+      <div class="compare-sub"><div><span class="cs-k">全社利益</span><span class="cs-v" style="color:var(--good);">${r.companyProfit.toFixed(2)}億円　<span style="font-size:11px;">(${dProfit >= 0 ? '+' : ''}${dProfit.toFixed(2)}億円)</span></span></div></div>
     </div>`
 }
 
@@ -71,7 +71,7 @@ export function renderCompareHiring(base: Employee[], additional: Employee[], ta
   if (roi) {
     roi.innerHTML = `
       <tr><th></th><th class="num">追加人件費コスト</th><th class="num">売上増分</th><th class="num">利益増分</th></tr>
-      <tr><td>${additional.length}名採用の効果</td><td class="num">${addCost.toFixed(1)}億円</td><td class="num">${dRev >= 0 ? '+' : ''}${dRev.toFixed(1)}億円</td><td class="num">${dProfit >= 0 ? '+' : ''}${dProfit.toFixed(1)}億円</td></tr>`
+      <tr><td>${additional.length}名採用の効果</td><td class="num">${addCost.toFixed(2)}億円</td><td class="num">${dRev >= 0 ? '+' : ''}${dRev.toFixed(2)}億円</td><td class="num">${dProfit >= 0 ? '+' : ''}${dProfit.toFixed(2)}億円</td></tr>`
   }
 
   if (summary) {
@@ -85,6 +85,6 @@ export function renderCompareHiring(base: Employee[], additional: Employee[], ta
         maxUnit = u
       }
     }
-    summary.textContent = `追加採用${additional.length}名により全社売上は${dRev >= 0 ? '+' : ''}${dRev.toFixed(1)}億円、全社利益は${dProfit >= 0 ? '+' : ''}${dProfit.toFixed(1)}億円変化した。利益の伸びが最も大きいのは${maxUnit}事業部（+${round2(maxDelta).toFixed(1)}億円）。追加人件費コスト${addCost.toFixed(1)}億円と照らし、投資対効果を確認できる。`
+    summary.textContent = `追加採用${additional.length}名により全社売上は${dRev >= 0 ? '+' : ''}${dRev.toFixed(2)}億円、全社利益は${dProfit >= 0 ? '+' : ''}${dProfit.toFixed(2)}億円変化した。利益の伸びが最も大きいのは${maxUnit}事業部（+${round2(maxDelta).toFixed(2)}億円）。追加人件費コスト${addCost.toFixed(2)}億円と照らし、投資対効果を確認できる。`
   }
 }

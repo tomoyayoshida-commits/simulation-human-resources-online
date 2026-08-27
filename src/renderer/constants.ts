@@ -1,6 +1,6 @@
 // 設計書§2/§3: 事業部別定数・丸め処理・CSVカラムマップ
 
-import type { UnitId, Weights } from './types.ts'
+import type { Employee, TaskId, UnitId, Weights } from './types.ts'
 
 export const UNIT_IDS: readonly UnitId[] = ['A', 'B', 'C'] as const
 
@@ -76,7 +76,7 @@ export function round2(x: number): number {
  * 実データ（human_resources_100.csv）のヘッダは「社員番号」を採用しているため primary とする。
  * UIモックのプレビュー表記「社員ID」やその他の別名は後方互換のためフォールバックとして許容する。
  */
-export const COLUMN_MAP: Record<keyof import('./types.ts').Employee, string[]> = {
+export const COLUMN_MAP: Record<keyof Employee, string[]> = {
   id: ['社員番号', '社員ID', 'id', 'ID', 'employee_id'],
   sales: ['営業力', 'sales'],
   mgmt: ['管理力', 'mgmt', 'management'],
@@ -96,9 +96,38 @@ export const EXPORT_HEADERS = {
   assignedUnit: '配置先事業部',
 } as const
 
-export const TASK_LABELS: Record<import('./types.ts').TaskId, string> = {
+export const TASK_LABELS: Record<TaskId, string> = {
   1: '全社売上最大化',
   2: 'A事業部利益最大化',
   3: 'B事業部売上最大化',
   4: 'C事業部売上最大化',
+}
+
+/**
+ * 課題ごとの「何を最大化するか」の定義（設計書§5.1）。
+ *
+ * この情報は従来 optimizer.ts の buildValues／shiftConstant／primaryMetric の3つの switch と、
+ * 表示側（compareTasks・reasonText）に分散していた。4箇所が独立に課題番号を分岐しており、
+ * 課題の意味を変えるとすべてを揃えて直す必要がある＝食い違いが混入しうる状態だった。
+ * 定義をこの表1つに集約し、各所はここを引くだけにする。
+ */
+export interface TaskSpec {
+  /** 最大化対象の事業部。null は全社（＝課題1） */
+  targetUnit: UnitId | null
+  /** 最大化対象の指標 */
+  metric: 'revenue' | 'profit'
+}
+
+export const TASK_SPEC: Record<TaskId, TaskSpec> = {
+  1: { targetUnit: null, metric: 'revenue' },
+  2: { targetUnit: 'A', metric: 'profit' },
+  3: { targetUnit: 'B', metric: 'revenue' },
+  4: { targetUnit: 'C', metric: 'revenue' },
+}
+
+/** 最大化対象の呼称（例：「A事業部の利益」「全社売上」）。表示・説明文で使う。 */
+export function taskTargetLabel(task: TaskId): string {
+  const { targetUnit, metric } = TASK_SPEC[task]
+  const metricLabel = metric === 'profit' ? '利益' : '売上'
+  return targetUnit === null ? `全社${metricLabel}` : `${targetUnit}事業部の${metricLabel}`
 }

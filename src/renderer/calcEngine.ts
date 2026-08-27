@@ -1,6 +1,6 @@
 // 設計書§4: 計算エンジン（貢献度〜利益）
 
-import type { Employee, EmployeeType, SimulationResult, UnitId, UnitResult } from './types.ts'
+import type { Employee, EmployeeType, SimulationResult, TaskId, UnitId, UnitResult } from './types.ts'
 import {
   BASE_REVENUE,
   COST_MULTIPLIER,
@@ -11,6 +11,7 @@ import {
   round2,
   SHORTAGE_TABLE,
   SURPLUS_TABLE,
+  TASK_SPEC,
   UNIT_IDS,
   WEIGHTS,
 } from './constants.ts'
@@ -109,12 +110,11 @@ export function membersByUnit(
   assignment: Record<string, UnitId>,
   employees: Employee[],
 ): Record<UnitId, Employee[]> {
-  const byId = new Map(employees.map((e) => [e.id, e]))
   const result: Record<UnitId, Employee[]> = { A: [], B: [], C: [] }
-  // 入力順を保つため employees を走査
+  // 入力順を保つため employees を走査（§7-6の決定性）
   for (const e of employees) {
     const unit = assignment[e.id]
-    if (unit) result[unit].push(byId.get(e.id)!)
+    if (unit) result[unit].push(e)
   }
   return result
 }
@@ -146,6 +146,18 @@ export function computeSimulationResult(
     assignment,
     feasible: companyRevenue > PREV_YEAR_REVENUE,
   }
+}
+
+/**
+ * 課題の最大化対象の値を結果から取り出す（§5.1）。
+ * 最適化側の選択キー（optimizer）と表示側（compareTasks）が同じ定義を使うための単一の入口。
+ * 課題1は全社売上、課題2〜4は `TASK_SPEC` の対象事業部の指標。
+ */
+export function taskPrimaryValue(result: SimulationResult, task: TaskId): number {
+  const { targetUnit, metric } = TASK_SPEC[task]
+  if (targetUnit === null) return result.companyRevenue
+  const unit = result.units[targetUnit]
+  return metric === 'profit' ? unit.profit : unit.finalRevenue
 }
 
 /**

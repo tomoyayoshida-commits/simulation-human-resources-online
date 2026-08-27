@@ -190,6 +190,10 @@ test('runOptimization: 最低人数合計を満たせないと min_headcount', (
 })
 
 test('runOptimization: 枝刈り(docs/pruning-plan.md)ありでも全候補総当たりと完全一致する', () => {
+  // 役割分担（docs/solver-oracle-plan.md §2.3・§5 Phase2）：
+  // bruteForceOptimize は内部で solveAssignment(assignment.ts)を再利用しているため、
+  // このテストが検証しているのは枝刈り(runOptimization側)ロジックの回帰のみ。
+  // MCMF自体の正しさは test/assignment.oracle.test.ts（HiGHSという独立実装との比較）が守る。
   // seed=1・110名 は枝刈り導入時に実際に不一致（誤った候補を選ぶ／closestの同点タイブレーク崩れ）
   // を検出した回帰ケース。総当たり(bruteForceOptimize)はO(N^3)×候補数で低速なため、
   // テスト時間予算（CLAUDE.md §3: 全体で約10秒台）を踏まえケースを絞る。

@@ -4,7 +4,7 @@ import type { Employee, SimulationResult, TaskId, ValidationError } from './type
 import { importEmployees, mergeEmployees, buildAssignmentCsv, downloadCsv } from './csv.ts'
 import { runOptimization } from './optimizer.ts'
 import { renderDashboard } from './dashboard.ts'
-import { renderCompareTasks } from './compareTasks.ts'
+import { renderCompareTasks, initCompareModeToggle } from './compareTasks.ts'
 import { renderCompareHiring } from './compareHiring.ts'
 
 // ---- アプリ状態 ----
@@ -198,6 +198,7 @@ function main(): void {
   initTaskSelection()
   initRunButton()
   initExportButton()
+  initCompareModeToggle()
 
   // 100名データ取込
   setupDropzone('dropzone-100', 'file-100', (text) => {

@@ -64,6 +64,7 @@ WSL2 には wine が無いため、`package.json` の `build.win` は `zip` タ�
 - **CSVカラムの実体**：`human_resources_100.csv` 入手済み。実ヘッダは `社員番号,営業力,管理力,開拓力,育成力,人件費`。`constants.ts` の `COLUMN_MAP.id` に `'社員番号'` を追加（primary）し確定。
 - **コスト／利益の単位**：実データで検証した結果、人件費(1〜20)を売上と同じ「億円」とみなすと桁が2つずれ（コスト合計が売上の数十倍）、全社利益が常に大幅な赤字になる不整合が判明。人件費は「百万円」単位とみなし、コスト計算時に `COST_UNIT_DIVISOR = 100` で億円へ換算するよう `calcEngine.ts`（`unitCostTotal`）・`optimizer.ts`（`profitValue`）を修正済み。
 - **最適化の枝刈り（`optimizer.ts`・`docs/pruning-plan.md`）**：4課題比較の体感速度改善のため、人数配分の候補ごとに割当(MCMF)を解く前に上界(緩和問題の最適値)を計算し、UB降順で処理・打ち切りする branch-and-bound を導入。導入時に「丸め前raw値と丸め後実測値のスケール不一致」による誤答（実際に最適でない候補を選ぶ／`closestCandidate`の同点タイブレークが反復順に依存する）をランダム110名データの検証で検出し、候補固有の定数項（`shiftConstant`）を上界に加算する形で修正。再発防止として `test/optimizer.test.ts` に総当たり実装との完全一致を検証する回帰テストを追加（該当シードを固定）。実データ4課題では旧実装比で体感数秒〜1桁ms台まで短縮を確認（ケースにより不可行判定のフォールバックが全候補走査になるため短縮幅は課題依存）。
+- **割当(MCMF)の独立検証（`docs/solver-oracle-plan.md`）**：`assignment.ts`（自前MCMF実装）を守るテストが5名規模の1件しかなかったため、テスト専用依存として `highs`（HiGHSのWASM版、devDependency）を追加し、`test/assignment.oracle.test.ts` で完全単模な輸送問題としてMILP定式化した独立実装と目的関数値を比較する回帰テストを追加（`test/helpers/lpOracle.ts`）。本番コード（`src/`）には数理最適化ライブラリを一切importしていない（設計書_AI向け.md の制約を維持）。実データ4課題の結果に変化なし。
 
 ## 未決事項（設計書§12）
 
