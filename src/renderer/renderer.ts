@@ -10,14 +10,17 @@ import { renderCompareHiring } from './compareHiring.ts'
 // ---- アプリ状態 ----
 const state: {
   employees100: Employee[] | null
-  employees10: Employee[] | null
   selectedTask: TaskId
   currentResult: SimulationResult | null
+  // 採用前後比較(#p5)は①の取込データを再利用しない独立画面のため、専用の取込状態を持つ
+  hiringBase100: Employee[] | null
+  hiringAdd10: Employee[] | null
 } = {
   employees100: null,
-  employees10: null,
   selectedTask: 1,
   currentResult: null,
+  hiringBase100: null,
+  hiringAdd10: null,
 }
 
 // ---- 画面遷移（モックの go(id) 移植版） ----
@@ -30,8 +33,8 @@ function go(id: string): void {
 
   // 比較画面は遷移時に最新データで再描画
   if (id === 'p4' && state.employees100) renderCompareTasks(state.employees100)
-  if (id === 'p5' && state.employees100 && state.employees10) {
-    renderCompareHiring(state.employees100, state.employees10, state.selectedTask)
+  if (id === 'p5' && state.hiringBase100 && state.hiringAdd10) {
+    renderCompareHiring(state.hiringBase100, state.hiringAdd10, state.selectedTask)
   }
 }
 
@@ -58,6 +61,35 @@ function setupDropzone(dropId: string, inputId: string, onText: (text: string) =
     const file = e.dataTransfer?.files?.[0]
     if (file) onText(await file.text())
   })
+}
+
+// ---- 採用前後比較(#p5)の取込エラー表示 ----
+// alert()はElectronで主プロセスとの同期IPCを介するため、file inputのchangeイベント直後に
+// 呼ぶと描画が一瞬止まって固まったように見える。取込報告(#p1)と同様にインライン表示する。
+// #p5 は左（採用前100名）・右（追加採用10名）の2つの独立取込を持つため、対象のDOM ID組を受け取る。
+function renderHiringImportError(ids: { summary: string; table: string }, errors: ValidationError[], message: string): void {
+  const summary = document.getElementById(ids.summary)
+  const errTable = document.getElementById(ids.table)
+  if (summary) {
+    summary.innerHTML = `<div class="stat"><div class="k">判定</div><div class="v"><span class="pill crit">${message}</span></div></div>`
+  }
+  if (errTable) {
+    let html = '<tr><th>行番号</th><th>カラム</th><th class="num">実測値</th><th>期待範囲</th></tr>'
+    for (const e of errors) {
+      html += `<tr><td>${e.row === 0 ? '-' : e.row}</td><td>${e.column}</td><td class="num err">${String(e.actual)}</td><td>${e.expected}</td></tr>`
+    }
+    errTable.innerHTML = html
+  }
+}
+
+// 取込成功時：判定ピルを「取込OK」に変え件数を示す。エラー表は空にする（前回の残骸を消す）
+function renderHiringImportOk(ids: { summary: string; table: string }, count: number): void {
+  const summary = document.getElementById(ids.summary)
+  const errTable = document.getElementById(ids.table)
+  if (summary) {
+    summary.innerHTML = `<div class="stat"><div class="k">判定</div><div class="v"><span class="pill good">取込OK（${count}件）</span></div></div>`
+  }
+  if (errTable) errTable.innerHTML = ''
 }
 
 // ---- 入力検証レポート描画（#p1） ----
@@ -99,6 +131,10 @@ function renderImportReport(employees: Employee[] | null, errors: ValidationErro
     }
     errTable.innerHTML = html
   }
+
+  // エラーが1件でもある間は次のステップへ進めない（誤った状態で②以降に進むのを防ぐ）
+  const nextBtn = document.getElementById('next-to-p2') as HTMLButtonElement | null
+  if (nextBtn) nextBtn.disabled = !ok
 }
 
 // ---- ナビゲーション初期化 ----
@@ -170,24 +206,43 @@ function main(): void {
     renderImportReport(employees, errors)
   })
 
-  // 追加採用10名データ取込
+  // 採用前後比較(#p5)：採用前100名データ取込（①とは独立）
+  const hiringErr100 = { summary: 'hiring-validation-summary-100', table: 'hiring-validation-errors-100' }
+  setupDropzone('dropzone-hiring-100', 'file-hiring-100', (text) => {
+    const { employees: base100, errors } = importEmployees(text, 100)
+    if (!base100) {
+      state.hiringBase100 = null
+      renderHiringImportError(hiringErr100, errors, `取込を保留（エラー${errors.length}件）`)
+      return
+    }
+    renderHiringImportOk(hiringErr100, base100.length)
+    state.hiringBase100 = base100
+    if (state.hiringAdd10) renderCompareHiring(state.hiringBase100, state.hiringAdd10, state.selectedTask)
+  })
+
+  // 採用前後比較(#p5)：追加採用10名データ取込（①とは独立）
+  const hiringErr10 = { summary: 'hiring-validation-summary-10', table: 'hiring-validation-errors-10' }
   setupDropzone('dropzone-10', 'file-10', (text) => {
-    if (!state.employees100) {
-      alert('先に100名データを取り込んでください。')
+    if (!state.hiringBase100) {
+      state.hiringAdd10 = null
+      renderHiringImportError(hiringErr10, [], '取込を保留（先に左側の採用前100名データを取り込んでください）')
       return
     }
     const { employees: add10, errors } = importEmployees(text, 10)
     if (!add10) {
-      alert(`追加採用データにエラーがあります（${errors.length}件）。`)
+      state.hiringAdd10 = null
+      renderHiringImportError(hiringErr10, errors, `取込を保留（エラー${errors.length}件）`)
       return
     }
-    const merged = mergeEmployees(state.employees100, add10)
+    const merged = mergeEmployees(state.hiringBase100, add10)
     if (!merged.employees) {
-      alert('追加採用データの社員IDが既存社員と重複しています。')
+      state.hiringAdd10 = null
+      renderHiringImportError(hiringErr10, merged.errors, '取込を保留（既存社員IDと重複）')
       return
     }
-    state.employees10 = add10
-    renderCompareHiring(state.employees100, state.employees10, state.selectedTask)
+    renderHiringImportOk(hiringErr10, add10.length)
+    state.hiringAdd10 = add10
+    renderCompareHiring(state.hiringBase100, state.hiringAdd10, state.selectedTask)
   })
 }
 

@@ -35,6 +35,7 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
 .dropzone.dragover{border-color:var(--a);background:#eef4fc;}
 .btn{display:inline-block;border:1px solid var(--a);background:var(--a);color:#fff;font-size:13px;padding:9px 18px;border-radius:7px;cursor:pointer;}
 .btn.secondary{background:#fff;color:var(--a);}
+.btn:disabled{opacity:0.4;cursor:not-allowed;filter:grayscale(40%);}
 .pill{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;padding:2px 9px;border-radius:9px;}
 .pill.good{background:#eaf7ea;color:#0a6b0a;}
 .pill.warn{background:#fef3dc;color:#8a5a00;}

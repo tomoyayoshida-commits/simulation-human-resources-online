@@ -128,6 +128,7 @@ export function mergeEmployees(
 ): { employees: Employee[] | null; errors: ValidationError[] } {
   const errors: ValidationError[] = []
   const baseIds = new Set(base.map((e) => e.id))
+  const seenAdditionalIds = new Set<string>()
   additional.forEach((e, i) => {
     if (baseIds.has(e.id)) {
       errors.push({
@@ -136,7 +137,15 @@ export function mergeEmployees(
         actual: e.id,
         expected: '既存社員IDと重複しないID',
       })
+    } else if (seenAdditionalIds.has(e.id)) {
+      errors.push({
+        row: i + 1,
+        column: EXPORT_HEADERS.id,
+        actual: e.id,
+        expected: '追加採用データ内で重複しないID',
+      })
     }
+    seenAdditionalIds.add(e.id)
   })
   if (errors.length > 0) return { employees: null, errors }
   return { employees: [...base, ...additional], errors: [] }

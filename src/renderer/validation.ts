@@ -40,6 +40,25 @@ export function validateEmployees(
     })
   }
 
+  // 社員番号重複チェック（id はシステム全体で一意キーとして使われるため必須）
+  const firstRowById = new Map<string, number>()
+  rows.forEach((row, i) => {
+    const rowNo = i + 1
+    const id = row.id
+    if (id === '' || id === undefined) return
+    const firstRow = firstRowById.get(id)
+    if (firstRow !== undefined) {
+      errors.push({
+        row: rowNo,
+        column: '社員番号',
+        actual: id,
+        expected: `重複しない社員番号（先頭出現: 行${firstRow}）`,
+      })
+    } else {
+      firstRowById.set(id, rowNo)
+    }
+  })
+
   rows.forEach((row, i) => {
     const rowNo = i + 1
     for (const spec of RANGES) {

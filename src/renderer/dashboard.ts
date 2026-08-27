@@ -56,18 +56,19 @@ function pill(kind: 'good' | 'warn' | 'crit', text: string): string {
   return `<span class="pill ${kind}">${text}</span>`
 }
 
-/** 実行不能時の表示（機能12/B-3） */
-function renderInfeasible(res: InfeasibleResult, task: TaskId): void {
+/** 実行不能時の表示（機能12/B-3）。参考配置があればその内容を但し書き付きで表示する。 */
+function renderInfeasible(res: InfeasibleResult, task: TaskId, employees: Employee[]): void {
   const subtitle = $('dashboard-subtitle')
   if (subtitle) subtitle.innerHTML = `選択課題：<b>${TASK_LABELS[task]}</b> — <span style="color:var(--critical);font-weight:600;">実行不能</span>`
 
+  const reasonText =
+    res.reason === 'min_headcount'
+      ? '各事業部の最低人数を満たす人数配分が存在しません（最低人数制約がボトルネック）。'
+      : '全社売上が前年度売上（58億円）を上回る配置が存在しません（全社売上下限がボトルネック）。'
+  const closest = res.closestCandidate
+
   const summary = $('company-summary')
   if (summary) {
-    const reasonText =
-      res.reason === 'min_headcount'
-        ? '各事業部の最低人数を満たす人数配分が存在しません（最低人数制約がボトルネック）。'
-        : '全社売上が前年度売上（58億円）を上回る配置が存在しません（全社売上下限がボトルネック）。'
-    const closest = res.closestCandidate
     summary.innerHTML = `
       <div class="stat" style="grid-column:1 / -1;">
         <div class="k">判定</div>
@@ -75,14 +76,42 @@ function renderInfeasible(res: InfeasibleResult, task: TaskId): void {
         <div class="d">${reasonText}</div>
         ${
           closest
-            ? `<div class="d">最も条件に近い参考配置：全社売上 ${oku(closest.companyRevenue)}（A:${closest.headcount.A}／B:${closest.headcount.B}／C:${closest.headcount.C}）</div>`
+            ? `<div class="d">以下は制約を満たさないが、その中で最も条件に近い参考配置（全社売上 ${oku(closest.companyRevenue)}）を表示している。</div>`
             : ''
         }
       </div>`
   }
 
+  if (!closest) {
+    // 参考にできる候補すら存在しないため、前回実行結果を引き継がず全て空表示にする
+    const emptyNote = '<p class="note">制約を満たす配置が存在しないため、この項目は表示できません。</p>'
+    const bars = $('headcount-bars')
+    if (bars) bars.innerHTML = emptyNote
+    const typeTable = $('type-breakdown')
+    if (typeTable) typeTable.innerHTML = ''
+    const revProfit = $('unit-revenue-profit')
+    if (revProfit) revProfit.innerHTML = emptyNote
+    const constraint = $('constraint-check')
+    if (constraint) constraint.innerHTML = ''
+    const gauges = $('fulfillment-gauges')
+    if (gauges) gauges.innerHTML = emptyNote
+    const preview = $('assignment-preview')
+    if (preview) preview.innerHTML = ''
+
+    const reasonBox = $('reason-box')
+    if (reasonBox) reasonBox.innerHTML = '<ul><li>制約を満たす配置が見つからなかったため、配置方針は生成されません。</li></ul>'
+    return
+  }
+
+  // 参考配置（制約未達）の内訳をそのまま表示する。制約チェック表は closest.feasible により自動的に未達が示される。
+  renderResultBody(closest, employees)
+
   const reasonBox = $('reason-box')
-  if (reasonBox) reasonBox.innerHTML = '<ul><li>制約を満たす配置が見つからなかったため、配置方針は生成されません。</li></ul>'
+  if (reasonBox) {
+    reasonBox.innerHTML =
+      `<p class="note" style="color:var(--critical);">※ この配置は制約（${res.reason === 'min_headcount' ? '各事業部の最低人数' : '全社売上58億円超'}）を満たしていない参考配置です。</p>` +
+      generateReasonText(closest, task)
+  }
 }
 
 /** ダッシュボード全体を更新（設計書§10） */
@@ -92,7 +121,7 @@ export function renderDashboard(
   employees: Employee[],
 ): void {
   if ('infeasible' in result) {
-    renderInfeasible(result, task)
+    renderInfeasible(result, task, employees)
     return
   }
 
@@ -115,6 +144,21 @@ export function renderDashboard(
       <div class="stat"><div class="k">全社利益</div><div class="v">${oku(result.companyProfit)}</div><div class="d">コスト計 ${oku(costTotal)}</div></div>
       <div class="stat"><div class="k">制約判定</div><div class="v">${feasible ? pill('good', '● すべて満たす') : pill('crit', '● 未達あり')}</div></div>`
   }
+
+  renderResultBody(result, employees)
+
+  // 配置方針・理由
+  const reasonBox = $('reason-box')
+  if (reasonBox) reasonBox.innerHTML = generateReasonText(result, task)
+}
+
+/**
+ * 配置結果の内訳（配置人数バー〜配置結果プレビュー）を更新する。
+ * 実行不能時の参考配置表示（renderInfeasible）と通常表示（renderDashboard）で共有する。
+ */
+function renderResultBody(result: SimulationResult, employees: Employee[]): void {
+  const { units, headcount } = result
+  const total = headcount.A + headcount.B + headcount.C
 
   // 配置人数バー
   const bars = $('headcount-bars')
@@ -195,10 +239,6 @@ export function renderDashboard(
       html +
       '<p class="note">帯の境界付近にある事業部は、1名の増減が売上に与える影響が大きいため注意。</p>'
   }
-
-  // 配置方針・理由
-  const reasonBox = $('reason-box')
-  if (reasonBox) reasonBox.innerHTML = generateReasonText(result, task)
 
   // 配置結果プレビュー
   const preview = $('assignment-preview')

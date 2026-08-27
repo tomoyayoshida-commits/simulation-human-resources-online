@@ -46,12 +46,25 @@ src/
 - [x] 手順5: 4課題横断比較（機能9）… `compareTasks.ts`
 - [x] 手順6: 採用前後比較（機能7）… `compareHiring.ts`
 - [x] 手順7: CSV出力（機能8）… `csv.ts`
-- [ ] 手順8: electron-builder によるパッケージング（`npm run build`。設定済み・未実行）
+- [x] 手順8: electron-builder による Windows パッケージング（`npm run build`）
 
 テストは `npm test`（Node 標準 `node:test` ＋型ストリップ、設計書§11 準拠）。
 
+## Windows 配布
+
+WSL2 には wine が無いため、`package.json` の `build.win` は `zip` ターゲット＋`signAndEditExecutable: false`（PEリソース編集・署名をスキップ）で構成。`npx electron-builder --win zip` で `release/人材配置シミュレーター-<version>-win.zip` を生成する。
+
+- **zip はフォルダごと一括で展開する。** exe は同一フォルダの DLL 群・`resources/app.asar`・`locales/` を相対参照するため、ファイルを別々の場所（Local と Resources 等）に分けて展開すると、白ウィンドウのまま即クラッシュ・起動が異常に重い・2回目以降起動しない等の症状になる。
+- 環境依存の GPU 初期化失敗を避けるため、`main.ts` で `app.disableHardwareAcceleration()` を有効化（静的UIのため描画性能への影響なし）。
+- 起動時の JS 例外・レンダラークラッシュは `%APPDATA%/simulation-human-resources/startup-error.log` に記録される。
+- 未署名のため初回起動時に SmartScreen 警告が出る場合がある（動作には支障なし）。NSIS インストーラは wine 必須のため未対応。
+
+## 解決済み事項
+
+- **CSVカラムの実体**：`human_resources_100.csv` 入手済み。実ヘッダは `社員番号,営業力,管理力,開拓力,育成力,人件費`。`constants.ts` の `COLUMN_MAP.id` に `'社員番号'` を追加（primary）し確定。
+- **コスト／利益の単位**：実データで検証した結果、人件費(1〜20)を売上と同じ「億円」とみなすと桁が2つずれ（コスト合計が売上の数十倍）、全社利益が常に大幅な赤字になる不整合が判明。人件費は「百万円」単位とみなし、コスト計算時に `COST_UNIT_DIVISOR = 100` で億円へ換算するよう `calcEngine.ts`（`unitCostTotal`）・`optimizer.ts`（`profitValue`）を修正済み。
+- **最適化の枝刈り（`optimizer.ts`・`docs/pruning-plan.md`）**：4課題比較の体感速度改善のため、人数配分の候補ごとに割当(MCMF)を解く前に上界(緩和問題の最適値)を計算し、UB降順で処理・打ち切りする branch-and-bound を導入。導入時に「丸め前raw値と丸め後実測値のスケール不一致」による誤答（実際に最適でない候補を選ぶ／`closestCandidate`の同点タイブレークが反復順に依存する）をランダム110名データの検証で検出し、候補固有の定数項（`shiftConstant`）を上界に加算する形で修正。再発防止として `test/optimizer.test.ts` に総当たり実装との完全一致を検証する回帰テストを追加（該当シードを固定）。実データ4課題では旧実装比で体感数秒〜1桁ms台まで短縮を確認（ケースにより不可行判定のフォールバックが全候補走査になるため短縮幅は課題依存）。
+
 ## 未決事項（設計書§12）
 
-- **CSVカラムの実体**：`human_resources_100.csv` が未取得のため、`constants.ts` の `COLUMN_MAP` は暫定（モックのヘッダ「社員ID/営業力/…」＋英語別名フォールバック）。実データ入手後に確定すること。
 - **丸め桁数 `ROUND_DIGITS`**（暫定：小数第2位）。
-- **コスト／利益の単位**：カタログの式どおり「コスト = Σ人件費 × 3」「利益 = 売上 − コスト」を実装。人件費(1〜20)と売上(億円)の単位関係はカタログに明記がなく、データ次第で利益が大きく負になりうる。実データで妥当性を確認すること。

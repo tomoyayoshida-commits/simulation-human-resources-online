@@ -24,6 +24,13 @@ test('importEmployees: 正常CSV（100名）を取り込める', () => {
   assert.deepEqual(employees![0], { id: 'E001', sales: 60, mgmt: 55, dev: 50, training: 45, cost: 10 })
 })
 
+test('importEmployees: 実データのヘッダ「社員番号」も取り込める', () => {
+  const csv = ['社員番号,営業力,管理力,開拓力,育成力,人件費', 'E001,75,46,63,40,6.7'].join('\n')
+  const { employees, errors } = importEmployees(csv, 1)
+  assert.equal(errors.length, 0)
+  assert.deepEqual(employees, [{ id: 'E001', sales: 75, mgmt: 46, dev: 63, training: 40, cost: 6.7 }])
+})
+
 test('importEmployees: BOM付きヘッダも取り込める', () => {
   const { employees, errors } = importEmployees('﻿' + makeCsv(100), 100)
   assert.equal(errors.length, 0)
@@ -62,6 +69,25 @@ test('mergeEmployees: id衝突をエラー', () => {
   const { employees, errors } = mergeEmployees(base, add)
   assert.equal(employees, null)
   assert.equal(errors.length, 1)
+})
+
+test('mergeEmployees: 追加採用データ内の重複idをエラー', () => {
+  const base: Employee[] = [{ id: 'E001', sales: 1, mgmt: 1, dev: 1, training: 1, cost: 1 }]
+  const add: Employee[] = [
+    { id: 'E101', sales: 2, mgmt: 2, dev: 2, training: 2, cost: 2 },
+    { id: 'E101', sales: 3, mgmt: 3, dev: 3, training: 3, cost: 3 },
+  ]
+  const { employees, errors } = mergeEmployees(base, add)
+  assert.equal(employees, null)
+  assert.equal(errors.length, 1)
+  assert.equal(errors[0].row, 2)
+})
+
+test('importEmployees: 社員番号の重複を検出', () => {
+  const csv = [HEADER, 'E001,60,55,50,45,10', 'E001,60,55,50,45,10'].join('\n')
+  const { employees, errors } = importEmployees(csv, 2)
+  assert.equal(employees, null)
+  assert.ok(errors.some((e) => e.row === 2 && e.column === '社員番号'))
 })
 
 test('buildAssignmentCsv: ヘッダと配置先を含む', () => {

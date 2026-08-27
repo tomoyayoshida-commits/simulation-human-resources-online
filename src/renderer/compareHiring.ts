@@ -1,7 +1,7 @@
 // 設計書§6/§10: 採用前後比較（#p5）
 
 import type { Employee, SimulationResult, TaskId, UnitId } from './types.ts'
-import { COST_MULTIPLIER, round2, UNIT_IDS } from './constants.ts'
+import { COST_MULTIPLIER, COST_UNIT_DIVISOR, round2, UNIT_IDS } from './constants.ts'
 import { runOptimization } from './optimizer.ts'
 
 const UNIT_VAR: Record<UnitId, string> = { A: 'var(--a)', B: 'var(--b)', C: 'var(--c)' }
@@ -62,7 +62,10 @@ export function renderCompareHiring(base: Employee[], additional: Employee[], ta
   if (grid) grid.innerHTML = beforeCard(beforeRes) + afterCard(afterRes, beforeRes)
 
   // ROI（参考）
-  const addCost = round2(additional.reduce((s, e) => s + e.cost * COST_MULTIPLIER, 0))
+  // 億円表示のため calcEngine.unitCostTotal と同じ換算（÷COST_UNIT_DIVISOR）を通す
+  const addCost = round2(
+    additional.reduce((s, e) => s + e.cost * COST_MULTIPLIER, 0) / COST_UNIT_DIVISOR,
+  )
   const dRev = round2(afterRes.companyRevenue - beforeRes.companyRevenue)
   const dProfit = round2(afterRes.companyProfit - beforeRes.companyProfit)
   if (roi) {

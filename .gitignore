@@ -14,6 +14,9 @@ dist-ssr
 release
 *.local
 
+# electron-packager 出力
+simulation-human-resources-*
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

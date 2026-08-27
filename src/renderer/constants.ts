@@ -52,6 +52,11 @@ export const SURPLUS_TABLE: { maxRate: number; factor: number }[] = [
 export const PREV_YEAR_REVENUE = 58 // 億円
 export const COST_MULTIPLIER = 3
 
+// 人件費(1〜20)は百万円単位、売上は億円単位のため、コスト計算時に百万円→億円へ換算する。
+// 実データ検証で判明：この換算なしだとコスト合計が売上の2桁上になり、利益が常に大幅な赤字になる
+// （例：人件費合計727.4×3=2182.2 vs 全社売上60前後）。÷100すれば桁が揃い、利益が現実的な値になる。
+export const COST_UNIT_DIVISOR = 100
+
 // 【要確認】四捨五入の桁数。カタログ7.5で未規定のため暫定で小数第2位。
 // 全計算の最終値・中間値に統一して適用する（設計書§3）。
 export const ROUND_DIGITS = 2
@@ -68,13 +73,11 @@ export function round2(x: number): number {
 /**
  * CSVヘッダ→Employeeフィールドの対応（設計書§7）。
  *
- * 【要確認】human_resources_100.csv が未取得のため実ヘッダ名は未確定。
- * ここでは UIモックのプレビュー表ヘッダ（社員ID/営業力/…）を第一候補とし、
- * 実データ差異に備えて英語別名もフォールバックとして許容する。
- * 実CSV入手後、primary を実ヘッダ名に確定させること。
+ * 実データ（human_resources_100.csv）のヘッダは「社員番号」を採用しているため primary とする。
+ * UIモックのプレビュー表記「社員ID」やその他の別名は後方互換のためフォールバックとして許容する。
  */
 export const COLUMN_MAP: Record<keyof import('./types.ts').Employee, string[]> = {
-  id: ['社員ID', 'id', 'ID', 'employee_id'],
+  id: ['社員番号', '社員ID', 'id', 'ID', 'employee_id'],
   sales: ['営業力', 'sales'],
   mgmt: ['管理力', 'mgmt', 'management'],
   dev: ['開拓力', 'dev', 'development'],

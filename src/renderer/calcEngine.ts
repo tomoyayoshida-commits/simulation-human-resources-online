@@ -4,6 +4,7 @@ import type { Employee, EmployeeType, SimulationResult, UnitId, UnitResult } fro
 import {
   BASE_REVENUE,
   COST_MULTIPLIER,
+  COST_UNIT_DIVISOR,
   GROWTH,
   OPTIMAL_HEADCOUNT,
   PREV_YEAR_REVENUE,
@@ -71,11 +72,11 @@ export function finalRevenue(base: number, sFactor: number, xFactor: number): nu
   return round2(base * sFactor * xFactor)
 }
 
-/** 事業部コスト計（§4）＝Σ 人件費 × 3。算出直後に round2。 */
+/** 事業部コスト計（§4）＝Σ 人件費 × 3 を億円換算（÷COST_UNIT_DIVISOR）。算出直後に round2。 */
 export function unitCostTotal(members: Employee[]): number {
   let sum = 0
   for (const e of members) sum += e.cost * COST_MULTIPLIER
-  return round2(sum)
+  return round2(sum / COST_UNIT_DIVISOR)
 }
 
 /** 事業部結果を構築（§4）。 */

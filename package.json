@@ -1,7 +1,7 @@
 {
   "name": "simulation-human-resources",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {
@@ -9,6 +9,7 @@
     "build": "tsc -b && vite build && electron-builder",
     "preview": "vite preview",
     "test": "node --experimental-strip-types --test test/*.test.ts",
+    "test:one": "node --experimental-strip-types --test",
     "lint": "oxlint",
     "packaging": "electron-packager . --overwrite"
   },
@@ -35,7 +36,8 @@
     "win": {
       "target": [
         "zip"
-      ]
+      ],
+      "signAndEditExecutable": false
     }
   },
   "packaging": {
