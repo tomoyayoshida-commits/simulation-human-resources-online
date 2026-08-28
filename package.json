@@ -1,7 +1,7 @@
 {
   "name": "simulation-human-resources",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.6.0",
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {
@@ -10,8 +10,7 @@
     "preview": "vite preview",
     "test": "node --experimental-strip-types --test test/*.test.ts",
     "test:one": "node --experimental-strip-types --test",
-    "lint": "oxlint",
-    "packaging": "electron-packager . --overwrite"
+    "lint": "oxlint"
   },
   "devDependencies": {
     "@electron/packager": "^20.3.0",
@@ -40,9 +39,5 @@
       ],
       "signAndEditExecutable": false
     }
-  },
-  "packaging": {
-    "name": "simulation-human-resources",
-    "productneme": "マイアプリ"
   }
 }

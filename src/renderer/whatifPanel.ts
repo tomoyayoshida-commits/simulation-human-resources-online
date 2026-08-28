@@ -86,7 +86,7 @@ export function renderRosterCard(input: RosterCardInput): void {
       <button class="btn secondary" id="whatif-hire-none">誰も採用しない</button>
     </div>
     ${rows}
-    <p class="note">合計 ${total} 名（基準100名 + 採用${input.selectedIds.size}名）</p>
+    <p class="note">合計 ${total} 名（基準${input.baseCount}名 + 採用${input.selectedIds.size}名）</p>
     <div style="text-align:right;"><button class="btn" id="whatif-reoptimize-roster">この母集団で再最適化 ▶</button></div>`
 }
 
@@ -157,24 +157,30 @@ export function renderParamsCard(input: ParamsCardInput): void {
     </div>`
 }
 
+/**
+ * 前提パラメータの検証結果と、「この前提で再最適化」ボタンの活性を更新する。
+ *
+ * ボタンの活性は errors の有無だけで決める。以前は「エラーがあれば無効にする」側しか
+ * 無く、値を直してエラーが消えてもボタンが無効のままだった（復帰用の関数はあったが
+ * 呼ばれていなかった・docs/refactor-plan.md B-2）。
+ */
 export function renderParamsErrors(errors: ValidationError[]): void {
   const el = $('whatif-params-errors')
-  if (!el) return
-  if (errors.length === 0) {
-    el.innerHTML = ''
-    return
+  if (el) {
+    el.innerHTML =
+      errors.length === 0
+        ? ''
+        : '<table class="errtable" style="margin:8px 0;"><tr><th>項目</th><th class="num">実測値</th><th>期待範囲</th></tr>' +
+          errors
+            .map(
+              (e) =>
+                `<tr><td class="err">${escapeHtml(e.column)}</td><td class="num err">${escapeHtml(e.actual)}</td><td>${escapeHtml(e.expected)}</td></tr>`,
+            )
+            .join('') +
+          '</table>'
   }
-  el.innerHTML =
-    '<table class="errtable" style="margin:8px 0;"><tr><th>項目</th><th class="num">実測値</th><th>期待範囲</th></tr>' +
-    errors.map((e) => `<tr><td class="err">${escapeHtml(e.column)}</td><td class="num err">${escapeHtml(e.actual)}</td><td>${escapeHtml(e.expected)}</td></tr>`).join('') +
-    '</table>'
   const btn = $('whatif-params-reoptimize') as HTMLButtonElement | null
-  if (btn) btn.disabled = true
-}
-
-export function clearParamsErrorsGate(): void {
-  const btn = $('whatif-params-reoptimize') as HTMLButtonElement | null
-  if (btn) btn.disabled = false
+  if (btn) btn.disabled = errors.length > 0
 }
 
 export interface HeadcountCardInput {
