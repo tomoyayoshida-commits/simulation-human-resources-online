@@ -129,8 +129,7 @@ export function renderDashboard(
     return
   }
 
-  const { units, headcount } = result
-  const total = headcount.A + headcount.B + headcount.C
+  const { units } = result
 
   // サブタイトル
   const subtitle = $('dashboard-subtitle')
