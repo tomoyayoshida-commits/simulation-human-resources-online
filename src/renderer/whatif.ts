@@ -1,6 +1,6 @@
 // 機能14 What-if分析（docs/whatif-plan.md §4/§5 Phase2）。純粋関数のみ・DOMに触らない。
 
-import type { AllocationCounts, Employee, SimParams, SimulationResult, TaskId, UnitId, ValidationError } from './types.ts'
+import type { AllocationCounts, AssignmentDiff, Employee, SimParams, SimulationResult, TaskId, UnitId, ValidationError } from './types.ts'
 import { UNIT_IDS } from './constants.ts'
 import { computeSimulationResult } from './calcEngine.ts'
 
@@ -100,7 +100,7 @@ export function validateParams(params: SimParams): ValidationError[] {
 export function diffAssignment(
   baseline: Record<string, UnitId>,
   current: Record<string, UnitId>,
-): { from: UnitId; to: UnitId; count: number }[] {
+): AssignmentDiff[] {
   const order: string[] = []
   const counts = new Map<string, number>()
   for (const id of Object.keys(baseline)) {

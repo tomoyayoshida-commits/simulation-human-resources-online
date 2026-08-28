@@ -1,13 +1,8 @@
 // 設計書§9: 配置方針テキスト生成
 
-import type { SimParams, SimulationResult, TaskId, UnitId } from './types.ts'
-import { DEFAULT_PARAMS, round2, TASK_LABELS, taskTargetLabel } from './constants.ts'
-
-const UNIT_LABEL: Record<UnitId, string> = { A: 'A事業部', B: 'B事業部', C: 'C事業部' }
-
-function pct(rate: number): string {
-  return `${Math.round(rate * 100)}%`
-}
+import type { SimParams, SimulationResult, TaskId } from './types.ts'
+import { DEFAULT_PARAMS, round2, TASK_LABELS, taskTargetLabel, UNIT_IDS, UNIT_LABEL } from './constants.ts'
+import { pct } from './format.ts'
 
 /**
  * 配置方針・理由の文章を生成する（設計書§9）。
@@ -27,7 +22,7 @@ export function generateReasonText(
   )
 
   // 2. 各事業部の充足率と適用係数
-  for (const u of ['A', 'B', 'C'] as UnitId[]) {
+  for (const u of UNIT_IDS) {
     const r = units[u]
     const notes: string[] = []
     if (r.shortageFactor < 1) notes.push(`不足補正 ${r.shortageFactor.toFixed(2)}`)

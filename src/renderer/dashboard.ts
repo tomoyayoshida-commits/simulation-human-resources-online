@@ -6,21 +6,14 @@ import {
   round2,
   TASK_LABELS,
   UNIT_IDS,
+  UNIT_LABEL,
+  UNIT_NAME,
+  UNIT_VAR,
 } from './constants.ts'
+import { oku, pill, signed } from './format.ts'
+import { $ } from './dom.ts'
 import { contribution, classifyType, membersByUnit, typeBreakdown } from './calcEngine.ts'
 import { generateReasonText } from './reasonText.ts'
-
-const UNIT_LABEL: Record<UnitId, string> = { A: 'A事業部', B: 'B事業部', C: 'C事業部' }
-const UNIT_VAR: Record<UnitId, string> = { A: 'var(--a)', B: 'var(--b)', C: 'var(--c)' }
-const UNIT_NAME: Record<UnitId, string> = { A: 'A事業部（飽和）', B: 'B事業部（成長）', C: 'C事業部（新規）' }
-
-function $(id: string): HTMLElement | null {
-  return document.getElementById(id)
-}
-
-function oku(n: number): string {
-  return `${n.toFixed(2)}億円`
-}
 
 /** 充足率(rate) → メーター上の位置(%)（モックの帯幅 20/15/10/15/40 に対応） */
 function ratePosition(rate: number): number {
@@ -49,10 +42,6 @@ const GAUGE_BANDS: Record<UnitId, { colors: string[]; labels: string[] }> = {
   },
 }
 const SEG_WIDTHS = [20, 15, 10, 15, 40]
-
-function pill(kind: 'good' | 'warn' | 'crit', text: string): string {
-  return `<span class="pill ${kind}">${text}</span>`
-}
 
 /** 実行不能時の表示（機能12/B-3）。参考配置があればその内容を但し書き付きで表示する。 */
 function renderInfeasible(
@@ -143,7 +132,7 @@ export function renderDashboard(
     const costTotal = round2(units.A.costTotal + units.B.costTotal + units.C.costTotal)
     const feasible = result.feasible
     summary.innerHTML = `
-      <div class="stat"><div class="k">全社売上</div><div class="v">${oku(result.companyRevenue)}</div><div class="d ${diff >= 0 ? 'good' : ''}">前年度比 ${diff >= 0 ? '+' : ''}${diff.toFixed(2)}億円</div></div>
+      <div class="stat"><div class="k">全社売上</div><div class="v">${oku(result.companyRevenue)}</div><div class="d ${diff >= 0 ? 'good' : ''}">前年度比 ${signed(diff)}億円</div></div>
       <div class="stat"><div class="k">全社利益</div><div class="v">${oku(result.companyProfit)}</div><div class="d">コスト計 ${oku(costTotal)}</div></div>
       <div class="stat"><div class="k">制約判定</div><div class="v">${feasible ? pill('good', '● すべて満たす') : pill('crit', '● 未達あり')}</div></div>`
   }
@@ -212,7 +201,7 @@ function renderResultBody(
     const revOk = result.companyRevenue > params.prevYearRevenue
     let html =
       '<tr><th>制約</th><th>基準</th><th>結果</th><th>余裕</th><th>判定</th></tr>'
-    html += `<tr><td>全社売上</td><td>${params.prevYearRevenue}.0億円超</td><td>${oku(result.companyRevenue)}</td><td style="color:${revOk ? '#006300' : 'var(--critical)'};">${revDiff >= 0 ? '+' : ''}${revDiff.toFixed(2)}億円</td><td>${revOk ? pill('good', '● 満たす') : pill('crit', '● 未達')}</td></tr>`
+    html += `<tr><td>全社売上</td><td>${params.prevYearRevenue}.0億円超</td><td>${oku(result.companyRevenue)}</td><td style="color:${revOk ? '#006300' : 'var(--critical)'};">${signed(revDiff)}億円</td><td>${revOk ? pill('good', '● 満たす') : pill('crit', '● 未達')}</td></tr>`
     for (const u of UNIT_IDS) {
       const margin = headcount[u] - params.minHeadcount[u]
       const ok = margin >= 0

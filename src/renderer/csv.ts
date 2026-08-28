@@ -1,7 +1,7 @@
 // 設計書§8: CSV入出力（外部ライブラリ不使用・ブラウザ標準APIのみ）
 
-import type { Employee, SimParams, SimulationResult, UnitId, ValidationError } from './types.ts'
-import { COLUMN_MAP, DEFAULT_PARAMS, EXPORT_HEADERS } from './constants.ts'
+import type { Employee, SimParams, SimulationResult, ValidationError } from './types.ts'
+import { COLUMN_MAP, DEFAULT_PARAMS, EXPORT_HEADERS, UNIT_LABEL } from './constants.ts'
 import { contribution, classifyType } from './calcEngine.ts'
 import { validateEmployees } from './validation.ts'
 
@@ -164,12 +164,11 @@ export function buildAssignmentCsv(
   const h = EXPORT_HEADERS
   const header = [h.id, h.sales, h.mgmt, h.dev, h.training, h.cost, h.assignedUnit, '貢献度', 'タイプ']
   const lines = [header.join(',')]
-  const unitLabel: Record<UnitId, string> = { A: 'A事業部', B: 'B事業部', C: 'C事業部' }
   for (const e of employees) {
     const unit = result.assignment[e.id]
     const contrib = unit ? contribution(e, unit, params) : ''
     lines.push(
-      [e.id, e.sales, e.mgmt, e.dev, e.training, e.cost, unit ? unitLabel[unit] : '', contrib, classifyType(e)].join(
+      [e.id, e.sales, e.mgmt, e.dev, e.training, e.cost, unit ? UNIT_LABEL[unit] : '', contrib, classifyType(e)].join(
         ',',
       ),
     )

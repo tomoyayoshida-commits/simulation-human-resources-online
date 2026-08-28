@@ -69,6 +69,13 @@ export interface ValidationError {
   expected: string
 }
 
+/** 基準の割当から現在の割当への異動（機能14）。whatif.ts が生成し whatifPanel.ts が表示する。 */
+export interface AssignmentDiff {
+  from: UnitId
+  to: UnitId
+  count: number
+}
+
 /** What-if で差し替え可能な計算前提（機能14）。既定値は constants.DEFAULT_PARAMS。 */
 export interface SimParams {
   weights: Record<UnitId, Weights>

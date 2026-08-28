@@ -1,12 +1,22 @@
 // 設計書§6/§10: 4課題横断比較（A-1 #p4）
 
-import type { Employee, InfeasibleResult, SimulationResult, TaskId, UnitId } from './types.ts'
-import { PREV_YEAR_REVENUE, round2, TASK_LABELS, taskTargetLabel, UNIT_IDS } from './constants.ts'
+import type { Employee, InfeasibleResult, SimulationResult, TaskId } from './types.ts'
+import {
+  PREV_YEAR_REVENUE,
+  PROFIT_SCALE,
+  round2,
+  TASK_IDS,
+  TASK_LABELS,
+  taskTargetLabel,
+  UNIT_IDS,
+  UNIT_VAR,
+} from './constants.ts'
+import { oku, oku1, signed } from './format.ts'
+import { $ } from './dom.ts'
 import { taskPrimaryValue } from './calcEngine.ts'
 import { runOptimization } from './optimizer.ts'
 import { generateReasonText } from './reasonText.ts'
 
-const UNIT_VAR: Record<UnitId, string> = { A: 'var(--a)', B: 'var(--b)', C: 'var(--c)' }
 const BADGE_COLOR: Record<TaskId, string> = { 1: 'var(--a)', 2: 'var(--a)', 3: 'var(--b)', 4: 'var(--c)' }
 const PRIMARY_LABEL: Record<TaskId, string> = {
   1: '全社売上（最大化対象）',
@@ -14,8 +24,6 @@ const PRIMARY_LABEL: Record<TaskId, string> = {
   3: 'B事業部売上（最大化対象）',
   4: 'C事業部売上（最大化対象）',
 }
-const PROFIT_SCALE = 30 // 億円（4カード共通スケール）
-
 /** 事業部別バーの表示対象（売上と利益の混在を避けるため、切替で単一指標のみ表示する） */
 type BarMode = 'revenue' | 'profit'
 const BAR_LABEL: Record<BarMode, string> = { revenue: '事業部別売上', profit: '事業部別利益' }
@@ -28,16 +36,12 @@ let cachedBaseline: SimulationResult | null = null
 /** 事業部別売上バーの共通スケール（4課題×3事業部の最大値）。利益は既存の固定スケールを維持。 */
 function revenueScale(results: Record<TaskId, SimulationResult | InfeasibleResult>): number {
   let max = 1
-  for (const t of [1, 2, 3, 4] as TaskId[]) {
+  for (const t of TASK_IDS) {
     const r = results[t]
     if ('infeasible' in r) continue
     for (const u of UNIT_IDS) max = Math.max(max, r.units[u].finalRevenue)
   }
   return max
-}
-
-function oku1(n: number): string {
-  return `${n.toFixed(2)}億`
 }
 
 function infeasibleCard(task: TaskId): string {
@@ -58,10 +62,10 @@ function card(task: TaskId, r: SimulationResult, baseline: SimulationResult | nu
   let deltaHtml: string
   if (task === 1) {
     const d = round2(r.companyRevenue - PREV_YEAR_REVENUE)
-    deltaHtml = `<div class="d ${d >= 0 ? 'good' : ''}">前年度比 ${d >= 0 ? '+' : ''}${d.toFixed(2)}億円</div>`
+    deltaHtml = `<div class="d ${d >= 0 ? 'good' : ''}">前年度比 ${signed(d)}億円</div>`
   } else if (baseline) {
     const d = round2(primary - taskPrimaryValue(baseline, task))
-    deltaHtml = `<div class="d">課題1比 ${d >= 0 ? '+' : ''}${d.toFixed(2)}億円</div>`
+    deltaHtml = `<div class="d">課題1比 ${signed(d)}億円</div>`
   } else {
     deltaHtml = ''
   }
@@ -83,8 +87,8 @@ function card(task: TaskId, r: SimulationResult, baseline: SimulationResult | nu
   const revMargin = round2(r.companyRevenue - PREV_YEAR_REVENUE)
   const tight = revMargin <= 1
   const subRows =
-    `<div><span class="cs-k">全社売上</span><span class="cs-v"${tight ? ' style="color:var(--warning);font-weight:600;"' : ''}>${r.companyRevenue.toFixed(2)}億円${tight ? ' ⚠' : ''}</span></div>` +
-    `<div><span class="cs-k">全社利益</span><span class="cs-v">${r.companyProfit.toFixed(2)}億円</span></div>`
+    `<div><span class="cs-k">全社売上</span><span class="cs-v"${tight ? ' style="color:var(--warning);font-weight:600;"' : ''}>${oku(r.companyRevenue)}${tight ? ' ⚠' : ''}</span></div>` +
+    `<div><span class="cs-k">全社利益</span><span class="cs-v">${oku(r.companyProfit)}</span></div>`
 
   const statusPill = tight
     ? `<span class="pill warn">● 余裕+${revMargin.toFixed(2)}億円のみ</span>`
@@ -117,11 +121,11 @@ function buildSummary(task: TaskId, r: SimulationResult, baseline: SimulationRes
   const hc = r.headcount
   const maxUnit = UNIT_IDS.reduce((a, b) => (hc[b] > hc[a] ? b : a))
   if (task === 1) {
-    return `人員を最適配分し全社売上を最大化。特定事業部に偏らないバランス型で、全社利益は${r.companyProfit.toFixed(2)}億円。`
+    return `人員を最適配分し全社売上を最大化。特定事業部に偏らないバランス型で、全社利益は${oku(r.companyProfit)}。`
   }
   const baseProfit = baseline ? baseline.companyProfit : r.companyProfit
   const dProfit = round2(r.companyProfit - baseProfit)
-  return `最も人員が厚いのは${maxUnit}事業部（${hc[maxUnit]}名）。${taskTargetLabel(task)}を最優先で最大化する一方、全社利益は課題1比 ${dProfit >= 0 ? '+' : ''}${dProfit.toFixed(2)}億円。`
+  return `最も人員が厚いのは${maxUnit}事業部（${hc[maxUnit]}名）。${taskTargetLabel(task)}を最優先で最大化する一方、全社利益は課題1比 ${signed(dProfit)}億円。`
 }
 
 /** キャッシュ済みの結果とバー表示モードから #p4 のカードを再描画する（最適化の再実行はしない）。 */
@@ -130,9 +134,9 @@ function renderCards(): void {
   const results = cachedResults
   const scale = barMode === 'profit' ? PROFIT_SCALE : revenueScale(results)
 
-  const grid = document.getElementById('compare-tasks-grid')
+  const grid = $('compare-tasks-grid')
   if (!grid) return
-  grid.innerHTML = ([1, 2, 3, 4] as TaskId[])
+  grid.innerHTML = TASK_IDS
     .map((t) => {
       const res = results[t]
       return 'infeasible' in res ? infeasibleCard(t) : card(t, res, cachedBaseline, barMode, scale)
@@ -167,11 +171,11 @@ export function initCompareModeToggle(): void {
     { id: 'cmp-mode-revenue', mode: 'revenue' },
   ]
   for (const { id, mode } of buttons) {
-    document.getElementById(id)?.addEventListener('click', () => {
+    $(id)?.addEventListener('click', () => {
       if (barMode === mode) return
       barMode = mode
       for (const b of buttons) {
-        document.getElementById(b.id)?.classList.toggle('active', b.mode === mode)
+        $(b.id)?.classList.toggle('active', b.mode === mode)
       }
       renderCards()
     })

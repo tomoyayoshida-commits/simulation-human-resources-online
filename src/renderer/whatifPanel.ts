@@ -1,27 +1,9 @@
 // 機能14 What-if分析パネル（#p6）のDOM更新。表示専用・計算を持たない（CLAUDE.md §5の方針）。
 
-import type { AllocationCounts, Employee, SimParams, SimulationResult, TaskId, UnitId, ValidationError } from './types.ts'
-import { TASK_LABELS, round2 } from './constants.ts'
-
-const UNIT_LABEL: Record<UnitId, string> = { A: 'A事業部', B: 'B事業部', C: 'C事業部' }
-
-function $(id: string): HTMLElement | null {
-  return document.getElementById(id)
-}
-
-function pill(kind: 'good' | 'warn' | 'crit', text: string): string {
-  return `<span class="pill ${kind}">${text}</span>`
-}
-
-function oku(n: number): string {
-  return `${n.toFixed(2)}億円`
-}
-
-function deltaText(current: number, base: number, unit = '億円'): string {
-  const d = round2(current - base)
-  if (d === 0) return `±0.00${unit}（基準と同じ）`
-  return `${d > 0 ? '+' : ''}${d.toFixed(2)}${unit}`
-}
+import type { AllocationCounts, AssignmentDiff, Employee, SimParams, SimulationResult, TaskId, UnitId, ValidationError } from './types.ts'
+import { round2, TASK_IDS, TASK_LABELS, UNIT_IDS, UNIT_LABEL } from './constants.ts'
+import { deltaText, oku, pill } from './format.ts'
+import { $ } from './dom.ts'
 
 /** ①基準ケース：課題選択カード（#p2のtaskcardと同じ見た目） */
 export function renderTaskCards(selectedTask: TaskId): void {
@@ -33,7 +15,7 @@ export function renderTaskCards(selectedTask: TaskId): void {
     3: '成長事業へ集中投資',
     4: '新規事業へ集中投資',
   }
-  el.innerHTML = ([1, 2, 3, 4] as TaskId[])
+  el.innerHTML = TASK_IDS
     .map(
       (t) =>
         `<div class="taskcard${t === selectedTask ? ' selected' : ''}" data-whatif-task="${t}"><div class="tag">チェックパターン${t}</div><h4>${TASK_LABELS[t]}</h4><p>${descs[t]}</p></div>`,
@@ -120,14 +102,13 @@ export function renderParamsCard(input: ParamsCardInput): void {
   const el = $('whatif-params-card')
   if (!el) return
   const { params, standard } = input
-  const units: UnitId[] = ['A', 'B', 'C']
   const numRow = (
     label: string,
     field: 'baseRevenue' | 'growth' | 'optimalHeadcount' | 'minHeadcount',
     step: string,
   ): string =>
     `<div class="bar-row"><span class="label" style="width:110px;">${label}</span>` +
-    units
+    UNIT_IDS
       .map(
         (u) =>
           `<input type="number" step="${step}" data-whatif-param="${field}" data-whatif-unit="${u}" value="${params[field][u]}" class="${changedClass(params[field][u], standard[field][u]).trim()}" style="width:78px;margin-right:6px;" title="標準値 ${standard[field][u]}">`,
@@ -137,7 +118,7 @@ export function renderParamsCard(input: ParamsCardInput): void {
 
   const weightRow = (key: 'sales' | 'mgmt' | 'dev' | 'training', label: string): string =>
     `<div class="bar-row"><span class="label" style="width:110px;">重み・${label}</span>` +
-    units
+    UNIT_IDS
       .map(
         (u) =>
           `<input type="number" step="0.01" data-whatif-weight="${key}" data-whatif-unit="${u}" value="${params.weights[u][key]}" class="${changedClass(params.weights[u][key], standard.weights[u][key]).trim()}" style="width:78px;margin-right:6px;" title="標準値 ${standard.weights[u][key]}">`,
@@ -145,7 +126,7 @@ export function renderParamsCard(input: ParamsCardInput): void {
       .join('') +
     '</div>'
 
-  const weightSums = units
+  const weightSums = UNIT_IDS
     .map((u) => {
       const sum = round2(
         params.weights[u].sales + params.weights[u].mgmt + params.weights[u].dev + params.weights[u].training,
@@ -156,7 +137,7 @@ export function renderParamsCard(input: ParamsCardInput): void {
     .join('')
 
   el.innerHTML = `
-    <div class="bar-row"><span class="label" style="width:110px;"></span>${units.map((u) => `<span style="width:78px;display:inline-block;text-align:center;margin-right:6px;font-size:11px;color:var(--text-muted);">${u}事業部</span>`).join('')}</div>
+    <div class="bar-row"><span class="label" style="width:110px;"></span>${UNIT_IDS.map((u) => `<span style="width:78px;display:inline-block;text-align:center;margin-right:6px;font-size:11px;color:var(--text-muted);">${u}事業部</span>`).join('')}</div>
     ${numRow('基準売上(億円)', 'baseRevenue', '0.1')}
     ${numRow('成長係数', 'growth', '0.01')}
     ${numRow('適正人数', 'optimalHeadcount', '1')}
@@ -208,9 +189,8 @@ export function renderHeadcountCard(input: HeadcountCardInput): void {
   const el = $('whatif-headcount-card')
   if (!el) return
   const { counts, rosterSize } = input
-  const units: UnitId[] = ['A', 'B', 'C']
   el.innerHTML =
-    units
+    UNIT_IDS
       .map(
         (u) =>
           `<div class="bar-row"><span class="label">${UNIT_LABEL[u]}</span>
@@ -224,8 +204,7 @@ export function renderHeadcountCard(input: HeadcountCardInput): void {
 
 /** ドラッグ中の軽量更新：既存のrange要素を再生成せず値だけ同期する。 */
 export function updateHeadcountValues(counts: AllocationCounts, rosterSize: number): void {
-  const units: UnitId[] = ['A', 'B', 'C']
-  for (const u of units) {
+  for (const u of UNIT_IDS) {
     const slider = document.querySelector<HTMLInputElement>(`[data-whatif-headcount="${u}"]`)
     if (slider && Number(slider.value) !== counts[u]) slider.value = String(counts[u])
     const label = document.querySelector<HTMLElement>(`[data-whatif-headcount-label="${u}"]`)
@@ -252,8 +231,8 @@ export function renderRosterTable(input: RosterTableInput): void {
     const base = baselineAssignment[e.id]
     const cur = assignment[e.id]
     const moved = base !== cur
-    html += `<tr${moved ? ' class="whatif-moved"' : ''}><td>${e.id}</td><td>${base ? UNIT_LABEL[base] : '-'}</td><td><select data-whatif-move="${e.id}">${['A', 'B', 'C']
-      .map((u) => `<option value="${u}" ${u === cur ? 'selected' : ''}>${UNIT_LABEL[u as UnitId]}</option>`)
+    html += `<tr${moved ? ' class="whatif-moved"' : ''}><td>${e.id}</td><td>${base ? UNIT_LABEL[base] : '-'}</td><td><select data-whatif-move="${e.id}">${UNIT_IDS
+      .map((u) => `<option value="${u}" ${u === cur ? 'selected' : ''}>${UNIT_LABEL[u]}</option>`)
       .join('')}</select></td></tr>`
   }
   html += '</table>'
@@ -264,10 +243,9 @@ export function renderRosterTable(input: RosterTableInput): void {
 export function renderUnitTable(current: SimulationResult, baseline: SimulationResult): void {
   const el = $('whatif-unit-table')
   if (!el) return
-  const units: UnitId[] = ['A', 'B', 'C']
   let html =
     '<table><tr><th>事業部</th><th class="num">人数(基準→現在)</th><th class="num">充足率</th><th class="num">売上(基準→現在)</th><th class="num">Δ売上</th><th class="num">利益(基準→現在)</th><th class="num">Δ利益</th></tr>'
-  for (const u of units) {
+  for (const u of UNIT_IDS) {
     const b = baseline.units[u]
     const c = current.units[u]
     html += `<tr><td>${UNIT_LABEL[u]}</td><td class="num">${b.count}→${c.count}</td><td class="num">${Math.round(c.fulfillmentRate * 100)}%</td><td class="num">${oku(b.finalRevenue)}→${oku(c.finalRevenue)}</td><td class="num">${deltaText(c.finalRevenue, b.finalRevenue)}</td><td class="num">${oku(b.profit)}→${oku(c.profit)}</td><td class="num">${deltaText(c.profit, b.profit)}</td></tr>`
@@ -306,9 +284,8 @@ function ratePosition(rate: number): number {
 export function renderGauges(current: SimulationResult): void {
   const el = $('whatif-gauges')
   if (!el) return
-  const units: UnitId[] = ['A', 'B', 'C']
   let html = ''
-  for (const u of units) {
+  for (const u of UNIT_IDS) {
     const r = current.units[u]
     const band = GAUGE_BANDS[u]
     const segs = SEG_WIDTHS.map((w, idx) => `<div class="seg" style="width:${w}%;background:${band.colors[idx]};"></div>`).join('')
@@ -323,7 +300,7 @@ export function renderGauges(current: SimulationResult): void {
 }
 
 /** 結果詳細：配置差分サマリー */
-export function renderDiffSummary(diffs: { from: UnitId; to: UnitId; count: number }[]): void {
+export function renderDiffSummary(diffs: AssignmentDiff[]): void {
   const el = $('whatif-diff-summary')
   if (!el) return
   if (diffs.length === 0) {
