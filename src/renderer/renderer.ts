@@ -488,7 +488,7 @@ function initRunButton(): void {
   const btn = document.getElementById('run-simulation')
   btn?.addEventListener('click', () => {
     if (!state.employees100) {
-      alert('先に①データ取込で human_resources_100.csv を取り込んでください。')
+      alert('先に①データ取込で社員データを取り込んでください。')
       go('p1')
       return
     }

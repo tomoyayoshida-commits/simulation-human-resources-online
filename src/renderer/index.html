@@ -59,10 +59,11 @@
   <!-- 1. データ取込（+ D-2を統合） -->
   <section class="panel" id="p1">
     <h2>① 社員データ取込</h2>
-    <p class="subtitle">human_resources_100.csv を読み込み、取込結果と検証結果を同じ画面で確認する</p>
+    <p class="subtitle">社員データを読み込み、取込結果と検証結果を同じ画面で確認する</p>
     <div class="card">
-      <div class="dropzone" id="dropzone-100">📄 human_resources_100.csv をドラッグ&ドロップ、または <span class="file-select-link" style="color:var(--a);font-weight:600;">ファイルを選択</span></div>
+      <div class="dropzone" id="dropzone-100">📄 社員データをドラッグ&ドロップ、または <span class="file-select-link" style="color:var(--a);font-weight:600;">ファイルを選択</span></div>
       <input type="file" id="file-100" accept=".csv" hidden>
+      <p class="note">対応形式：CSVファイル（.csv）</p>
     </div>
 
     <div class="section-title">取込結果（先頭5名分プレビュー・全100名）</div>
@@ -72,7 +73,7 @@
       </table>
     </div>
 
-    <div class="section-title"><span class="addon-tag">追加機能 D-2</span>入力検証レポート</div>
+    <div class="section-title">入力検証レポート</div>
     <div class="stat-row" id="validation-summary">
       <div class="stat"><div class="k">取込件数</div><div class="v">0 / 100</div></div>
       <div class="stat"><div class="k">エラー件数</div><div class="v">0</div></div>
@@ -143,7 +144,7 @@
       <p class="note">制約に違反する場合はこの表の該当行が赤警告となり、原因（最低人数／全社売上のどちらがボトルネックか）をここに表示する。</p>
     </div>
 
-    <div class="section-title"><span class="addon-tag">追加機能 B-1</span>充足率・ペナルティ帯</div>
+    <div class="section-title">充足率・ペナルティ帯</div>
     <div class="card" id="fulfillment-gauges">
       <p class="note">未実行</p>
     </div>
@@ -164,8 +165,7 @@
 
   <!-- A-1 横断比較 -->
   <section class="panel" id="p4">
-    <span class="addon-tag">追加機能 A-1</span>
-    <h2 style="margin-top:8px;">4課題横断比較ダッシュボード</h2>
+    <h2>4課題横断比較ダッシュボード</h2>
     <p class="subtitle">4課題分の要約カードを並べ、目的間のトレードオフを見比べる</p>
 
     <div class="mode-toggle" id="compare-mode-toggle">
@@ -187,8 +187,9 @@
     <div class="compare-grid" style="grid-template-columns:1fr 1fr;">
       <div class="card">
         <div class="section-title" style="margin-top:0;">採用前（100名）</div>
-        <div class="dropzone" id="dropzone-hiring-100">📄 human_resources_100.csv をドラッグ&ドロップ、または <span class="file-select-link" style="color:var(--a);font-weight:600;">ファイルを選択</span></div>
+        <div class="dropzone" id="dropzone-hiring-100">📄 社員データをドラッグ&ドロップ、または <span class="file-select-link" style="color:var(--a);font-weight:600;">ファイルを選択</span></div>
         <input type="file" id="file-hiring-100" accept=".csv" hidden>
+        <p class="note">対応形式：CSVファイル（.csv）</p>
         <div id="hiring-import-error-100" style="margin-top:12px;">
           <div class="stat-row" id="hiring-validation-summary-100">
             <div class="stat"><div class="k">判定</div><div class="v"><span class="pill warn">未取込</span></div></div>
@@ -198,8 +199,9 @@
       </div>
       <div class="card">
         <div class="section-title" style="margin-top:0;">追加採用（10名）</div>
-        <div class="dropzone" id="dropzone-10">📄 追加採用10名分データ（同一形式CSV）をドラッグ&ドロップ、または <span class="file-select-link" style="color:var(--a);font-weight:600;">ファイルを選択</span></div>
+        <div class="dropzone" id="dropzone-10">📄 追加採用10名分データをドラッグ&ドロップ、または <span class="file-select-link" style="color:var(--a);font-weight:600;">ファイルを選択</span></div>
         <input type="file" id="file-10" accept=".csv" hidden>
+        <p class="note">対応形式：CSVファイル（.csv・社員データと同一形式）</p>
         <div id="hiring-import-error-10" style="margin-top:12px;">
           <div class="stat-row" id="hiring-validation-summary-10">
             <div class="stat"><div class="k">判定</div><div class="v"><span class="pill warn">未取込</span></div></div>
@@ -227,15 +229,14 @@
 
   <!-- What-if 分析 -->
   <section class="panel" id="p6">
-    <span class="addon-tag">追加機能 14</span>
-    <h2 style="margin-top:8px;">What-if 分析</h2>
+    <h2>What-if 分析</h2>
     <p class="subtitle">前提・母集団・配置を変えたときに結果がどう動くかを、基準ケースとの差分で確認する</p>
     <div class="hint">💡 人数配分と個別異動は動かした瞬間に再計算される。前提パラメータと採用シナリオは最適配置の解き直しが必要なため「再最適化」ボタンで実行する（最大約1.2秒）。</div>
 
     <div class="section-title" style="margin-top:8px;">基準ケース</div>
     <div class="card">
       <div class="taskcards" id="whatif-task-cards"></div>
-      <p class="note" id="whatif-baseline-note">未実行：先に①データ取込で human_resources_100.csv を取り込んでください。</p>
+      <p class="note" id="whatif-baseline-note">未実行：先に①データ取込で社員データを取り込んでください。</p>
     </div>
 
     <div class="stat-row whatif-sticky" id="whatif-summary">
