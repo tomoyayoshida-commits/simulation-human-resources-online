@@ -14,6 +14,8 @@ npm install       # 依存インストール
 npm run dev       # Vite dev サーバ + Electron ウィンドウ起動
 npm run build     # tsc 型チェック → vite build → electron-builder でパッケージング
 npm run preview   # ビルド済みレンダラーのプレビュー
+npm test          # node:test による単体テスト（52件）
+npm run test:e2e  # Electron実機で dist/ を操作する結線テスト（21項目・要画面）
 npm run lint      # oxlint
 ```
 
@@ -54,6 +56,8 @@ src/
 - [x] 手順10: 表示層のリファクタリング（v0.6・docs/refactor-plan.md）… 重複定義の集約と `renderer.ts` の分割
 
 テストは `npm test`（Node 標準 `node:test` ＋型ストリップ、設計書§11 準拠）。全52件。
+単体テストは純粋関数までしか触れないため、取込UI〜状態〜描画の配線は `npm run test:e2e`
+（Electron実機で `dist/` を読み込み、CSVのdropを合成して①〜⑥を操作する21項目）で担保する。
 
 ## Windows 配布
 

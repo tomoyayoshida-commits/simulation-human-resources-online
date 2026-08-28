@@ -33,6 +33,7 @@ Electron + TypeScript。**外部API・ネットワーク通信は行わない／
 | `npm run dev` | Vite + Electron 起動（WSLg 経由で Windows 側に表示）。HMR あり |
 | `npm test` | `node:test` + 型ストリップ。全52件・約18秒 |
 | `npm run test:one -- --test-name-pattern='<正規表現>' <ファイル>` | 1件だけ実行。約0.1秒。例：`npm run test:one -- --test-name-pattern='境界は上側' test/calcEngine.test.ts`。注意は§8 |
+| `npm run test:e2e` | `vite build` → Electron実機で dist/ を操作する結線テスト。全21項目・約20秒。§8の注意あり |
 | `npm run lint` | oxlint |
 | `npm run build` | `tsc -b` → `vite build` → `electron-builder`。Windows配布は `npx electron-builder --win zip`（README参照） |
 
@@ -66,6 +67,7 @@ src/
     whatifPanel.ts     294行  #p6 のDOM更新。表示専用で計算を持たない
 test/                          node:test。calcEngine / csv / optimizer / assignment.oracle / whatif / gauge / format の7ファイル・52テスト
   helpers/lpOracle.ts          assignment.oracle 用のHiGHS(MILP)ラッパー（テスト専用。src/からimportしない）
+  e2e/run.mjs                  Electron実機での結線テスト（`npm run test:e2e`・21項目）。node:test とは別枠
 ```
 
 - ★＝ロジックの中核。仕様変更時はまずこの4ファイルを見る。
@@ -123,6 +125,10 @@ test/                          node:test。calcEngine / csv / optimizer / assign
   `npm test` の18秒はアプリではなく `枝刈り…完全一致` テスト1本（**15.5秒**）が占める。基準実装 `bruteForceOptimize` が枝刈りなしで861候補×MCMFを回すため。
   CPUプロファイル内訳：`MinCostFlow.run` 60% / `upperBoundRawTotal` 11% / `buildValues` 10% / GC 6%。
   **pruning-plan.md の①貢献度の事前計算は実装済み**（`optimizer.buildEmployeeBases`）。**②UBのquickselect化は未実装**（`upperBoundRawTotal` は今も全ソート）。さらに縮めるならここ。
+- **E2E（`npm run test:e2e`）は画面が要る**。WSL2 では WSLg 経由で動くが、ヘッドレス環境では xvfb が必要。
+  データは既定で `~/development/資料/human_resources_100.csv` と `.../テストケース/採用01_正常10名.csv` を読む
+  （`E2E_CSV_100` / `E2E_CSV_ADD10` で差し替え可）。期待値は `docs/baseline-snapshot.txt` の実測値に紐づいており、
+  **計算仕様を変えたらここも直す**（例：課題3の全社売上 60.10億円、ゲージ位置 86.7%）。
 - **`--test-name-pattern` はマッチ0件でも exit 0**（§4 `test:one`）。1件も実行されていないのに成功に見える。
   出力の `✔ <テスト名>` で狙ったテストが実際に走ったことを毎回確認する。
   - パターンは**正規表現**。テスト名の**半角**括弧はエスケープが要る：`全探索\(5名` か `全探索.5名`。

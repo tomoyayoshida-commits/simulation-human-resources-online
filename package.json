@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "test": "node --experimental-strip-types --test test/*.test.ts",
     "test:one": "node --experimental-strip-types --test",
+    "test:e2e": "vite build && electron test/e2e/run.mjs",
     "lint": "oxlint"
   },
   "devDependencies": {
