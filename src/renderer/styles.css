@@ -26,7 +26,6 @@ h2{font-size:19px;margin:0 0 4px;}
 .subtitle{color:var(--text-secondary);font-size:13px;margin:0 0 20px;}
 .section-title{font-size:14px;font-weight:600;margin:30px 0 10px;padding-top:18px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;}
 .section-title:first-of-type{border-top:none;padding-top:0;margin-top:8px;}
-.addon-tag{font-size:10px;color:var(--b);border:1px solid var(--b);border-radius:8px;padding:1px 7px;font-weight:500;}
 .card{background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:18px 20px;margin-bottom:14px;}
 table{width:100%;border-collapse:collapse;font-size:12.5px;}
 th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--grid);}

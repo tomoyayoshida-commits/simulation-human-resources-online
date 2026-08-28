@@ -1,0 +1,26 @@
+task1 rev=61.53 profit=39.7 hc=40/40/20 feasible=true
+  A n=40 ability=2523.05 rate=1 sf=1 xf=1 base=25.14 final=25.14 cost=8.58 profit=16.56
+  B n=40 ability=2632.7 rate=1.1428571428571428 sf=1 xf=1 base=29.11 final=29.11 cost=9 profit=20.11
+  C n=20 ability=1218.4 rate=0.8 sf=0.9 xf=1 base=8.09 final=7.28 cost=4.25 profit=3.03
+  csv=caf4b0b5285b7549295ff6da18d0288a7c47c5a01c63b6cdd7b5ac9a3e341779
+  reason=374884386f2280303b9379524d049cea735dfd742dbf45429ebe9166bbe95a55
+task2 rev=59.74 profit=37.92 hc=47/41/12 feasible=true
+  A n=47 ability=3128.55 rate=1.175 sf=1 xf=1 base=28.77 final=28.77 cost=9.33 profit=19.44
+  B n=41 ability=2410.35 rate=1.1714285714285715 sf=1 xf=1 base=27.25 final=27.25 cost=10.11 profit=17.14
+  C n=12 ability=662.4 rate=0.48 sf=0.7 xf=1 base=5.31 final=3.72 cost=2.38 profit=1.34
+  csv=c8d44177befab475f5fac2132c302b42322408b4fac7f32c40e8ccfeafdfe5ce
+  reason=0309261c48ef38c5e9b5f0585b258be2508a5cac48e7158a38c5b6bc72d22dd4
+task3 rev=60.1 profit=38.28 hc=41/49/10 feasible=true
+  A n=41 ability=2355.8 rate=1.025 sf=1 xf=1 base=24.13 final=24.13 cost=8.89 profit=15.24
+  B n=49 ability=3218.55 rate=1.4 sf=1 xf=0.95 base=34.04 final=32.34 cost=10.96 profit=21.38
+  C n=10 ability=637.2 rate=0.4 sf=0.7 xf=1 base=5.19 final=3.63 cost=1.97 profit=1.66
+  csv=01bcda8245edfbfc961081b12652109eff32840e4fca2a03e2b730118cee19ce
+  reason=c286448decdf7911a4555f6b406f80190902c0ccd9318ae74a78852482e3025c
+task4 rev=60.45 profit=38.64 hc=40/35/25 feasible=true
+  A n=40 ability=2477.65 rate=1 sf=1 xf=1 base=24.87 final=24.87 cost=8.45 profit=16.42
+  B n=35 ability=2122.7 rate=1 sf=1 xf=1 base=24.83 final=24.83 cost=7.84 profit=16.99
+  C n=25 ability=1749.7 rate=1 sf=1 xf=1 base=10.75 final=10.75 cost=5.52 profit=5.23
+  csv=3d2969f04b38b83a820919e9ae20c94f70e9839e6205dcf0a6f69be59713540b
+  reason=e658581a62e82cb127b004d38ac9a4dbdbcb02e8a8c7a2f44e52fa35b0e3d765
+
+SHA256(all)=d0a984052ef37fa98d35962287a0aacd79902a33af092f91914dfa02dfc52f9b
