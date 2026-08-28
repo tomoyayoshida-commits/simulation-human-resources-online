@@ -31,10 +31,10 @@ Electron + TypeScript。**外部API・ネットワーク通信は行わない／
 | コマンド | 内容 |
 |---|---|
 | `npm run dev` | Vite + Electron 起動（WSLg 経由で Windows 側に表示）。HMR あり |
-| `npm test` | `node:test` + 型ストリップ。全30件・約17秒 |
+| `npm test` | `node:test` + 型ストリップ。全52件・約18秒 |
 | `npm run test:one -- --test-name-pattern='<正規表現>' <ファイル>` | 1件だけ実行。約0.1秒。例：`npm run test:one -- --test-name-pattern='境界は上側' test/calcEngine.test.ts`。注意は§8 |
 | `npm run lint` | oxlint |
-| `npm run build` | `tsc -b` → `vite build` → `electron-builder`（**未実行**） |
+| `npm run build` | `tsc -b` → `vite build` → `electron-builder`。Windows配布は `npx electron-builder --win zip`（README参照） |
 
 ## 5. ディレクトリ構成
 
@@ -42,28 +42,35 @@ Electron + TypeScript。**外部API・ネットワーク通信は行わない／
 src/
   main/main.ts          74行  Electronエントリ。BrowserWindow生成のみ。IPC・ファイルI/Oなし
   renderer/
-    index.html         274行  画面骨格。#p0〜#p6 の7パネル（モック由来の静的サンプル値は撤去し「未実行」プレースホルダに置換済み）
-    styles.css         124行  モック由来のスタイル＋What-if用の最小追加(§7)
-    renderer.ts        571行  ★結線層。状態保持・画面遷移go()・CSV取込UI・実行/出力ボタン・What-if(#p6)イベント配線
-    types.ts            83行  型定義のみ（SimParams含む・機能14）
-    constants.ts       149行  ★全定数の単一の置き場。重み・売上・ペナルティ表・COLUMN_MAP・round2()・DEFAULT_PARAMS
-    csv.ts             191行  CSVパース/エクスポート/採用データマージ
+    index.html         278行  画面骨格。#p0〜#p6 の7パネル（モック由来の静的サンプル値は撤去し「未実行」プレースホルダに置換済み）
+    styles.css         126行  モック由来のスタイル＋What-if用の最小追加(§7)
+    renderer.ts        170行  ★結線層。アプリ状態・画面遷移go()・実行/出力ボタン・取込の配線だけ
+    types.ts            90行  型定義のみ（SimParams・AssignmentDiff含む・機能14）
+    constants.ts       168行  ★全定数の単一の置き場。重み・売上・ペナルティ表・COLUMN_MAP・round2()・DEFAULT_PARAMS
+                             ＋ UNIT_IDS / TASK_IDS / UNIT_LABEL / UNIT_NAME / UNIT_VAR / PROFIT_SCALE
+    format.ts           64行  表示用の文字列整形（DOM非依存）。escapeHtml/escapeAttr/oku/oku1/signed/deltaText/pct/pill
+    dom.ts              14行  $ / setHtml だけの薄いDOMヘルパ
+    csv.ts             190行  CSVパース/エクスポート/採用データマージ
     validation.ts       88行  範囲・件数チェック。ValidationError[]を返す純粋関数
     calcEngine.ts      181行  ★貢献度→能力値→売上→コスト→利益。全て純粋関数
     assignment.ts      179行  最小費用流(SSP+Johnsonポテンシャル+Dijkstra)。内側の割当を厳密解
     optimizer.ts       281行  ★人数配分の全列挙×割当。課題1〜4の目的関数と辞書式合成。solveForHeadcount(機能14軸1)含む
-    reasonText.ts       56行  配置方針テキスト生成
-    dashboard.ts       265行  #p3 のDOM更新
-    compareTasks.ts    179行  #p4 の4課題横断比較カード。事業部別バーは売上/利益の切替式（docs/solver-oracle-plan.mdとは無関係、A-1のUI改善）
-    compareHiring.ts    90行  #p5 の採用前後比較＋ROI表
+    reasonText.ts       51行  配置方針テキスト生成
+    importPanel.ts     123行  #p1/#p5 の取込UI（setupDropzone）と検証レポート描画
+    dashboard.ts       210行  #p3 のDOM更新
+    gauge.ts            93行  充足率ゲージ。#p3 と #p6 が共有する。帯ラベルは shortageTable から生成
+    compareTasks.ts    183行  #p4 の4課題横断比較カード。事業部別バーは売上/利益の切替式
+    compareHiring.ts    89行  #p5 の採用前後比較＋ROI表
     whatif.ts          118行  What-if分析（機能14）の純粋関数群。evaluateAssignment/validateParams/diffAssignment等。DOM非依存
-    whatifPanel.ts     345行  #p6 のDOM更新。表示専用で計算を持たない
-test/                          node:test。calcEngine / csv / optimizer / assignment.oracle / whatif の5ファイル・37テスト
+    whatifController.ts 361行 #p6 の状態保持とイベント配線。①の取込結果は renderer.ts から getContext で参照する
+    whatifPanel.ts     294行  #p6 のDOM更新。表示専用で計算を持たない
+test/                          node:test。calcEngine / csv / optimizer / assignment.oracle / whatif / gauge / format の7ファイル・52テスト
   helpers/lpOracle.ts          assignment.oracle 用のHiGHS(MILP)ラッパー（テスト専用。src/からimportしない）
 ```
 
 - ★＝ロジックの中核。仕様変更時はまずこの4ファイルを見る。
-- `dashboard.ts` / `compareTasks.ts` / `compareHiring.ts` / `whatifPanel.ts` は表示専用で計算を持たない（例外は §8 の単位換算）。
+- `importPanel.ts` / `dashboard.ts` / `gauge.ts` / `compareTasks.ts` / `compareHiring.ts` / `whatifPanel.ts` は表示専用で計算を持たない（例外は §8 の単位換算）。
+- 表示の重複を作らないこと。事業部名・色・億円表記・判定ピル・エスケープは `constants.ts` と `format.ts` に既にある。各モジュールで定義し直さない（v0.6のリファクタで一度解消済み・`docs/refactor-plan.md`）。
 - What-if分析（機能14・製品カタログ未記載の追加機能）の設計・作業指示は `docs/whatif-plan.md`。`calcEngine.ts`/`optimizer.ts`の主要関数は`SimParams`（既定値`DEFAULT_PARAMS`）を末尾引数として受け取れる（式の形は変更していない）。`assignment.ts`はこのリファクタで無変更。
 
 ## 6. ドメイン定数（`constants.ts` に実装済み・再読不要）
@@ -102,6 +109,15 @@ test/                          node:test。calcEngine / csv / optimizer / assign
   （`optimizer.profitValue` は事前計算した `EmployeeBase.cost`（生の人件費）を受け取り、除算はこの関数内で行う）
   **人件費に触るコードを書くときは必ずこの除算を通す。**
 - **CSVヘッダは「社員番号」**（「社員ID」ではない）。`COLUMN_MAP` が単一の参照点。
+- **CSV由来の文字列を innerHTML に埋めるときは必ず `format.escapeHtml`（属性なら `escapeAttr`）を通す。**
+  社員番号と `ValidationError.actual` は利用者のCSVがそのまま入る。
+  `テストケース/hire_test04_xss_script_injection.csv` は社員番号に `<script>` や `<img onerror>` を持つ。
+  `contextIsolation: true` はレンダラー自身が innerHTML に書いたHTMLの実行までは防がない。
+  検証済みの数値（能力値・人件費）と自前の定数は対象外。
+- **CSV出力（`buildAssignmentCsv`）はフォーミュラインジェクション未対策。**
+  `=1+1` や `@SUM(...)` で始まる社員番号がそのまま出力に載る（`hire_test03_csv_formula_injection.csv`）。
+  入力パーサもクォート付きフィールド非対応（RFC4180非準拠）で、両者は同時に直す必要がある。
+  対応可否は未合意のまま保留中（`docs/refactor-plan.md` B-6）。
 - **最適化の速度は解決済み**：実データ4課題で**約1.2秒**（課題1 329ms / 2 112ms / 3 137ms / 4 573ms、110名の課題1 449ms）。
   `docs/pruning-plan.md` の branch-and-bound で約10秒から短縮済み。「10秒かかる」は枝刈り導入前の古い情報。
   `npm test` の18秒はアプリではなく `枝刈り…完全一致` テスト1本（**15.5秒**）が占める。基準実装 `bruteForceOptimize` が枝刈りなしで861候補×MCMFを回すため。

@@ -28,13 +28,15 @@ src/
     styles.css     モックのスタイル
     renderer.ts    画面初期化・遷移（go(id)）・イベントバインド
     （以降、後続手順で追加）
-    types.ts / constants.ts        型・事業部別定数（§2）
+    types.ts / constants.ts        型・事業部別定数・表示定数（§2）
+    format.ts / dom.ts             文字列整形（エスケープ含む）・DOMヘルパ
     csv.ts / validation.ts         CSV入出力・入力検証（§3,§7,§8）
     calcEngine.ts                  貢献度〜利益の計算（§4）
     assignment.ts / optimizer.ts   割当（min-cost flow）・最適化（§5）
     reasonText.ts                  配置方針テキスト生成（§9）
-    dashboard.ts / compareTasks.ts / compareHiring.ts  DOM更新（§10）
-    whatif.ts / whatifPanel.ts     What-if分析（機能14）の計算・DOM更新（docs/whatif-plan.md）
+    importPanel.ts                 #p1/#p5 の取込UIと検証レポート（§10）
+    dashboard.ts / gauge.ts / compareTasks.ts / compareHiring.ts  DOM更新（§10）
+    whatif.ts / whatifController.ts / whatifPanel.ts  What-if分析（機能14）の計算・状態・DOM更新
 ```
 
 ## 実装状況
@@ -49,8 +51,9 @@ src/
 - [x] 手順7: CSV出力（機能8）… `csv.ts`
 - [x] 手順8: electron-builder による Windows パッケージング（`npm run build`）
 - [x] 手順9: What-if分析（機能14・製品カタログ未記載の追加機能。docs/whatif-plan.md）… `whatif.ts` / `whatifPanel.ts` / `#p6`
+- [x] 手順10: 表示層のリファクタリング（v0.6・docs/refactor-plan.md）… 重複定義の集約と `renderer.ts` の分割
 
-テストは `npm test`（Node 標準 `node:test` ＋型ストリップ、設計書§11 準拠）。
+テストは `npm test`（Node 標準 `node:test` ＋型ストリップ、設計書§11 準拠）。全52件。
 
 ## Windows 配布
 
@@ -69,6 +72,17 @@ WSL2 には wine が無いため、`package.json` の `build.win` は `zip` タ�
 - **割当(MCMF)の独立検証（`docs/solver-oracle-plan.md`）**：`assignment.ts`（自前MCMF実装）を守るテストが5名規模の1件しかなかったため、テスト専用依存として `highs`（HiGHSのWASM版、devDependency）を追加し、`test/assignment.oracle.test.ts` で完全単模な輸送問題としてMILP定式化した独立実装と目的関数値を比較する回帰テストを追加（`test/helpers/lpOracle.ts`）。本番コード（`src/`）には数理最適化ライブラリを一切importしていない（設計書_AI向け.md の制約を維持）。実データ4課題の結果に変化なし。
 - **追加採用10名データ**：`~/development/資料/テストケース/採用01_正常10名.csv`（旧 `hire_test01_simple_normal.csv`。E101〜E110、既存100名データと同一フォーマット）を入手・検証済み（2026-08-28）。取込・マージ・110名での4課題最適化を実行し、100名側の結果が既存の実測値と完全一致すること、110名側も全課題 feasible であることを確認。#p5 採用前後比較の実データ検証が可能になった。
 
+- **表示層のリファクタリング（v0.6・`docs/refactor-plan.md`）**：事業部名・色・億円表記・判定ピル・DOM取得・ゲージ描画が
+  表示モジュールごとに重複定義されていたため、`constants.ts` / `format.ts` / `dom.ts` / `gauge.ts` に集約。
+  573行あった `renderer.ts` を `importPanel.ts`（取込UI）・`whatifController.ts`（#p6の状態と配線）へ分割し170行にした。
+  同時に3件の不具合を修正：①#p3 と #p6 でゲージのマーカー位置の式が違い、充足率1.4で10.7ポイントずれていた
+  （`SURPLUS_TABLE` の1.6と対応が取れる #p3 側に統一）。②前提パラメータのエラーを直しても「再最適化」ボタンが
+  無効のまま復帰しなかった。③CSV由来の社員番号を無エスケープで innerHTML に埋めていた。
+  全工程で実データ4課題の結果ハッシュ（`docs/baseline-snapshot.txt`）が不変であることを確認している。
+
 ## 未決事項（設計書§12）
 
 - **丸め桁数 `ROUND_DIGITS`**（暫定：小数第2位）。
+- **CSV入出力のRFC4180準拠とフォーミュラインジェクション対策**（`docs/refactor-plan.md` B-6）。
+  入力パーサがクォート付きフィールド非対応、出力が `=`/`+`/`-`/`@` 始まりの値を素通しする。
+  往復互換に影響するため、入力・出力を同時に直す前提で可否を判断する。
