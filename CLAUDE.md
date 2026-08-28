@@ -131,7 +131,9 @@ test/                          node:test。calcEngine / csv / optimizer / assign
   `docs/pruning-plan.md` の branch-and-bound で約10秒から短縮済み。「10秒かかる」は枝刈り導入前の古い情報。
   `npm test` の18秒はアプリではなく `枝刈り…完全一致` テスト1本（**15.5秒**）が占める。基準実装 `bruteForceOptimize` が枝刈りなしで861候補×MCMFを回すため。
   CPUプロファイル内訳：`MinCostFlow.run` 60% / `upperBoundRawTotal` 11% / `buildValues` 10% / GC 6%。
-  **pruning-plan.md の①貢献度の事前計算は実装済み**（`optimizer.buildEmployeeBases`）。**②UBのquickselect化は未実装**（`upperBoundRawTotal` は今も全ソート）。さらに縮めるならここ。
+  **pruning-plan.md の①貢献度の事前計算は実装済み**（`optimizer.buildEmployeeBases`）。**②UBのquickselect化は実測のうえ見送り**：
+  全ソートは4課題合計1126ms中の約117ms（10.4%）で、ソートを消しても削減幅の上限は68ms。
+  加算順が変わって `ub` の下位ビットがずれるため §9 の再合意も要る。詳細と代替案は `docs/pruning-plan.md` の追記を見る。
 - **E2E（`npm run test:e2e`）は画面が要る**。WSL2 では WSLg 経由で動くが、ヘッドレス環境では xvfb が必要。
   データは既定で `~/development/資料/human_resources_100.csv` と `.../テストケース/採用01_正常10名.csv` を読む
   （`E2E_CSV_100` / `E2E_CSV_ADD10` で差し替え可）。期待値は `docs/baseline-snapshot.txt` の実測値に紐づいており、
