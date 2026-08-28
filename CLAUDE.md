@@ -11,18 +11,23 @@
 
 ## 2. 何を作っているか
 
-100名（採用後110名）を A/B/C 事業部へ配置し、売上・利益を最適化するデスクトップアプリ。
-Electron + TypeScript。**外部API・ネットワーク通信は行わない／数理最適化ライブラリは本番コードで使わない**。
-※これは**課題の制約ではなく自主的な設計判断**（出典 `設計書_AI向け.md:11`「サイズが小さく自前実装で十分高速」）。
+100名（採用後110名）を A/B/C 事業部へ配置し、売上・利益を最適化するアプリ。
+Web(SPA) + TypeScript + Firebase。社内限定公開のため Firebase Authentication（Google認証・許可リスト制）と
+Firestore（データ永続化・履歴管理）を利用し、Google Cloud との外部通信を行う。
+**数理最適化ライブラリは本番コードで使わない**方針は維持（出典 `設計書_AI向け.md:11`「サイズが小さく自前実装で十分高速」）。
+※旧方針は「Electron製デスクトップアプリ・外部API/ネットワーク通信なし」だったが、
+社内メンバー間でのデータ共有・履歴管理を要件化したため**意図的に撤回**した（2026-08-28、`docs/web-firebase-plan.md`参照）。
+このリポジトリはElectron版（`simulation-human-resources`）から複製したWeb版専用リポジトリ。
 課題原文の「制約条件」は全社売上>58億と各事業部の最低人数の2つのみ。変更したい場合は禁止事項ではなく §9 の再合意対象。
 「配置結果」に加え「配置方針とその理由」の出力が評価対象。
 
 ## 3. 開発環境
 
-コードは WSL2 Ubuntu 上：`\\wsl.localhost\Ubuntu\home\tomoyayoshida\development\simulation-human-resources`
+コードは WSL2 Ubuntu 上：`\\wsl.localhost\Ubuntu\home\tomoyayoshida\development\simulation-human-resources-online`
+（Electron版 `simulation-human-resources` とはディレクトリ・リモートリポジトリともに分離済み）
 
 - PowerShell から実行するときは**ログインシェル経由が必須**（node は fnm 管理）：
-  `wsl -d Ubuntu -- bash -lic "cd ~/development/simulation-human-resources && npm test"`
+  `wsl -d Ubuntu -- bash -lic "cd ~/development/simulation-human-resources-online && npm test"`
 - `bash -c`（`-li` なし）は `node: command not found` になる。
 - PowerShell は `2>/dev/null` を Windows パスと誤解するため使わない。
 
@@ -30,19 +35,19 @@ Electron + TypeScript。**外部API・ネットワーク通信は行わない／
 
 | コマンド | 内容 |
 |---|---|
-| `npm run dev` | Vite + Electron 起動（WSLg 経由で Windows 側に表示）。HMR あり |
-| `npm test` | `node:test` + 型ストリップ。全52件・約18秒 |
+| `npm run dev` | Vite 起動。ブラウザで `http://localhost:5173` を開く。HMR あり |
+| `npm run preview` | `vite preview`。`dist/` を静的サイトとしてローカル配信し本番相当を確認 |
+| `npm test` | `node:test` + 型ストリップ。全65件・約18秒 |
 | `npm run test:one -- --test-name-pattern='<正規表現>' <ファイル>` | 1件だけ実行。約0.1秒。例：`npm run test:one -- --test-name-pattern='境界は上側' test/calcEngine.test.ts`。注意は§8 |
-| `npm run test:e2e` | `vite build` → Electron実機で dist/ を操作する結線テスト。全21項目・約20秒。§8の注意あり |
+| `npm run test:e2e` | **Playwright移行待ちのため一時的に無効**（旧Electron実機E2Eは撤去済み）。`docs/web-firebase-plan.md` 参照 |
 | `npm run snapshot` | 実データ4課題の結果を `docs/baseline-snapshot.txt` と照合。差があれば行単位で示し exit 1。約1秒。`-- --write` で基準を更新 |
 | `npm run lint` | oxlint |
-| `npm run build` | `tsc -b` → `vite build` → `electron-builder`。Windows配布は `npx electron-builder --win zip`（README参照） |
+| `npm run build` | `tsc -b` → `vite build`。成果物は `dist/`。デプロイは `firebase deploy`（Firebase導入後、`docs/web-firebase-plan.md`参照） |
 
 ## 5. ディレクトリ構成
 
 ```
 src/
-  main/main.ts          74行  Electronエントリ。BrowserWindow生成のみ。IPC・ファイルI/Oなし
   renderer/
     index.html         278行  画面骨格。#p0〜#p6 の7パネル（モック由来の静的サンプル値は撤去し「未実行」プレースホルダに置換済み）
     styles.css         126行  モック由来のスタイル＋What-if用の最小追加(§7)
@@ -66,9 +71,9 @@ src/
     whatif.ts          118行  What-if分析（機能14）の純粋関数群。evaluateAssignment/validateParams/diffAssignment等。DOM非依存
     whatifController.ts 361行 #p6 の状態保持とイベント配線。①の取込結果は renderer.ts から getContext で参照する
     whatifPanel.ts     294行  #p6 のDOM更新。表示専用で計算を持たない
-test/                          node:test。calcEngine / csv / optimizer / assignment.oracle / whatif / gauge / format の7ファイル・52テスト
+test/                          node:test。calcEngine / csv / optimizer / assignment.oracle / whatif / gauge / format の7ファイル・65テスト
   helpers/lpOracle.ts          assignment.oracle 用のHiGHS(MILP)ラッパー（テスト専用。src/からimportしない）
-  e2e/run.mjs                  Electron実機での結線テスト（`npm run test:e2e`・21項目）。node:test とは別枠
+  e2e/run.mjs                  旧Electron実機E2E（21項目）。electron依存除去により**現在は実行不可**。Playwright版へ移行後に削除予定（`docs/web-firebase-plan.md`）
   snapshot.ts                  実データ4課題の結果スナップショット（`npm run snapshot`）。node:test とは別枠
 ```
 

@@ -3,42 +3,21 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build && electron-builder",
+    "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test": "node --experimental-strip-types --test test/*.test.ts",
     "test:one": "node --experimental-strip-types --test",
-    "test:e2e": "vite build && electron test/e2e/run.mjs",
+    "test:e2e": "echo 'test:e2e は Playwright 移行待ちのため一時的に無効です（docs/web-firebase-plan.md 参照）' && exit 1",
     "snapshot": "node --experimental-strip-types test/snapshot.ts",
     "lint": "oxlint"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
-    "electron": "^43.4.0",
-    "electron-builder": "^26.15.3",
     "highs": "^1.15.2",
     "oxlint": "^1.78.0",
     "typescript": "~6.0.3",
-    "vite": "^8.2.1",
-    "vite-plugin-electron": "^1.1.1"
-  },
-  "build": {
-    "appId": "com.pathoslogos.simulation-human-resources",
-    "productName": "侍の人材配置",
-    "files": [
-      "dist/**/*",
-      "dist-electron/**/*"
-    ],
-    "directories": {
-      "output": "release"
-    },
-    "win": {
-      "target": [
-        "zip"
-      ],
-      "signAndEditExecutable": false
-    }
+    "vite": "^8.2.1"
   }
 }

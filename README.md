@@ -1,7 +1,10 @@
-# 侍の人材配置
+# 侍の人材配置（Web版）
 
-100名（採用後110名）の社員を A/B/C 事業部に配置し、売上・利益を最適化するデスクトップアプリ。
-Electron + TypeScript（レンダラーはブラウザ標準APIのみ）で実装する。外部API・ネットワーク通信は行わない。
+100名（採用後110名）の社員を A/B/C 事業部に配置し、売上・利益を最適化するWebアプリ（SPA）。
+TypeScript（ブラウザ標準APIのみ）で実装。社内限定公開のため Firebase Hosting / Authentication（Google認証）/
+Firestore（データ永続化）を導入予定（詳細は `docs/web-firebase-plan.md`）。旧版はElectron製デスクトップアプリ
+（`simulation-human-resources`リポジトリ）だったが、複数人・複数端末でのデータ共有・履歴管理を要件化したため
+本リポジトリとしてWeb化した。
 
 設計書:
 - `設計書_AI向け.md` … 型・数式・アルゴリズムの実装仕様
@@ -11,21 +14,21 @@ Electron + TypeScript（レンダラーはブラウザ標準APIのみ）で実�
 
 ```bash
 npm install       # 依存インストール
-npm run dev       # Vite dev サーバ + Electron ウィンドウ起動
-npm run build     # tsc 型チェック → vite build → electron-builder でパッケージング
-npm run preview   # ビルド済みレンダラーのプレビュー
-npm test          # node:test による単体テスト（52件）
-npm run test:e2e  # Electron実機で dist/ を操作する結線テスト（21項目・要画面）
+npm run dev       # Vite dev サーバ起動（ブラウザで http://localhost:5173 を開く）
+npm run build     # tsc 型チェック → vite build（dist/ に静的サイトを生成）
+npm run preview   # dist/ を静的サイトとしてローカル配信（本番相当の確認）
+npm test          # node:test による単体テスト（65件）
+npm run test:e2e  # Playwright移行待ちのため一時的に無効（旧Electron実機E2Eは撤去）
 npm run snapshot  # 実データ4課題の結果が変わっていないかを基準ファイルと照合
 npm run lint      # oxlint
 ```
+
+デプロイ（Firebase導入後）: `npm run build && firebase deploy`（詳細は `docs/web-firebase-plan.md`）
 
 ## ディレクトリ構成（設計書§1）
 
 ```
 src/
-  main/
-    main.ts        Electron エントリ。BrowserWindow 生成のみ
   renderer/
     index.html     モックの HTML 骨格（#p0〜#p5 パネル、.topbar 等）
     styles.css     モックのスタイル
@@ -52,22 +55,14 @@ src/
 - [x] 手順5: 4課題横断比較（機能9）… `compareTasks.ts`
 - [x] 手順6: 採用前後比較（機能7）… `compareHiring.ts`
 - [x] 手順7: CSV出力（機能8）… `csv.ts`
-- [x] 手順8: electron-builder による Windows パッケージング（`npm run build`）
+- [x] 手順8: Web(SPA) + Firebase への移植（Electron除去。ホスティング/認証/永続化はdocs/web-firebase-plan.mdの段階実装で対応中）
 - [x] 手順9: What-if分析（機能14・製品カタログ未記載の追加機能。docs/whatif-plan.md）… `whatif.ts` / `whatifPanel.ts` / `#p6`
 - [x] 手順10: 表示層のリファクタリング（v0.6・docs/refactor-plan.md）… 重複定義の集約と `renderer.ts` の分割
 
-テストは `npm test`（Node 標準 `node:test` ＋型ストリップ、設計書§11 準拠）。全52件。
-単体テストは純粋関数までしか触れないため、取込UI〜状態〜描画の配線は `npm run test:e2e`
-（Electron実機で `dist/` を読み込み、CSVのdropを合成して①〜⑥を操作する21項目）で担保する。
-
-## Windows 配布
-
-WSL2 には wine が無いため、`package.json` の `build.win` は `zip` ターゲット＋`signAndEditExecutable: false`（PEリソース編集・署名をスキップ）で構成。`npx electron-builder --win zip` で `release/侍の人材配置-<version>-win.zip` を生成する。
-
-- **zip はフォルダごと一括で展開する。** exe は同一フォルダの DLL 群・`resources/app.asar`・`locales/` を相対参照するため、ファイルを別々の場所（Local と Resources 等）に分けて展開すると、白ウィンドウのまま即クラッシュ・起動が異常に重い・2回目以降起動しない等の症状になる。
-- 環境依存の GPU 初期化失敗を避けるため、`main.ts` で `app.disableHardwareAcceleration()` を有効化（静的UIのため描画性能への影響なし）。
-- 起動時の JS 例外・レンダラークラッシュは `%APPDATA%/simulation-human-resources/startup-error.log` に記録される。
-- 未署名のため初回起動時に SmartScreen 警告が出る場合がある（動作には支障なし）。NSIS インストーラは wine 必須のため未対応。
+テストは `npm test`（Node 標準 `node:test` ＋型ストリップ、設計書§11 準拠）。全65件。
+単体テストは純粋関数までしか触れないため、取込UI〜状態〜描画の配線を確認する結線テストは
+旧Electron実機E2E（21項目）が担っていたが、Web化に伴い撤去。Playwright版への移行待ち
+（`npm run test:e2e` は現在無効。`docs/web-firebase-plan.md` 参照）。
 
 ## 解決済み事項
 
