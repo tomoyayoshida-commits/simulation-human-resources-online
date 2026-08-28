@@ -6,7 +6,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { deltaText, escapeAttr, escapeHtml, oku, oku1, pct, pill, signed } from '../src/renderer/format.ts'
 
-// テストケース `hire_test04_xss_script_injection.csv` が社員番号に持つ4パターン
+// テストケース `採用04_XSSスクリプト混入.csv` が社員番号に持つ4パターン
+// （HTMLに見えるIDは入力検証で弾かず、この関数で無害化する方針・CLAUDE.md §8）
 const XSS_IDS = [
   `<script>alert('xss')</script>`,
   `<img src=x onerror=alert(1)>`,

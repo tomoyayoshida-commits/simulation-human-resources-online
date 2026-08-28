@@ -113,12 +113,19 @@ test/                          node:test。calcEngine / csv / optimizer / assign
 - **CSVヘッダは「社員番号」**（「社員ID」ではない）。`COLUMN_MAP` が単一の参照点。
 - **CSV由来の文字列を innerHTML に埋めるときは必ず `format.escapeHtml`（属性なら `escapeAttr`）を通す。**
   社員番号と `ValidationError.actual` は利用者のCSVがそのまま入る。
-  `テストケース/hire_test04_xss_script_injection.csv` は社員番号に `<script>` や `<img onerror>` を持つ。
+  `テストケース/採用04_XSSスクリプト混入.csv` は社員番号に `<script>` や `<img onerror>` を持ち、**取込は通る**
+  （HTMLに見えるIDは弾かず、表示側のエスケープで無害化する方針）。
   `contextIsolation: true` はレンダラー自身が innerHTML に書いたHTMLの実行までは防がない。
   検証済みの数値（能力値・人件費）と自前の定数は対象外。
+- **社員番号は空と `= + - @` 始まりを入力検証で弾く**（`validation.ts`）。
+  空は `assignment` のキーが衝突して配置が壊れるため。数式始まりは取込事故として報告する
+  （`採用03_CSV数式インジェクション.csv` は「社員番号が不正」で保留される）。
+  規則の出典は `constants.FORMULA_TRIGGER` で、CSV出力のガードと共有している。
 - **CSV入出力のフォーミュラインジェクション対策・RFC4180準拠は対応済み**（`docs/refactor-plan.md` B-6）。
   `csv.ts` の `parseCsv` がクォート付きフィールド（カンマ・改行・`""`エスケープ）を解釈し、
-  `escapeCsvField`/`stripFormulaGuard` が `=`/`+`/`-`/`@` 始まりの値に出力時 `'` を前置・入力時に除去して往復互換を保つ。
+  `escapeCsvField`/`stripFormulaGuard` が出力時 `'` を前置・入力時に除去して往復互換を保つ。
+  **ガード対象は「数式トリガ始まり」だけでなく「`'` 始まり」も含む**。含めないと可逆にならず、
+  `'=A1` が往復で `=A1` に化ける（実際に起きていた）。片方だけ直すと非対称に戻るので必ず対で扱う。
   `採用03_CSV数式インジェクション.csv`（旧 `hire_test03_csv_formula_injection.csv`）で検証済み。
 - **最適化の速度は解決済み**：実データ4課題で**約1.2秒**（課題1 329ms / 2 112ms / 3 137ms / 4 573ms、110名の課題1 449ms）。
   `docs/pruning-plan.md` の branch-and-bound で約10秒から短縮済み。「10秒かかる」は枝刈り導入前の古い情報。

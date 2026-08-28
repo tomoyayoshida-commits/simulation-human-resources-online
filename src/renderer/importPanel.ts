@@ -13,7 +13,7 @@ export interface HiringImportIds {
 
 /**
  * 検証エラー1行。
- * actual にはCSVの生の値がそのまま入る（`テストケース/hire_test04_xss_script_injection.csv` の
+ * actual にはCSVの生の値がそのまま入る（`テストケース/採用04_XSSスクリプト混入.csv` の
  * 社員番号は `<script>` を含む）ため、必ずエスケープしてから埋め込む。
  */
 function errorRow(e: ValidationError): string {

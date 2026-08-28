@@ -7,7 +7,7 @@ import { round2 } from './constants.ts'
  * HTMLエスケープ。
  *
  * CSV由来の値（社員番号・ValidationError の column/actual）は利用者が用意したテキストであり、
- * `テストケース/hire_test04_xss_script_injection.csv` のように `<script>` や
+ * `テストケース/採用04_XSSスクリプト混入.csv` のように `<script>` や
  * `<img src=x onerror=...>` を社員番号に含むデータが実際に想定されている。
  * contextIsolation はレンダラー自身が innerHTML に書いたHTMLの実行までは防がないため、
  * 外部由来の文字列は必ずここを通してから埋め込む。自前の定数・数値は対象外。

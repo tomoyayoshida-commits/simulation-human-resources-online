@@ -3,6 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- 外部通信を行わないアプリのため、読み込み元を自分自身に閉じる。
+     画像は CSV プレビュー等で data: を使う余地を残し、それ以外は既定の 'none' に落ちる。
+     これが無いと Electron が開発時に「CSP未設定」の警告を出す。 -->
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'">
 <title>人材配置シミュレーター</title>
 <link rel="stylesheet" href="./styles.css">
 </head>

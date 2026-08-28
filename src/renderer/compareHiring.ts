@@ -84,6 +84,9 @@ export function renderCompareHiring(base: Employee[], additional: Employee[], ta
         maxUnit = u
       }
     }
-    summary.textContent = `追加採用${additional.length}名により全社売上は${signed(dRev)}億円、全社利益は${signed(dProfit)}億円変化した。利益の伸びが最も大きいのは${maxUnit}事業部（+${round2(maxDelta).toFixed(2)}億円）。追加人件費コスト${oku(addCost)}と照らし、投資対効果を確認できる。`
+    // 全事業部の利益が減るシナリオもあるため符号は signed() に任せる
+    // （`+` を固定で書いていたときは `+-1.00億円` と表示されていた）
+    const deltaLabel = maxDelta >= 0 ? '利益の伸びが最も大きい' : '利益の落ち込みが最も小さい'
+    summary.textContent = `追加採用${additional.length}名により全社売上は${signed(dRev)}億円、全社利益は${signed(dProfit)}億円変化した。${deltaLabel}のは${maxUnit}事業部（${signed(round2(maxDelta))}億円）。追加人件費コスト${oku(addCost)}と照らし、投資対効果を確認できる。`
   }
 }

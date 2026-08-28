@@ -14,7 +14,6 @@
     "lint": "oxlint"
   },
   "devDependencies": {
-    "@electron/packager": "^20.3.0",
     "@types/node": "^24.13.3",
     "electron": "^43.4.0",
     "electron-builder": "^26.15.3",

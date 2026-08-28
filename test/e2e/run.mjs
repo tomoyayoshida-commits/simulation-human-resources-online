@@ -13,8 +13,8 @@
 //   E2E_CSV_100    既定 ~/development/資料/human_resources_100.csv
 //   E2E_CSV_ADD10  既定 ~/development/資料/テストケース/採用01_正常10名.csv
 
-import { app, BrowserWindow } from 'electron'
-import { existsSync, readFileSync } from 'node:fs'
+import { app, BrowserWindow, session } from 'electron'
+import { existsSync, readFileSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -63,16 +63,29 @@ function isProblem(level) {
   return level === 'error' || level === 'warning'
 }
 
+// CSV出力（機能8）は Blob + <a download> で行う。保存ダイアログが出ると自動実行が止まるので
+// 保存先を固定し、CSPの下でもダウンロードが成立することを検証できるようにする。
+const DOWNLOAD_PATH = path.join(os.tmpdir(), 'e2e_assignment_result.csv')
+
 app.whenReady().then(async () => {
+  rmSync(DOWNLOAD_PATH, { force: true })
+  session.defaultSession.on('will-download', (_e, item) => item.setSavePath(DOWNLOAD_PATH))
+
   const win = new BrowserWindow({ width: 1280, height: 860, show: false })
 
-  let consoleSeen = 0
+  // 監視フックが本当に生きているかを確かめるための目印。
+  // 以前は Electron のCSP警告が出ることを当てにしていたが、index.html に CSP を設定して
+  // 警告が消えた結果このチェックが空振りした。自前でプローブを出して確実に検知する。
+  const PROBE = '__e2e_console_probe__'
+  let probeSeen = false
   const consoleProblems = []
   win.webContents.on('console-message', (...args) => {
     const { level, message } = readConsoleMessage(args)
-    consoleSeen++
-    // 開発時のみ出るCSP警告はアプリの不具合ではない（パッケージ後は出ない）
-    if (isProblem(level) && !message.includes('Electron Security Warning')) consoleProblems.push(message)
+    if (String(message).includes(PROBE)) {
+      probeSeen = true
+      return
+    }
+    if (isProblem(level)) consoleProblems.push(message)
   })
   win.webContents.on('render-process-gone', (_e, details) => {
     consoleProblems.push(`render-process-gone: ${JSON.stringify(details)}`)
@@ -123,6 +136,18 @@ app.whenReady().then(async () => {
   check('③ゲージのB事業部が86.7%（B-1統一後）', p3Markers.split(',')[1] === '86.7%', p3Markers)
   check('③配置結果プレビュー100行', (await run(`document.querySelectorAll('#assignment-preview tr').length`)) === 101)
   check('③配置方針が生成される', await run(`document.querySelectorAll('#reason-box li').length >= 5`))
+
+  // 機能8: CSV出力。index.html の CSP 下でも Blob ダウンロードが成立することを見る
+  await run(`document.getElementById('export-csv').click()`)
+  await new Promise((r) => setTimeout(r, 1200))
+  const saved = existsSync(DOWNLOAD_PATH) ? readFileSync(DOWNLOAD_PATH, 'utf8') : ''
+  check(
+    '③CSV出力が保存され、ヘッダと100名分の行を含む',
+    saved.includes('配置先事業部') && saved.trimEnd().split('\n').length === 101,
+    saved ? `行数 ${saved.trimEnd().split('\n').length}` : '保存されなかった',
+  )
+  // 出力を再取込できる（往復整合）ことも同時に見る
+  check('③出力CSVが再取込できる形式になっている', saved.split('\n')[1]?.startsWith('E'), saved.split('\n')[1] ?? '')
 
   // ---- ④ 4課題横断比較 ----
   await run(`document.querySelector('.phasebtn[data-tab="p4"]').click()`)
@@ -203,9 +228,11 @@ app.whenReady().then(async () => {
 
   // ---- エラーの取りこぼしが無いことの確認 ----
   const pageErrors = await run(`window.__e2eErrors`)
-  // console-message を1件も受け取っていないなら、フックが効いておらず見逃している可能性がある
-  check('コンソール監視が機能している（1件以上受信）', consoleSeen > 0, `受信 ${consoleSeen} 件`)
-  check('レンダラーでエラーが発生していない', consoleProblems.length === 0 && pageErrors.length === 0,
+  // プローブが届かないなら console-message のフックが効いておらず、エラーを見逃している
+  await run(`console.warn(${JSON.stringify(PROBE)}); true`)
+  await new Promise((r) => setTimeout(r, 200))
+  check('コンソール監視が機能している（プローブを受信）', probeSeen)
+  check('レンダラーでエラー・警告が発生していない', consoleProblems.length === 0 && pageErrors.length === 0,
     [...consoleProblems, ...pageErrors].join(' / '))
 
   let failed = 0
