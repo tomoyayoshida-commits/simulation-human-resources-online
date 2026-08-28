@@ -124,3 +124,29 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
 .whatif-sticky{position:sticky;top:0;z-index:5;background:var(--page);padding:10px 0;}
 input.whatif-changed{border-color:var(--a);background:#eef4fc;}
 tr.whatif-moved{background:#fef3dc;}
+
+/* --- 以下、同じ指定が複数箇所のインラインstyleに散っていたものを集約 --- */
+/* 上に一段あける（カードを続けて並べるとき） */
+.mt-12{margin-top:12px;}
+/* 右寄せの操作ボタン列。spacedは前後に余白を取る版 */
+.actions{text-align:right;}
+.actions.spaced{margin:8px 0 18px;}
+/* 高さを固定してスクロールさせるカード（#p6の社員一覧は100行を超える） */
+.scroll-card{max-height:420px;overflow:auto;}
+/* 2カラムで並べる比較グリッド（既定の4カラムを上書き） */
+.compare-grid.pair{grid-template-columns:1fr 1fr;}
+/* ドロップゾーン内の「ファイルを選択」 */
+.file-select-link{color:var(--a);font-weight:600;}
+/* What-if 前提パラメータ：ラベルと入力の幅を揃える（.bar-row の既定より広い） */
+.whatif-params .label{width:110px;}
+.whatif-params input[type="number"]{width:78px;margin-right:6px;}
+.whatif-params .unit-head{width:78px;display:inline-block;text-align:center;margin-right:6px;font-size:11px;color:var(--text-muted);}
+.whatif-params .scalar{margin-top:10px;}
+.whatif-params .scalar input[type="number"]{width:90px;margin-right:0;}
+.whatif-params .scalar .label ~ .label{margin-left:20px;}
+.whatif-hire-buttons{display:flex;gap:6px;margin-bottom:8px;}
+.whatif-weight-sum{margin-right:14px;}
+.whatif-weight-sum.off{color:var(--warning);font-weight:600;}
+/* #p6 採用候補のチェックボックス行 */
+.whatif-candidate{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12.5px;}
+.errtable.inline{margin:8px 0;}

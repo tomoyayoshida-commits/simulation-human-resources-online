@@ -76,18 +76,18 @@ export function renderRosterCard(input: RosterCardInput): void {
     .map((e) => {
       const checked = input.selectedIds.has(e.id) ? 'checked' : ''
       // 社員番号はCSV由来。属性値・本文の両方でエスケープする（dataset 経由で読み戻す値は元のまま）
-      return `<label style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12.5px;"><input type="checkbox" data-whatif-candidate="${escapeAttr(e.id)}" ${checked}> ${escapeHtml(e.id)}（営${e.sales}/管${e.mgmt}/開${e.dev}/育${e.training}/人件費${e.cost}）</label>`
+      return `<label class="whatif-candidate"><input type="checkbox" data-whatif-candidate="${escapeAttr(e.id)}" ${checked}> ${escapeHtml(e.id)}（営${e.sales}/管${e.mgmt}/開${e.dev}/育${e.training}/人件費${e.cost}）</label>`
     })
     .join('')
   const total = input.baseCount + input.selectedIds.size
   el.innerHTML = `
-    <div style="margin-bottom:8px;">
-      <button class="btn secondary" id="whatif-hire-all" style="margin-right:6px;">全員採用</button>
+    <div class="whatif-hire-buttons">
+      <button class="btn secondary" id="whatif-hire-all">全員採用</button>
       <button class="btn secondary" id="whatif-hire-none">誰も採用しない</button>
     </div>
     ${rows}
     <p class="note">合計 ${total} 名（基準${input.baseCount}名 + 採用${input.selectedIds.size}名）</p>
-    <div style="text-align:right;"><button class="btn" id="whatif-reoptimize-roster">この母集団で再最適化 ▶</button></div>`
+    <div class="actions"><button class="btn" id="whatif-reoptimize-roster">この母集団で再最適化 ▶</button></div>`
 }
 
 export interface ParamsCardInput {
@@ -109,21 +109,21 @@ export function renderParamsCard(input: ParamsCardInput): void {
     field: 'baseRevenue' | 'growth' | 'optimalHeadcount' | 'minHeadcount',
     step: string,
   ): string =>
-    `<div class="bar-row"><span class="label" style="width:110px;">${label}</span>` +
+    `<div class="bar-row"><span class="label">${label}</span>` +
     UNIT_IDS
       .map(
         (u) =>
-          `<input type="number" step="${step}" data-whatif-param="${field}" data-whatif-unit="${u}" value="${params[field][u]}" class="${changedClass(params[field][u], standard[field][u]).trim()}" style="width:78px;margin-right:6px;" title="標準値 ${standard[field][u]}">`,
+          `<input type="number" step="${step}" data-whatif-param="${field}" data-whatif-unit="${u}" value="${params[field][u]}" class="${changedClass(params[field][u], standard[field][u]).trim()}" title="標準値 ${standard[field][u]}">`,
       )
       .join('') +
     '</div>'
 
   const weightRow = (key: 'sales' | 'mgmt' | 'dev' | 'training', label: string): string =>
-    `<div class="bar-row"><span class="label" style="width:110px;">重み・${label}</span>` +
+    `<div class="bar-row"><span class="label">重み・${label}</span>` +
     UNIT_IDS
       .map(
         (u) =>
-          `<input type="number" step="0.01" data-whatif-weight="${key}" data-whatif-unit="${u}" value="${params.weights[u][key]}" class="${changedClass(params.weights[u][key], standard.weights[u][key]).trim()}" style="width:78px;margin-right:6px;" title="標準値 ${standard.weights[u][key]}">`,
+          `<input type="number" step="0.01" data-whatif-weight="${key}" data-whatif-unit="${u}" value="${params.weights[u][key]}" class="${changedClass(params.weights[u][key], standard.weights[u][key]).trim()}" title="標準値 ${standard.weights[u][key]}">`,
       )
       .join('') +
     '</div>'
@@ -134,12 +134,12 @@ export function renderParamsCard(input: ParamsCardInput): void {
         params.weights[u].sales + params.weights[u].mgmt + params.weights[u].dev + params.weights[u].training,
       )
       const off = Math.abs(sum - 1) > 0.001
-      return `<span style="margin-right:14px;${off ? 'color:var(--warning);font-weight:600;' : ''}">${u}合計 ${sum.toFixed(2)}${off ? ' ⚠標準は1.00' : ''}</span>`
+      return `<span class="whatif-weight-sum${off ? ' off' : ''}">${u}合計 ${sum.toFixed(2)}${off ? ' ⚠標準は1.00' : ''}</span>`
     })
     .join('')
 
   el.innerHTML = `
-    <div class="bar-row"><span class="label" style="width:110px;"></span>${UNIT_IDS.map((u) => `<span style="width:78px;display:inline-block;text-align:center;margin-right:6px;font-size:11px;color:var(--text-muted);">${u}事業部</span>`).join('')}</div>
+    <div class="bar-row"><span class="label"></span>${UNIT_IDS.map((u) => `<span class="unit-head">${u}事業部</span>`).join('')}</div>
     ${numRow('基準売上(億円)', 'baseRevenue', '0.1')}
     ${numRow('成長係数', 'growth', '0.01')}
     ${numRow('適正人数', 'optimalHeadcount', '1')}
@@ -149,11 +149,11 @@ export function renderParamsCard(input: ParamsCardInput): void {
     ${weightRow('dev', '開拓')}
     ${weightRow('training', '育成')}
     <p class="note">${weightSums}</p>
-    <div class="bar-row" style="margin-top:10px;">
-      <span class="label" style="width:110px;">全社売上下限</span>
-      <input type="number" step="0.1" data-whatif-scalar="prevYearRevenue" value="${params.prevYearRevenue}" class="${changedClass(params.prevYearRevenue, standard.prevYearRevenue).trim()}" style="width:90px;" title="標準値 ${standard.prevYearRevenue}">
-      <span class="label" style="width:110px;margin-left:20px;">コスト係数</span>
-      <input type="number" step="0.1" data-whatif-scalar="costMultiplier" value="${params.costMultiplier}" class="${changedClass(params.costMultiplier, standard.costMultiplier).trim()}" style="width:90px;" title="標準値 ${standard.costMultiplier}">
+    <div class="bar-row scalar">
+      <span class="label">全社売上下限</span>
+      <input type="number" step="0.1" data-whatif-scalar="prevYearRevenue" value="${params.prevYearRevenue}" class="${changedClass(params.prevYearRevenue, standard.prevYearRevenue).trim()}" title="標準値 ${standard.prevYearRevenue}">
+      <span class="label">コスト係数</span>
+      <input type="number" step="0.1" data-whatif-scalar="costMultiplier" value="${params.costMultiplier}" class="${changedClass(params.costMultiplier, standard.costMultiplier).trim()}" title="標準値 ${standard.costMultiplier}">
     </div>`
 }
 
@@ -170,7 +170,7 @@ export function renderParamsErrors(errors: ValidationError[]): void {
     el.innerHTML =
       errors.length === 0
         ? ''
-        : '<table class="errtable" style="margin:8px 0;"><tr><th>項目</th><th class="num">実測値</th><th>期待範囲</th></tr>' +
+        : '<table class="errtable inline"><tr><th>項目</th><th class="num">実測値</th><th>期待範囲</th></tr>' +
           errors
             .map(
               (e) =>
@@ -207,7 +207,7 @@ export function renderHeadcountCard(input: HeadcountCardInput): void {
       )
       .join('') +
     `<p class="note" data-whatif-headcount-total>合計 ${counts.A + counts.B + counts.C} / ${rosterSize}名（3スライダーの合計が常に母集団数になるよう自動調整）</p>
-     <div style="text-align:right;"><button class="btn secondary" id="whatif-auto-optimize">最適化に任せる ▶</button></div>`
+     <div class="actions"><button class="btn secondary" id="whatif-auto-optimize">最適化に任せる ▶</button></div>`
 }
 
 /** ドラッグ中の軽量更新：既存のrange要素を再生成せず値だけ同期する。 */

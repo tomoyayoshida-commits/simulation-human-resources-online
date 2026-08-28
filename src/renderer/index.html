@@ -66,7 +66,7 @@
     <h2>① 社員データ取込</h2>
     <p class="subtitle">社員データを読み込み、取込結果と検証結果を同じ画面で確認する</p>
     <div class="card">
-      <div class="dropzone" id="dropzone-100">📄 社員データをドラッグ&ドロップ、または <span class="file-select-link" style="color:var(--a);font-weight:600;">ファイルを選択</span></div>
+      <div class="dropzone" id="dropzone-100">📄 社員データをドラッグ&ドロップ、または <span class="file-select-link">ファイルを選択</span></div>
       <input type="file" id="file-100" accept=".csv" hidden>
       <p class="note">対応形式：CSVファイル（.csv）</p>
     </div>
@@ -189,13 +189,13 @@
   <section class="panel" id="p5">
     <h2>採用前後比較</h2>
     <p class="subtitle">採用前（100名）・追加採用（10名）を取り込んで比較する</p>
-    <div class="compare-grid" style="grid-template-columns:1fr 1fr;">
+    <div class="compare-grid pair">
       <div class="card">
         <div class="section-title" style="margin-top:0;">採用前（100名）</div>
-        <div class="dropzone" id="dropzone-hiring-100">📄 社員データをドラッグ&ドロップ、または <span class="file-select-link" style="color:var(--a);font-weight:600;">ファイルを選択</span></div>
+        <div class="dropzone" id="dropzone-hiring-100">📄 社員データをドラッグ&ドロップ、または <span class="file-select-link">ファイルを選択</span></div>
         <input type="file" id="file-hiring-100" accept=".csv" hidden>
         <p class="note">対応形式：CSVファイル（.csv）</p>
-        <div id="hiring-import-error-100" style="margin-top:12px;">
+        <div id="hiring-import-error-100" class="mt-12">
           <div class="stat-row" id="hiring-validation-summary-100">
             <div class="stat"><div class="k">判定</div><div class="v"><span class="pill warn">未取込</span></div></div>
           </div>
@@ -204,10 +204,10 @@
       </div>
       <div class="card">
         <div class="section-title" style="margin-top:0;">追加採用（10名）</div>
-        <div class="dropzone" id="dropzone-10">📄 追加採用10名分データをドラッグ&ドロップ、または <span class="file-select-link" style="color:var(--a);font-weight:600;">ファイルを選択</span></div>
+        <div class="dropzone" id="dropzone-10">📄 追加採用10名分データをドラッグ&ドロップ、または <span class="file-select-link">ファイルを選択</span></div>
         <input type="file" id="file-10" accept=".csv" hidden>
         <p class="note">対応形式：CSVファイル（.csv・社員データと同一形式）</p>
-        <div id="hiring-import-error-10" style="margin-top:12px;">
+        <div id="hiring-import-error-10" class="mt-12">
           <div class="stat-row" id="hiring-validation-summary-10">
             <div class="stat"><div class="k">判定</div><div class="v"><span class="pill warn">未取込</span></div></div>
           </div>
@@ -216,7 +216,7 @@
       </div>
     </div>
 
-    <div class="compare-grid" id="compare-hiring-grid" style="grid-template-columns:1fr 1fr;">
+    <div class="compare-grid pair" id="compare-hiring-grid">
       <div class="compare-before">
         <p class="note">未実行：上の2つの欄でCSVを取り込むと比較結果が表示される。</p>
       </div>
@@ -254,26 +254,26 @@
     </div>
 
     <div class="section-title">② 前提パラメータ</div>
-    <div class="card" id="whatif-params-card"></div>
+    <div class="card whatif-params" id="whatif-params-card"></div>
     <div id="whatif-params-errors"></div>
-    <div style="text-align:right;margin:8px 0 18px;">
+    <div class="actions spaced">
       <button class="btn secondary" id="whatif-params-reset">標準に戻す</button>
       <button class="btn" id="whatif-params-reoptimize">この前提で再最適化 ▶</button>
     </div>
 
     <div class="section-title">③ 配置（人数配分・個別異動）</div>
     <div class="card" id="whatif-headcount-card"></div>
-    <div class="card" id="whatif-roster-table-card" style="margin-top:12px;max-height:420px;overflow:auto;"></div>
-    <div style="text-align:right;margin:8px 0 18px;">
+    <div class="card mt-12 scroll-card" id="whatif-roster-table-card"></div>
+    <div class="actions spaced">
       <button class="btn secondary" id="whatif-reset-assignment">基準の配置に戻す</button>
     </div>
 
     <div class="section-title">結果詳細</div>
     <div class="card" id="whatif-unit-table"></div>
-    <div class="card" id="whatif-gauges" style="margin-top:12px;"></div>
-    <div class="card" id="whatif-diff-summary" style="margin-top:12px;"></div>
-    <div class="reason-box" id="whatif-reason-box" style="margin-top:12px;"></div>
-    <div style="margin-top:12px;"><button class="btn" id="whatif-export-csv">この What-if 配置をCSV出力 ⭳</button></div>
+    <div class="card mt-12" id="whatif-gauges"></div>
+    <div class="card mt-12" id="whatif-diff-summary"></div>
+    <div class="reason-box mt-12" id="whatif-reason-box"></div>
+    <div class="mt-12"><button class="btn" id="whatif-export-csv">この What-if 配置をCSV出力 ⭳</button></div>
   </section>
 
 </div>

@@ -12,7 +12,7 @@ import {
   UNIT_VAR,
 } from './constants.ts'
 import { oku, oku1, signed } from './format.ts'
-import { $ } from './dom.ts'
+import { $, setHtml } from './dom.ts'
 import { taskPrimaryValue } from './calcEngine.ts'
 import { runOptimization } from './optimizer.ts'
 import { generateReasonText } from './reasonText.ts'
@@ -25,13 +25,21 @@ const PRIMARY_LABEL: Record<TaskId, string> = {
   4: 'C事業部売上（最大化対象）',
 }
 /** 事業部別バーの表示対象（売上と利益の混在を避けるため、切替で単一指標のみ表示する） */
-type BarMode = 'revenue' | 'profit'
+export type BarMode = 'revenue' | 'profit'
 const BAR_LABEL: Record<BarMode, string> = { revenue: '事業部別売上', profit: '事業部別利益' }
 
-// 再描画（モード切替）時に runOptimization を再実行しないためのキャッシュ
-let barMode: BarMode = 'profit'
-let cachedResults: Record<TaskId, SimulationResult | InfeasibleResult> | null = null
-let cachedBaseline: SimulationResult | null = null
+export type TaskResults = Record<TaskId, SimulationResult | InfeasibleResult>
+
+/**
+ * #p4 のビュー状態。
+ * モード切替のたびに runOptimization を回さないよう結果をキャッシュする。
+ * 可変な状態はこの1オブジェクトに閉じ、HTML生成は buildCompareGridHtml（純粋関数）に出してある。
+ */
+const view: { barMode: BarMode; results: TaskResults | null; baseline: SimulationResult | null } = {
+  barMode: 'profit',
+  results: null,
+  baseline: null,
+}
 
 /** 事業部別売上バーの共通スケール（4課題×3事業部の最大値）。利益は既存の固定スケールを維持。 */
 function revenueScale(results: Record<TaskId, SimulationResult | InfeasibleResult>): number {
@@ -128,20 +136,26 @@ function buildSummary(task: TaskId, r: SimulationResult, baseline: SimulationRes
   return `最も人員が厚いのは${maxUnit}事業部（${hc[maxUnit]}名）。${taskTargetLabel(task)}を最優先で最大化する一方、全社利益は課題1比 ${signed(dProfit)}億円。`
 }
 
+/**
+ * 4課題分のカードHTMLを組み立てる（純粋関数・DOM非依存）。
+ * ビュー状態から切り離してあるので、最適化結果を渡すだけで単体テストできる。
+ */
+export function buildCompareGridHtml(
+  results: TaskResults,
+  baseline: SimulationResult | null,
+  mode: BarMode,
+): string {
+  const scale = mode === 'profit' ? PROFIT_SCALE : revenueScale(results)
+  return TASK_IDS.map((t) => {
+    const res = results[t]
+    return 'infeasible' in res ? infeasibleCard(t) : card(t, res, baseline, mode, scale)
+  }).join('')
+}
+
 /** キャッシュ済みの結果とバー表示モードから #p4 のカードを再描画する（最適化の再実行はしない）。 */
 function renderCards(): void {
-  if (!cachedResults) return
-  const results = cachedResults
-  const scale = barMode === 'profit' ? PROFIT_SCALE : revenueScale(results)
-
-  const grid = $('compare-tasks-grid')
-  if (!grid) return
-  grid.innerHTML = TASK_IDS
-    .map((t) => {
-      const res = results[t]
-      return 'infeasible' in res ? infeasibleCard(t) : card(t, res, cachedBaseline, barMode, scale)
-    })
-    .join('')
+  if (!view.results) return
+  setHtml('compare-tasks-grid', buildCompareGridHtml(view.results, view.baseline, view.barMode))
 }
 
 /**
@@ -149,14 +163,14 @@ function renderCards(): void {
  * 結果はメモリ上にキャッシュしてから描画する。
  */
 export function renderCompareTasks(employees: Employee[]): void {
-  const results: Record<TaskId, SimulationResult | InfeasibleResult> = {
+  const results: TaskResults = {
     1: runOptimization(employees, 1),
     2: runOptimization(employees, 2),
     3: runOptimization(employees, 3),
     4: runOptimization(employees, 4),
   }
-  cachedResults = results
-  cachedBaseline = 'infeasible' in results[1] ? null : (results[1] as SimulationResult)
+  view.results = results
+  view.baseline = 'infeasible' in results[1] ? null : results[1]
   renderCards()
 }
 
@@ -172,8 +186,8 @@ export function initCompareModeToggle(): void {
   ]
   for (const { id, mode } of buttons) {
     $(id)?.addEventListener('click', () => {
-      if (barMode === mode) return
-      barMode = mode
+      if (view.barMode === mode) return
+      view.barMode = mode
       for (const b of buttons) {
         $(b.id)?.classList.toggle('active', b.mode === mode)
       }
