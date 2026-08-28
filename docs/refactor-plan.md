@@ -316,7 +316,9 @@ const total = input.baseCount + input.selectedIds.size
 - Electron 起動時に CSP 未設定の開発時警告が出る。`index.html` に `Content-Security-Policy` を入れると消せる。
 - **B-4 の書きぶりの訂正**：本手順書では「#p6 のパラメータ変更に追従する」としたが、`shortageTable` は現状UIから
   編集できないため、実際の効果は「二重定義の解消」に留まる。表示上の不整合は起きていなかった。
-- **B-6 は未対応のまま**。`README.md` の未決事項と `CLAUDE.md §8` の既知の罠に記載済み。
+- **B-6 は別作業として対応済み**（2026-08-28）。`csv.ts` にRFC4180準拠パーサ（`parseCsv`）と
+  フォーミュラインジェクション対策（`escapeCsvField`/`stripFormulaGuard`。`'` 前置・入力側で除去し往復互換維持）を実装。
+  `README.md` / `CLAUDE.md §8` を更新済み。
 - 検証に使った Electron E2E は、**恒久的な回帰テストとして `test/e2e/run.mjs` に復元済み**（`npm run test:e2e`・21項目）。
   一時スクリプトからの主な変更点：データの場所を `~/development/資料/` 既定＋環境変数（`E2E_CSV_100` /
   `E2E_CSV_ADD10`）で差し替え可能にし、`dist/` 未ビルド時とデータ欠損時は原因を明示して exit 2 で止まるようにした。

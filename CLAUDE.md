@@ -116,10 +116,10 @@ test/                          node:test。calcEngine / csv / optimizer / assign
   `テストケース/hire_test04_xss_script_injection.csv` は社員番号に `<script>` や `<img onerror>` を持つ。
   `contextIsolation: true` はレンダラー自身が innerHTML に書いたHTMLの実行までは防がない。
   検証済みの数値（能力値・人件費）と自前の定数は対象外。
-- **CSV出力（`buildAssignmentCsv`）はフォーミュラインジェクション未対策。**
-  `=1+1` や `@SUM(...)` で始まる社員番号がそのまま出力に載る（`hire_test03_csv_formula_injection.csv`）。
-  入力パーサもクォート付きフィールド非対応（RFC4180非準拠）で、両者は同時に直す必要がある。
-  対応可否は未合意のまま保留中（`docs/refactor-plan.md` B-6）。
+- **CSV入出力のフォーミュラインジェクション対策・RFC4180準拠は対応済み**（`docs/refactor-plan.md` B-6）。
+  `csv.ts` の `parseCsv` がクォート付きフィールド（カンマ・改行・`""`エスケープ）を解釈し、
+  `escapeCsvField`/`stripFormulaGuard` が `=`/`+`/`-`/`@` 始まりの値に出力時 `'` を前置・入力時に除去して往復互換を保つ。
+  `採用03_CSV数式インジェクション.csv`（旧 `hire_test03_csv_formula_injection.csv`）で検証済み。
 - **最適化の速度は解決済み**：実データ4課題で**約1.2秒**（課題1 329ms / 2 112ms / 3 137ms / 4 573ms、110名の課題1 449ms）。
   `docs/pruning-plan.md` の branch-and-bound で約10秒から短縮済み。「10秒かかる」は枝刈り導入前の古い情報。
   `npm test` の18秒はアプリではなく `枝刈り…完全一致` テスト1本（**15.5秒**）が占める。基準実装 `bruteForceOptimize` が枝刈りなしで861候補×MCMFを回すため。

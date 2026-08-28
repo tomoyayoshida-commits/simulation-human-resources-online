@@ -12,11 +12,73 @@ function stripBom(text: string): string {
   return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text
 }
 
-/** 行分割（CRLF/CR/LF対応）。末尾の空行は無視。 */
-function splitLines(text: string): string[] {
-  const lines = text.split(/\r\n|\r|\n/)
-  while (lines.length > 0 && lines[lines.length - 1].trim() === '') lines.pop()
-  return lines
+/**
+ * RFC4180準拠の最小限のCSVパーサ（外部ライブラリ不使用）。
+ * クォート内のカンマ・CR/LF・エスケープされた `""` を正しく1フィールドとして扱う。
+ * 末尾の空行（データなしの行）は無視する。
+ */
+function parseCsv(text: string): string[][] {
+  const rows: string[][] = []
+  let row: string[] = []
+  let field = ''
+  let inQuotes = false
+  let i = 0
+  while (i < text.length) {
+    const c = text[i]
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') {
+          field += '"'
+          i += 2
+        } else {
+          inQuotes = false
+          i += 1
+        }
+      } else {
+        field += c
+        i += 1
+      }
+      continue
+    }
+    if (c === '"') {
+      inQuotes = true
+      i += 1
+    } else if (c === ',') {
+      row.push(field)
+      field = ''
+      i += 1
+    } else if (c === '\r' || c === '\n') {
+      row.push(field)
+      rows.push(row)
+      row = []
+      field = ''
+      i += c === '\r' && text[i + 1] === '\n' ? 2 : 1
+    } else {
+      field += c
+      i += 1
+    }
+  }
+  if (field !== '' || row.length > 0) {
+    row.push(field)
+    rows.push(row)
+  }
+  while (rows.length > 0 && rows[rows.length - 1].length === 1 && rows[rows.length - 1][0].trim() === '') rows.pop()
+  return rows
+}
+
+/** CSVインジェクション対策：`=` `+` `-` `@` 始まりの値を表計算ソフトに数式評価させないための前置ガード */
+const FORMULA_TRIGGER = /^[=+\-@]/
+
+/** 出力側：ガード対象なら `'` を前置し、カンマ/引用符/改行を含むならRFC4180クォートを付与 */
+function escapeCsvField(raw: string): string {
+  const guarded = FORMULA_TRIGGER.test(raw) ? `'${raw}` : raw
+  if (!/[",\r\n]/.test(guarded)) return guarded
+  return `"${guarded.replace(/"/g, '""')}"`
+}
+
+/** 入力側：出力時に前置した `'` ガードを取り除き、往復互換を保つ */
+function stripFormulaGuard(value: string): string {
+  return value.startsWith("'") && FORMULA_TRIGGER.test(value.slice(1)) ? value.slice(1) : value
 }
 
 /**
@@ -56,22 +118,22 @@ export function importEmployees(
   expectedCount: number,
 ): { employees: Employee[] | null; errors: ValidationError[] } {
   const cleaned = stripBom(text)
-  const lines = splitLines(cleaned)
+  const table = parseCsv(cleaned)
 
-  if (lines.length === 0) {
+  if (table.length === 0) {
     return {
       employees: null,
       errors: [{ row: 0, column: '(ファイル)', actual: '空', expected: 'ヘッダ行＋データ行' }],
     }
   }
-  if (lines.length === 1) {
+  if (table.length === 1) {
     return {
       employees: null,
       errors: [{ row: 0, column: '(ファイル)', actual: 'ヘッダのみ', expected: 'データ行が1行以上' }],
     }
   }
 
-  const header = lines[0].split(',')
+  const header = table[0]
   const { indices, errors: colErrors } = resolveColumns(header)
   if (indices === null) {
     return { employees: null, errors: colErrors }
@@ -80,8 +142,8 @@ export function importEmployees(
   // データ行をパース → 正規フィールド名の Record<string,string>[] に変換
   const structuralErrors: ValidationError[] = []
   const rows: Record<string, string>[] = []
-  for (let i = 1; i < lines.length; i++) {
-    const cells = lines[i].split(',')
+  for (let i = 1; i < table.length; i++) {
+    const cells = table[i]
     const rowNo = i // データ行番号（1-based, ヘッダ除く）
     if (cells.length !== header.length) {
       structuralErrors.push({
@@ -94,7 +156,7 @@ export function importEmployees(
     }
     const rec: Record<string, string> = {}
     for (const field of Object.keys(COLUMN_MAP) as Field[]) {
-      rec[field] = cells[indices[field]].trim()
+      rec[field] = stripFormulaGuard(cells[indices[field]].trim())
     }
     rows.push(rec)
   }
@@ -163,14 +225,14 @@ export function buildAssignmentCsv(
 ): string {
   const h = EXPORT_HEADERS
   const header = [h.id, h.sales, h.mgmt, h.dev, h.training, h.cost, h.assignedUnit, '貢献度', 'タイプ']
-  const lines = [header.join(',')]
+  const lines = [header.map((v) => escapeCsvField(String(v))).join(',')]
   for (const e of employees) {
     const unit = result.assignment[e.id]
     const contrib = unit ? contribution(e, unit, params) : ''
     lines.push(
-      [e.id, e.sales, e.mgmt, e.dev, e.training, e.cost, unit ? UNIT_LABEL[unit] : '', contrib, classifyType(e)].join(
-        ',',
-      ),
+      [e.id, e.sales, e.mgmt, e.dev, e.training, e.cost, unit ? UNIT_LABEL[unit] : '', contrib, classifyType(e)]
+        .map((v) => escapeCsvField(String(v)))
+        .join(','),
     )
   }
   return lines.join('\n')
