@@ -1,7 +1,7 @@
 {
   "name": "simulation-human-resources",
   "private": true,
-  "version": "0.7.0",
+  "version": "1.0.0",
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {
@@ -26,7 +26,7 @@
   },
   "build": {
     "appId": "com.pathoslogos.simulation-human-resources",
-    "productName": "人材配置シミュレーター",
+    "productName": "侍の人材配置",
     "files": [
       "dist/**/*",
       "dist-electron/**/*"

@@ -36,7 +36,7 @@ function createWindow() {
   win = new BrowserWindow({
     width: 1280,
     height: 860,
-    title: '人材配置シミュレーター',
+    title: '侍の人材配置',
     webPreferences: {
       // レンダラーはブラウザ標準APIのみを使うため Node 連携は無効のまま
       contextIsolation: true,

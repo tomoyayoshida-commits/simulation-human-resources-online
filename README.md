@@ -1,4 +1,4 @@
-# 人材配置シミュレーター
+# 侍の人材配置
 
 100名（採用後110名）の社員を A/B/C 事業部に配置し、売上・利益を最適化するデスクトップアプリ。
 Electron + TypeScript（レンダラーはブラウザ標準APIのみ）で実装する。外部API・ネットワーク通信は行わない。
@@ -62,7 +62,7 @@ src/
 
 ## Windows 配布
 
-WSL2 には wine が無いため、`package.json` の `build.win` は `zip` ターゲット＋`signAndEditExecutable: false`（PEリソース編集・署名をスキップ）で構成。`npx electron-builder --win zip` で `release/人材配置シミュレーター-<version>-win.zip` を生成する。
+WSL2 には wine が無いため、`package.json` の `build.win` は `zip` ターゲット＋`signAndEditExecutable: false`（PEリソース編集・署名をスキップ）で構成。`npx electron-builder --win zip` で `release/侍の人材配置-<version>-win.zip` を生成する。
 
 - **zip はフォルダごと一括で展開する。** exe は同一フォルダの DLL 群・`resources/app.asar`・`locales/` を相対参照するため、ファイルを別々の場所（Local と Resources 等）に分けて展開すると、白ウィンドウのまま即クラッシュ・起動が異常に重い・2回目以降起動しない等の症状になる。
 - 環境依存の GPU 初期化失敗を避けるため、`main.ts` で `app.disableHardwareAcceleration()` を有効化（静的UIのため描画性能への影響なし）。
