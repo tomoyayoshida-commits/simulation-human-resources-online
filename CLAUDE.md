@@ -127,13 +127,19 @@ test/                          node:test。calcEngine / csv / optimizer / assign
   **ガード対象は「数式トリガ始まり」だけでなく「`'` 始まり」も含む**。含めないと可逆にならず、
   `'=A1` が往復で `=A1` に化ける（実際に起きていた）。片方だけ直すと非対称に戻るので必ず対で扱う。
   `採用03_CSV数式インジェクション.csv`（旧 `hire_test03_csv_formula_injection.csv`）で検証済み。
+- **上界の並べ替えは候補ループの外に巻き上げてある**（`optimizer.buildValueOrders`）。
+  `perUnit[u] = (非負係数) × contrib_u` の形になる組では事業部内の順位が人数配分に依存しないため。
+  **例外は課題2のA事業部だけ**（利益にコスト項が入り順位が eff_A に依存する）。ここを外すと上界が不正になる。
+  守っているのは `upperBoundsForCandidates: 並べ替えを巻き上げても上界がビット単位で変わらない` テスト。
+  **総当たり比較テストではこの退行を検出できない**（前提を壊しても全通過することを確認済み）。
 - **最適化の速度は解決済み**：実データ4課題で**約1.2秒**（課題1 329ms / 2 112ms / 3 137ms / 4 573ms、110名の課題1 449ms）。
   `docs/pruning-plan.md` の branch-and-bound で約10秒から短縮済み。「10秒かかる」は枝刈り導入前の古い情報。
   `npm test` の18秒はアプリではなく `枝刈り…完全一致` テスト1本（**15.5秒**）が占める。基準実装 `bruteForceOptimize` が枝刈りなしで861候補×MCMFを回すため。
   CPUプロファイル内訳：`MinCostFlow.run` 60% / `upperBoundRawTotal` 11% / `buildValues` 10% / GC 6%。
-  **pruning-plan.md の①貢献度の事前計算は実装済み**（`optimizer.buildEmployeeBases`）。**②UBのquickselect化は実測のうえ見送り**：
-  全ソートは4課題合計1126ms中の約117ms（10.4%）で、ソートを消しても削減幅の上限は68ms。
-  加算順が変わって `ub` の下位ビットがずれるため §9 の再合意も要る。詳細と代替案は `docs/pruning-plan.md` の追記を見る。
+  **pruning-plan.md の①貢献度の事前計算は実装済み**（`optimizer.buildEmployeeBases`）。
+  **②UBのquickselect化は見送り**（加算順が変わり ub の下位ビットがずれるため）。
+  代わりに**並べ替えの巻き上げを実装済み**で、883ms → 837ms（5.2%短縮・結果はビット不変）。
+  詳細は `docs/pruning-plan.md` の追記を見る。
 - **E2E（`npm run test:e2e`）は画面が要る**。WSL2 では WSLg 経由で動くが、ヘッドレス環境では xvfb が必要。
   データは既定で `~/development/資料/human_resources_100.csv` と `.../テストケース/採用01_正常10名.csv` を読む
   （`E2E_CSV_100` / `E2E_CSV_ADD10` で差し替え可）。期待値は `docs/baseline-snapshot.txt` の実測値に紐づいており、
