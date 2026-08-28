@@ -1,6 +1,6 @@
 // 設計書§10: 結果ダッシュボード（③ #p3）のDOM更新
 
-import type { Employee, InfeasibleResult, SimParams, SimulationResult, TaskId, UnitId } from './types.ts'
+import type { Employee, InfeasibleResult, SimParams, SimulationResult, TaskId } from './types.ts'
 import {
   DEFAULT_PARAMS,
   round2,
@@ -12,36 +12,9 @@ import {
 } from './constants.ts'
 import { oku, pill, signed } from './format.ts'
 import { $ } from './dom.ts'
+import { renderGaugesHtml } from './gauge.ts'
 import { contribution, classifyType, membersByUnit, typeBreakdown } from './calcEngine.ts'
 import { generateReasonText } from './reasonText.ts'
-
-/** 充足率(rate) → メーター上の位置(%)（モックの帯幅 20/15/10/15/40 に対応） */
-function ratePosition(rate: number): number {
-  let pos: number
-  if (rate < 0.7) pos = (rate / 0.7) * 20
-  else if (rate < 0.8) pos = 20 + ((rate - 0.7) / 0.1) * 15
-  else if (rate < 0.9) pos = 35 + ((rate - 0.8) / 0.1) * 10
-  else if (rate < 1.0) pos = 45 + ((rate - 0.9) / 0.1) * 15
-  else pos = 60 + Math.min((rate - 1.0) / 0.6, 1) * 40
-  return Math.max(0, Math.min(100, pos))
-}
-
-// 各事業部の帯ラベル（モック準拠）
-const GAUGE_BANDS: Record<UnitId, { colors: string[]; labels: string[] }> = {
-  A: {
-    colors: ['var(--critical)', 'var(--serious)', 'var(--warning)', '#cfe8cf', 'var(--good)'],
-    labels: ['&lt;70%（0.30）', '70%（0.50）', '80%（0.70）', '90%（0.85）', '100%以上（1.00）'],
-  },
-  B: {
-    colors: ['var(--critical)', 'var(--serious)', 'var(--warning)', '#cfe8cf', 'var(--good)'],
-    labels: ['&lt;70%（0.50）', '70%（0.65）', '80%（0.80）', '90%（0.90）', '100%以上（1.00）'],
-  },
-  C: {
-    colors: ['var(--serious)', 'var(--warning)', '#f6e6b4', '#cfe8cf', 'var(--good)'],
-    labels: ['&lt;70%（0.70）', '70%（0.80）', '80%（0.90）', '90%（0.95）', '100%以上（1.00）'],
-  },
-}
-const SEG_WIDTHS = [20, 15, 10, 15, 40]
 
 /** 実行不能時の表示（機能12/B-3）。参考配置があればその内容を但し書き付きで表示する。 */
 function renderInfeasible(
@@ -217,25 +190,8 @@ function renderResultBody(
   // 充足率・ペナルティ帯ゲージ
   const gauges = $('fulfillment-gauges')
   if (gauges) {
-    let html = ''
-    for (const u of UNIT_IDS) {
-      const r = units[u]
-      const band = GAUGE_BANDS[u]
-      const segs = SEG_WIDTHS.map(
-        (w, idx) => `<div class="seg" style="width:${w}%;background:${band.colors[idx]};"></div>`,
-      ).join('')
-      // ラベルは.meterのSEG_WIDTHS（不等幅）と揃えないと帯の境界とずれるため、同じ幅を明示する
-      const labels = band.labels
-        .map((l, idx) => `<span style="flex:0 0 ${SEG_WIDTHS[idx]}%;">${l}</span>`)
-        .join('')
-      const pos = ratePosition(r.fulfillmentRate)
-      const ratePct = Math.round(r.fulfillmentRate * 100)
-      html += `<div class="gauge-title">${UNIT_NAME[u]}　充足率 ${ratePct}% → 不足補正${r.shortageFactor.toFixed(2)}／過剰補正${r.surplusFactor.toFixed(2)}</div>
-        <div class="meter">${segs}<div class="marker" style="left:${pos.toFixed(1)}%;" data-label="現在 ${ratePct}%"></div></div>
-        <div class="band-labels">${labels}</div>`
-    }
     gauges.innerHTML =
-      html +
+      renderGaugesHtml(result, UNIT_NAME, params) +
       '<p class="note">帯の境界付近にある事業部は、1名の増減が売上に与える影響が大きいため注意。</p>'
   }
 

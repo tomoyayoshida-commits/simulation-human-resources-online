@@ -3,7 +3,8 @@
 import type { AllocationCounts, AssignmentDiff, Employee, SimParams, SimulationResult, TaskId, UnitId, ValidationError } from './types.ts'
 import { round2, TASK_IDS, TASK_LABELS, UNIT_IDS, UNIT_LABEL } from './constants.ts'
 import { deltaText, oku, pill } from './format.ts'
-import { $ } from './dom.ts'
+import { $, setHtml } from './dom.ts'
+import { renderGaugesHtml } from './gauge.ts'
 
 /** ①基準ケース：課題選択カード（#p2のtaskcardと同じ見た目） */
 export function renderTaskCards(selectedTask: TaskId): void {
@@ -254,49 +255,13 @@ export function renderUnitTable(current: SimulationResult, baseline: SimulationR
   el.innerHTML = html
 }
 
-const GAUGE_BANDS: Record<UnitId, { colors: string[]; labels: string[] }> = {
-  A: {
-    colors: ['var(--critical)', 'var(--serious)', 'var(--warning)', '#cfe8cf', 'var(--good)'],
-    labels: ['&lt;70%（0.30）', '70%（0.50）', '80%（0.70）', '90%（0.85）', '100%以上（1.00）'],
-  },
-  B: {
-    colors: ['var(--critical)', 'var(--serious)', 'var(--warning)', '#cfe8cf', 'var(--good)'],
-    labels: ['&lt;70%（0.50）', '70%（0.65）', '80%（0.80）', '90%（0.90）', '100%以上（1.00）'],
-  },
-  C: {
-    colors: ['var(--serious)', 'var(--warning)', '#f6e6b4', '#cfe8cf', 'var(--good)'],
-    labels: ['&lt;70%（0.70）', '70%（0.80）', '80%（0.90）', '90%（0.95）', '100%以上（1.00）'],
-  },
-}
-const SEG_WIDTHS = [20, 15, 10, 15, 40]
-
-function ratePosition(rate: number): number {
-  let pos: number
-  if (rate < 0.7) pos = (rate / 0.7) * 20
-  else if (rate < 0.8) pos = 20 + ((rate - 0.7) / 0.1) * 15
-  else if (rate < 0.9) pos = 35 + ((rate - 0.8) / 0.1) * 10
-  else if (rate < 1.0) pos = 45 + ((rate - 0.9) / 0.1) * 15
-  else pos = Math.min(100, 60 + ((rate - 1.0) / 1.0) * 40)
-  return pos
-}
-
-/** 結果詳細：充足率・ペナルティ帯ゲージ（#p3のfulfillment-gaugesと同じ見せ方） */
-export function renderGauges(current: SimulationResult): void {
-  const el = $('whatif-gauges')
-  if (!el) return
-  let html = ''
-  for (const u of UNIT_IDS) {
-    const r = current.units[u]
-    const band = GAUGE_BANDS[u]
-    const segs = SEG_WIDTHS.map((w, idx) => `<div class="seg" style="width:${w}%;background:${band.colors[idx]};"></div>`).join('')
-    const labels = band.labels.map((l, idx) => `<span style="flex:0 0 ${SEG_WIDTHS[idx]}%;">${l}</span>`).join('')
-    const pos = ratePosition(r.fulfillmentRate)
-    const ratePct = Math.round(r.fulfillmentRate * 100)
-    html += `<div class="gauge-title">${UNIT_LABEL[u]}　充足率 ${ratePct}% → 不足補正${r.shortageFactor.toFixed(2)}／過剰補正${r.surplusFactor.toFixed(2)}</div>
-      <div class="meter">${segs}<div class="marker" style="left:${pos.toFixed(1)}%;" data-label="現在 ${ratePct}%"></div></div>
-      <div class="band-labels">${labels}</div>`
-  }
-  el.innerHTML = html
+/**
+ * 結果詳細：充足率・ペナルティ帯ゲージ（#p3のfulfillment-gaugesと同じ見せ方）。
+ * 描画は gauge.ts と共有する（以前は #p3 と式が食い違っていた・docs/refactor-plan.md B-1）。
+ * 帯は前提パラメータの不足補正表から作るため、params を渡して #p6 の変更に追従させる。
+ */
+export function renderGauges(current: SimulationResult, params?: SimParams): void {
+  setHtml('whatif-gauges', renderGaugesHtml(current, UNIT_LABEL, params))
 }
 
 /** 結果詳細：配置差分サマリー */

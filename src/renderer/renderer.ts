@@ -136,7 +136,7 @@ function renderWhatIfAll(): void {
   } else {
     renderSummary(null)
   }
-  renderGauges(evaluation.result)
+  renderGauges(evaluation.result, wi.params)
   renderDiffSummary(diffAssignment(wi.baselineAssignment, wi.assignment))
 
   renderRosterCard({
@@ -208,7 +208,7 @@ function initWhatIfPanel(): void {
       renderUnitTable(evaluation.result, baseline)
       renderReasonBox(generateReasonText(evaluation.result, wiForRender.task, wiForRender.params), !paramsEqualDefault(wiForRender.params))
     }
-    renderGauges(evaluation.result)
+    renderGauges(evaluation.result, wiForRender.params)
     renderDiffSummary(diffAssignment(wiForRender.baselineAssignment, wiForRender.assignment))
     renderRosterTable({ roster: wiForRender.roster, baselineAssignment: wiForRender.baselineAssignment, assignment: wiForRender.assignment })
   })
