@@ -4,6 +4,25 @@ import type { Employee, SimParams, TaskId, UnitId, Weights } from './types.ts'
 
 export const UNIT_IDS: readonly UnitId[] = ['A', 'B', 'C'] as const
 
+/** 課題の反復順（§5.1）。`[1,2,3,4] as TaskId[]` の散在を防ぐ単一の参照点。 */
+export const TASK_IDS: readonly TaskId[] = [1, 2, 3, 4] as const
+
+/** 事業部の表示名。表・バー・文章のいずれからも引く。 */
+export const UNIT_LABEL: Record<UnitId, string> = { A: 'A事業部', B: 'B事業部', C: 'C事業部' }
+
+/** 事業部の表示名（特性付き）。ゲージ見出しなど、事業部の性格が判断に効く箇所で使う。 */
+export const UNIT_NAME: Record<UnitId, string> = {
+  A: 'A事業部（飽和）',
+  B: 'B事業部（成長）',
+  C: 'C事業部（新規）',
+}
+
+/** 事業部の系統色（styles.css の :root で定義）。バー・バッジの塗りに使う。 */
+export const UNIT_VAR: Record<UnitId, string> = { A: 'var(--a)', B: 'var(--b)', C: 'var(--c)' }
+
+/** 事業部別利益バーの共通スケール（億円）。#p4 と #p5 でカードを横に見比べるため同じ値を使う。 */
+export const PROFIT_SCALE = 30
+
 export const WEIGHTS: Record<UnitId, Weights> = {
   A: { sales: 0.45, mgmt: 0.35, dev: 0.1, training: 0.1 },
   B: { sales: 0.35, mgmt: 0.2, dev: 0.3, training: 0.15 },
