@@ -319,6 +319,9 @@ const total = input.baseCount + input.selectedIds.size
 - **B-6 は別作業として対応済み**（2026-08-28）。`csv.ts` にRFC4180準拠パーサ（`parseCsv`）と
   フォーミュラインジェクション対策（`escapeCsvField`/`stripFormulaGuard`。`'` 前置・入力側で除去し往復互換維持）を実装。
   `README.md` / `CLAUDE.md §8` を更新済み。
+- 結果スナップショットの再取得スクリプトも **`test/snapshot.ts` に恒久化済み**（`npm run snapshot`）。
+  本リファクタ中に同じスクリプトを3回書き直す羽目になったため、一時ファイル扱いをやめた。
+  `docs/baseline-snapshot.txt` と照合し、差があれば行単位で示して exit 1 する。`-- --write` で基準を更新できる。
 - 検証に使った Electron E2E は、**恒久的な回帰テストとして `test/e2e/run.mjs` に復元済み**（`npm run test:e2e`・21項目）。
   一時スクリプトからの主な変更点：データの場所を `~/development/資料/` 既定＋環境変数（`E2E_CSV_100` /
   `E2E_CSV_ADD10`）で差し替え可能にし、`dist/` 未ビルド時とデータ欠損時は原因を明示して exit 2 で止まるようにした。

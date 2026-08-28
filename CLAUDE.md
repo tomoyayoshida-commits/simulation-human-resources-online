@@ -34,6 +34,7 @@ Electron + TypeScript。**外部API・ネットワーク通信は行わない／
 | `npm test` | `node:test` + 型ストリップ。全52件・約18秒 |
 | `npm run test:one -- --test-name-pattern='<正規表現>' <ファイル>` | 1件だけ実行。約0.1秒。例：`npm run test:one -- --test-name-pattern='境界は上側' test/calcEngine.test.ts`。注意は§8 |
 | `npm run test:e2e` | `vite build` → Electron実機で dist/ を操作する結線テスト。全21項目・約20秒。§8の注意あり |
+| `npm run snapshot` | 実データ4課題の結果を `docs/baseline-snapshot.txt` と照合。差があれば行単位で示し exit 1。約1秒。`-- --write` で基準を更新 |
 | `npm run lint` | oxlint |
 | `npm run build` | `tsc -b` → `vite build` → `electron-builder`。Windows配布は `npx electron-builder --win zip`（README参照） |
 
@@ -68,6 +69,7 @@ src/
 test/                          node:test。calcEngine / csv / optimizer / assignment.oracle / whatif / gauge / format の7ファイル・52テスト
   helpers/lpOracle.ts          assignment.oracle 用のHiGHS(MILP)ラッパー（テスト専用。src/からimportしない）
   e2e/run.mjs                  Electron実機での結線テスト（`npm run test:e2e`・21項目）。node:test とは別枠
+  snapshot.ts                  実データ4課題の結果スナップショット（`npm run snapshot`）。node:test とは別枠
 ```
 
 - ★＝ロジックの中核。仕様変更時はまずこの4ファイルを見る。
@@ -157,8 +159,10 @@ test/                          node:test。calcEngine / csv / optimizer / assign
 ## 9. 作業規約
 
 - **数式・定数・アルゴリズムの変更前に必ず確認を取る**。「動かすため」の独断の調整は不可。齟齬を見つけたら直す前に報告する。
-- 変更後は `npm test`。計算ロジックを触ったら実データでの4課題の売上・利益も確認する。
-  実データ：`/mnt/c/Users/pluser1/Desktop/本課題　必要資料/human_resources_100.csv`
+- 変更後は `npm test`。**計算ロジックを触ったら `npm run snapshot`** で実データ4課題の結果が
+  動いていないことを確認する（`docs/baseline-snapshot.txt` との照合。差があれば行単位で指摘して exit 1）。
+  結果が変わるのが正しい変更なら、**先に §9 冒頭の確認を取ってから** `npm run snapshot -- --write` で基準を更新する。
+  実データ：`~/development/資料/human_resources_100.csv`（デスクトップの `本課題　必要資料/` 配下と同一内容）
 - コメントは既存の `// 設計書§N: ...` 形式に合わせ、**なぜそうしたか**を書く。
 - レンダラーに Node API を持ち込まない（`contextIsolation: true` / `nodeIntegration: false` を維持）。
 - 一時スクリプトはプロジェクト直下に作って使用後に削除する（相対 import 解決のため `/tmp` 不可）。

@@ -16,6 +16,7 @@ npm run build     # tsc 型チェック → vite build → electron-builder で�
 npm run preview   # ビルド済みレンダラーのプレビュー
 npm test          # node:test による単体テスト（52件）
 npm run test:e2e  # Electron実機で dist/ を操作する結線テスト（21項目・要画面）
+npm run snapshot  # 実データ4課題の結果が変わっていないかを基準ファイルと照合
 npm run lint      # oxlint
 ```
 
