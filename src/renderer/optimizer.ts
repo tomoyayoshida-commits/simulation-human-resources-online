@@ -129,6 +129,42 @@ function buildValues(
 }
 
 /**
+ * 上界計算で使う「事業部ごとの社員の並び（value降順）」。
+ * null は「この事業部は候補ごとに並べ替えが要る」ことを表す（下の buildValueOrders 参照）。
+ */
+type ValueOrders = Record<UnitId, number[] | null>
+
+/**
+ * 上界計算の並べ替えを候補ループの外へ巻き上げる（docs/pruning-plan.md の追記）。
+ *
+ * buildValues の値は、コスト項が入らない (課題,事業部) の組では
+ *   perUnit[u] = (K_u × eff_u) × contrib_u      （K_u ≥ 0、eff_u > 0）
+ * という「社員によらない非負の係数 × contrib_u」の形になる。
+ * 非負倍は順序を保つので、**事業部内の順位は人数配分に依存しない**。
+ * よって contrib_u の降順を1回求めれば861候補すべてで使い回せる。
+ *
+ * 例外は**課題2のA事業部**だけ。primary が利益（rev − cost）でコスト項が入るため、
+ * 順位が eff_A に依存する。この組は null を返し、従来どおり候補ごとに並べ替える。
+ *
+ * **ビット一致について**：並べ替えの結果を再利用するだけで、加算する値も加算順も変えない。
+ * 安定ソートなので、値そのものを降順ソートした場合と同じ置換になる
+ * （非負倍は順序を保ち、同値のタイブレークも入力順で一致する。係数が0なら全値0で和も0）。
+ * したがって ub は従来と**ビット単位で同じ値**になり、UB降順の並びも枝刈り判定も変わらない。
+ */
+function buildValueOrders(bases: EmployeeBase[], task: TaskId): ValueOrders {
+  const { targetUnit, metric } = TASK_SPEC[task]
+  const orders = { A: null, B: null, C: null } as ValueOrders
+  for (const u of UNIT_IDS) {
+    // コスト項が入る組は contrib だけでは順位が決まらない
+    if (metric === 'profit' && u === targetUnit) continue
+    const idx = bases.map((_, i) => i)
+    idx.sort((a, b) => bases[b].contrib[u] - bases[a].contrib[u])
+    orders[u] = idx
+  }
+  return orders
+}
+
+/**
  * 候補の上界（docs/pruning-plan.md §2）。
  * 「1社員は1事業部にしか配属できない」制約を外した緩和問題として、事業部ごとに
  * value(i,X) 上位 counts[X] 件を単純合計する。緩和問題の最適値は本問題（MCMF）の
@@ -139,12 +175,19 @@ function upperBoundRawTotal(
   bases: EmployeeBase[],
   values: Record<string, Record<UnitId, number>>,
   counts: AllocationCounts,
+  orders: ValueOrders,
 ): number {
   let total = 0
   for (const u of UNIT_IDS) {
-    const perUnit = bases.map((b) => values[b.id][u]).sort((a, b) => b - a)
-    const take = counts[u]
-    for (let i = 0; i < take && i < perUnit.length; i++) total += perUnit[i]
+    const take = Math.min(counts[u], bases.length)
+    const order = orders[u]
+    if (order === null) {
+      // 順位が人数配分に依存する組（課題2のA事業部）だけ、候補ごとに並べ替える
+      const perUnit = bases.map((b) => values[b.id][u]).sort((a, b) => b - a)
+      for (let i = 0; i < take; i++) total += perUnit[i]
+    } else {
+      for (let i = 0; i < take; i++) total += values[bases[order[i]].id][u]
+    }
   }
   return total
 }
@@ -171,6 +214,30 @@ function shiftConstant(task: TaskId, eff: Record<UnitId, number>, params: SimPar
   return targetUnit === null
     ? constAll * LEX_WEIGHT
     : eff[targetUnit] * params.baseRevenue[targetUnit] * LEX_WEIGHT + constAll
+}
+
+/**
+ * 各候補の上界を列挙順に返す（テスト専用の観測点）。
+ *
+ * 上界の並べ替えを候補ループの外へ巻き上げた（buildValueOrders）ため、
+ * 「巻き上げても ub が変わらない」ことを検証できる出口が要る。
+ * 巻き上げの前提が崩れると ub が静かにずれ、枝刈りが真の最適解を切り落としうるが、
+ * それは総当たり比較テストでは**必ずしも顕在化しない**（実際に前提を壊しても
+ * 既存テストは全通過した）。ここを直接突くのが唯一確実な守り方。
+ * 本番コードからは呼ばない。
+ */
+export function upperBoundsForCandidates(
+  employees: Employee[],
+  task: TaskId,
+  params: SimParams = DEFAULT_PARAMS,
+): number[] {
+  const bases = buildEmployeeBases(employees, params)
+  const orders = buildValueOrders(bases, task)
+  return enumerateHeadcounts(employees.length, params).map((counts) => {
+    const eff = effectiveFactors(counts, params)
+    const values = buildValues(bases, task, eff, params)
+    return upperBoundRawTotal(bases, values, counts, orders)
+  })
 }
 
 /**
@@ -219,10 +286,13 @@ export function runOptimization(
   // 有望な候補から先に厳密解(MCMF)を試す。best が見つかった後、残りの候補の UB が
   // bestScalar を(マージン込みで)超えられなければ、それ以降は全て UB が単調に
   // 小さくなるため打ち切ってよい。
+  // 上界の並べ替えは（課題2のA事業部を除き）人数配分に依存しないので、ここで1回だけ作る
+  const orders = buildValueOrders(bases, task)
+
   const prepared = candidates.map((counts) => {
     const eff = effectiveFactors(counts, params)
     const values = buildValues(bases, task, eff, params)
-    const ub = upperBoundRawTotal(bases, values, counts) + shiftConstant(task, eff, params)
+    const ub = upperBoundRawTotal(bases, values, counts, orders) + shiftConstant(task, eff, params)
     return { counts, values, ub }
   })
   prepared.sort((a, b) => b.ub - a.ub)
