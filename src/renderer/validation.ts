@@ -1,6 +1,7 @@
 // 設計書§7: 入力バリデーション（機能13/D-2）
 
 import type { ValidationError } from './types.ts'
+import { FORMULA_TRIGGER } from './constants.ts'
 
 interface RangeSpec {
   field: string
@@ -39,6 +40,30 @@ export function validateEmployees(
       expected: `${expectedCount}件`,
     })
   }
+
+  // 社員番号そのものの検査。
+  // id は assignment（employeeId -> unit）のキーとして全体で使われるため、空だと複数人が
+  // 同一キーに潰れて配置が壊れる。従来は空をエラーにしておらず、重複チェックも空を素通りしていた。
+  // また `=1+1` のような値は表計算ソフトで数式として評価される取り込み事故の典型なので、
+  // 社員番号としては受け付けずに入力検証で報告する（出力側のガードは csv.escapeCsvField が担う）。
+  rows.forEach((row, i) => {
+    const id = (row.id ?? '').trim()
+    if (id === '') {
+      errors.push({
+        row: i + 1,
+        column: '社員番号',
+        actual: '(空)',
+        expected: '空でない社員番号',
+      })
+    } else if (FORMULA_TRIGGER.test(id)) {
+      errors.push({
+        row: i + 1,
+        column: '社員番号',
+        actual: id,
+        expected: '= + - @ で始まらない社員番号（表計算ソフトが数式として評価するため）',
+      })
+    }
+  })
 
   // 社員番号重複チェック（id はシステム全体で一意キーとして使われるため必須）
   const firstRowById = new Map<string, number>()

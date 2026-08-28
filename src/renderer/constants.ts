@@ -92,9 +92,15 @@ export const DEFAULT_PARAMS: SimParams = {
 // （例：人件費合計727.4×3=2182.2 vs 全社売上60前後）。÷100すれば桁が揃い、利益が現実的な値になる。
 export const COST_UNIT_DIVISOR = 100
 
-// 【要確認】四捨五入の桁数。カタログ7.5で未規定のため暫定で小数第2位。
+// 四捨五入の桁数。カタログ7.5で未規定だったため小数第2位で確定した（README「決着済み」）。
 // 全計算の最終値・中間値に統一して適用する（設計書§3）。
 export const ROUND_DIGITS = 2
+
+/**
+ * 表計算ソフトが数式として評価してしまう先頭文字。
+ * CSV出力時のガード（`csv.escapeCsvField`）と、社員番号の入力検証（`validation`）が同じ規則を使う。
+ */
+export const FORMULA_TRIGGER = /^[=+\-@]/
 
 /**
  * 丸め処理（設計書§3）。
