@@ -11,10 +11,12 @@
     "test:one": "node --experimental-strip-types --test",
     "test:e2e": "echo 'test:e2e は Playwright 移行待ちのため一時的に無効です（docs/web-firebase-plan.md 参照）' && exit 1",
     "snapshot": "node --experimental-strip-types test/snapshot.ts",
-    "lint": "oxlint"
+    "lint": "oxlint",
+    "deploy": "npm run build && firebase deploy --only hosting"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
+    "firebase-tools": "^15.28.2",
     "highs": "^1.15.2",
     "oxlint": "^1.78.0",
     "typescript": "~6.0.3",

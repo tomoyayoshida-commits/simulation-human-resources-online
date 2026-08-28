@@ -17,6 +17,11 @@ release
 # electron-packager 出力
 simulation-human-resources-*
 
+# Firebase CLI デプロイキャッシュ
+.firebase/
+.env
+.env.local
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -1,0 +1,9 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Phase (d)で許可リスト方式に置き換えるまでの暫定値。全拒否（docs/web-firebase-plan.md参照）。
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

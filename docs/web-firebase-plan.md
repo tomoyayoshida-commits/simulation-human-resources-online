@@ -34,9 +34,13 @@
 - `npm run test:e2e`は旧Electron実機E2E（`test/e2e/run.mjs`）がelectron依存除去により実行不可になったため、
   一時的に`exit 1`のプレースホルダに変更（Phase (e)でPlaywright移行するまでの既知の欠落）
 
-### Phase (b): Firebase Hosting導入 — 未着手
-- 要: Firebaseプロジェクトの作成（GCPコンソール or `firebase projects:create`）
-- `firebase.json` / `.firebaserc` の作成、`firebase deploy --only hosting`
+### Phase (b): Firebase Hosting導入 — 完了（2026-08-28）
+- Firebaseプロジェクトは既存の `summer011`（表示名: 26summer011）を流用（新規 `samurai-operation` は作成せず、ユーザー確認の上で決定）
+- `firebase.json` / `.firebaserc`（`default: summer011`）/ `firestore.indexes.json`（空）/ `firestore.rules`（暫定：全拒否。Phase (d)で許可リスト方式に置き換え）を作成
+- `firebase-tools` を devDependency として追加（`npx firebase` はキャッシュ未取得だと解決に失敗するため固定インストールが必要だった）
+- `package.json` に `scripts.deploy`（`npm run build && firebase deploy --only hosting`）を追加
+- `npx firebase login`（ユーザーが対話的に実施）→ `npx firebase deploy --only hosting` で公開確認済み
+- 公開URL: https://summer011.web.app （**現時点は認証ガードなし。Phase (c)で速やかに認証必須化する**）
 
 ### Phase (c): Google Auth導入 — 未着手
 - 要: OAuth同意画面の設定（社内Google Workspace利用なら「内部」に設定）
