@@ -101,6 +101,21 @@ app.whenReady().then(async () => {
     window.addEventListener('unhandledrejection', (e) => window.__e2eErrors.push(String(e.reason)))
     true`)
 
+  /**
+   * 重い計算（loading.ts の withLoading）が終わるのを待つ。
+   * run-simulation・#p4/#p6遷移・What-ifの再最適化系ボタンはクリックしても即座には終わらないため、
+   * これを待たずに次の操作へ進むと、まだ結果が無い状態で export-csv 等を叩いてしまい
+   * `alert()` が出て以降の操作が固まる（実際に発生した）。
+   */
+  const waitForLoadingDone = (timeoutMs = 5000) => `(async () => {
+    const deadline = Date.now() + ${timeoutMs}
+    while (document.getElementById('loading-overlay')?.classList.contains('active')) {
+      if (Date.now() > deadline) return false
+      await new Promise((r) => setTimeout(r, 10))
+    }
+    return true
+  })()`
+
   /** dropイベントを合成してCSVを読み込ませる。File API 経由なので本番と同じ経路を通る。 */
   const dropCsv = (zoneId, text) => `
     (async () => {
@@ -125,6 +140,7 @@ app.whenReady().then(async () => {
   await run(`document.querySelector('.phasebtn[data-tab="p2"]').click()
     ;document.querySelector('.taskcard[data-task="3"]').click()
     ;document.getElementById('run-simulation').click()`)
+  check('②実行後、計算完了まで待てる', await run(waitForLoadingDone()))
   const summary = await run(`document.getElementById('company-summary').textContent`)
   // 課題3の全社売上は docs/baseline-snapshot.txt の 60.1 と一致するはず
   check('③全社売上60.10億円（スナップショットと一致）', summary.includes('60.10億円'), summary.trim())
@@ -151,12 +167,14 @@ app.whenReady().then(async () => {
 
   // ---- ④ 4課題横断比較 ----
   await run(`document.querySelector('.phasebtn[data-tab="p4"]').click()`)
+  check('④遷移後、計算完了まで待てる', await run(waitForLoadingDone()))
   check('④比較カード4枚', (await run(`document.querySelectorAll('#compare-tasks-grid .compare-card').length`)) === 4)
   await run(`document.getElementById('cmp-mode-revenue').click()`)
   check('④売上/利益の切替が効く', await run(`document.body.textContent.includes('事業部別売上')`))
 
   // ---- ⑥ What-if ----
   await run(`document.querySelector('.phasebtn[data-tab="p6"]').click()`)
+  check('⑥遷移後、計算完了まで待てる', await run(waitForLoadingDone()))
   check(
     '⑥人数スライダー3本・社員一覧100行',
     (await run(`document.querySelectorAll('[data-whatif-headcount]').length`)) === 3 &&
@@ -213,6 +231,7 @@ app.whenReady().then(async () => {
   await run(`document.querySelector('.phasebtn[data-tab="p5"]').click()`)
   await run(dropCsv('dropzone-hiring-100', CSV))
   await run(dropCsv('dropzone-10', ADD10))
+  check('⑤採用前後データ投入後、計算完了まで待てる', await run(waitForLoadingDone()))
   check(
     '⑤採用前後カードとROI表が出る',
     (await run(
@@ -223,6 +242,7 @@ app.whenReady().then(async () => {
   // ---- #p6 に戻ってもWhat-ifの編集が保持されるか（go(p6) の ensureWhatIf 分岐） ----
   check('⑥編集後のA人数が既定40から動いている', beforeLeave !== '40', beforeLeave)
   await run(`document.querySelector('.phasebtn[data-tab="p6"]').click()`)
+  check('⑥再遷移後、計算完了まで待てる', await run(waitForLoadingDone()))
   const afterReturn = await run(`document.querySelector('[data-whatif-headcount="A"]').value`)
   check('⑥他画面から戻っても編集が保持される', afterReturn === beforeLeave, `離脱前=${beforeLeave} 復帰後=${afterReturn}`)
 

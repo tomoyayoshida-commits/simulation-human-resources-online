@@ -15,6 +15,7 @@ import { renderCompareTasks, initCompareModeToggle } from './compareTasks.ts'
 import { renderCompareHiring } from './compareHiring.ts'
 import { renderHiringImportError, renderHiringImportOk, renderImportReport, setupDropzone } from './importPanel.ts'
 import { ensureWhatIf, initWhatIfPanel, renderWhatIfAll, resetWhatIf } from './whatifController.ts'
+import { withLoading } from './loading.ts'
 import { $ } from './dom.ts'
 
 // ---- アプリ状態 ----
@@ -34,7 +35,9 @@ const state: {
 }
 
 // ---- 画面遷移（モックの go(id) 移植版） ----
-function go(id: string): void {
+// 比較画面（p4/p5/p6）は最新データで再計算するため重い同期処理を伴う。
+// withLoading で1フレーム描画してから計算に入り、体感の「固まった」印象を防ぐ（loading.ts）。
+async function go(id: string): Promise<void> {
   document.querySelectorAll<HTMLElement>('.phasebtn').forEach((b) => b.classList.remove('active'))
   document.querySelectorAll<HTMLElement>('.panel').forEach((p) => p.classList.remove('active'))
   document.querySelector<HTMLElement>(`.phasebtn[data-tab="${id}"]`)?.classList.add('active')
@@ -42,13 +45,17 @@ function go(id: string): void {
   window.scrollTo({ top: 0, behavior: 'instant' })
 
   // 比較画面は遷移時に最新データで再描画
-  if (id === 'p4' && state.employees100) renderCompareTasks(state.employees100)
+  if (id === 'p4' && state.employees100) {
+    const employees100 = state.employees100
+    await withLoading('4課題を計算しています…', () => renderCompareTasks(employees100))
+  }
   if (id === 'p5' && state.hiringBase100 && state.hiringAdd10) {
-    renderCompareHiring(state.hiringBase100, state.hiringAdd10, state.selectedTask)
+    const { hiringBase100, hiringAdd10, selectedTask } = state
+    await withLoading('採用前後の効果を計算しています…', () => renderCompareHiring(hiringBase100, hiringAdd10, selectedTask))
   }
   if (id === 'p6') {
     ensureWhatIf()
-    renderWhatIfAll()
+    await withLoading('What-if分析を計算しています…', () => renderWhatIfAll())
   }
 }
 
@@ -56,12 +63,12 @@ function go(id: string): void {
 function initNavigation(): void {
   document.querySelectorAll<HTMLElement>('.phasebtn').forEach((btn) => {
     btn.addEventListener('click', () => {
-      if (btn.dataset.tab) go(btn.dataset.tab)
+      if (btn.dataset.tab) void go(btn.dataset.tab)
     })
   })
   document.querySelectorAll<HTMLElement>('[data-go]').forEach((el) => {
     el.addEventListener('click', () => {
-      if (el.dataset.go) go(el.dataset.go)
+      if (el.dataset.go) void go(el.dataset.go)
     })
   })
 }
@@ -83,13 +90,18 @@ function initRunButton(): void {
   $('run-simulation')?.addEventListener('click', () => {
     if (!state.employees100) {
       alert('先に①データ取込で社員データを取り込んでください。')
-      go('p1')
+      void go('p1')
       return
     }
-    const result = runOptimization(state.employees100, state.selectedTask)
-    state.currentResult = 'infeasible' in result ? null : result
-    renderDashboard(result, state.selectedTask, state.employees100)
-    go('p3')
+    const employees100 = state.employees100
+    const selectedTask = state.selectedTask
+    void withLoading('シミュレーションを実行しています…', () => runOptimization(employees100, selectedTask)).then(
+      async (result) => {
+        state.currentResult = 'infeasible' in result ? null : result
+        renderDashboard(result, selectedTask, employees100)
+        await go('p3')
+      },
+    )
   })
 }
 

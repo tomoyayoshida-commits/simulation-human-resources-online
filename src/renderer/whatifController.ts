@@ -12,6 +12,7 @@ import { runOptimization, solveForHeadcount } from './optimizer.ts'
 import { computeSimulationResult } from './calcEngine.ts'
 import { generateReasonText } from './reasonText.ts'
 import { diffAssignment, evaluateAssignment, headcountOf, validateParams, type WhatIfState } from './whatif.ts'
+import { withLoading } from './loading.ts'
 import { $ } from './dom.ts'
 import {
   renderBaselineNote,
@@ -113,21 +114,6 @@ export function ensureWhatIf(): void {
   if (whatIf === null) resetWhatIf()
 }
 
-/** requestAnimationFrameを1回挟んでボタンのラベル変更を確実に描画させてから重い計算に入る（docs/whatif-plan.md §4.7）。 */
-function runHeavy(button: HTMLButtonElement, busyLabel: string, fn: () => void): void {
-  const original = button.textContent
-  button.disabled = true
-  button.textContent = busyLabel
-  requestAnimationFrame(() => {
-    try {
-      fn()
-    } finally {
-      button.disabled = false
-      button.textContent = original
-    }
-  })
-}
-
 /**
  * 現在の割当に依存する表示だけを更新する（サマリー・事業部別テーブル・理由・ゲージ・差分・社員一覧）。
  * 人数配分スライダーのドラッグ中は headcount-card を作り直せない（range要素が破棄され
@@ -206,11 +192,14 @@ export function initWhatIfPanel(context: () => WhatIfContext): void {
     const wi = whatIf
     if (!target || !wi) return
     wi.task = Number(target.dataset.whatifTask) as TaskId
-    const opt = runOptimization(wi.roster, wi.task, wi.params)
-    if (!('infeasible' in opt)) wi.assignment = { ...opt.assignment }
-    const baseline = whatIfBaseline(wi.task)
-    wi.baselineAssignment = baseline ? { ...baseline.assignment } : {}
-    renderWhatIfAll()
+    void withLoading('課題を切り替えて再計算しています…', () => runOptimization(wi.roster, wi.task, wi.params)).then(
+      (opt) => {
+        if (!('infeasible' in opt)) wi.assignment = { ...opt.assignment }
+        const baseline = whatIfBaseline(wi.task)
+        wi.baselineAssignment = baseline ? { ...baseline.assignment } : {}
+        renderWhatIfAll()
+      },
+    )
   })
 
   // 軸1：人数配分スライダー（同期・range要素は再生成しない §4.7）
@@ -232,8 +221,7 @@ export function initWhatIfPanel(context: () => WhatIfContext): void {
     if ((e.target as HTMLElement).id !== 'whatif-auto-optimize') return
     const wi = whatIf
     if (!wi) return
-    runHeavy(e.target as HTMLButtonElement, '再最適化中…', () => {
-      const opt = runOptimization(wi.roster, wi.task, wi.params)
+    void withLoading('再最適化しています…', () => runOptimization(wi.roster, wi.task, wi.params)).then((opt) => {
       if (!('infeasible' in opt)) wi.assignment = { ...opt.assignment }
       renderWhatIfAll()
     })
@@ -287,12 +275,11 @@ export function initWhatIfPanel(context: () => WhatIfContext): void {
     wi.assignment = { ...wi.baselineAssignment }
     renderWhatIfAll()
   })
-  $('whatif-params-reoptimize')?.addEventListener('click', (e) => {
+  $('whatif-params-reoptimize')?.addEventListener('click', () => {
     const wi = whatIf
     if (!wi) return
     if (validateParams(wi.params).length > 0) return
-    runHeavy(e.currentTarget as HTMLButtonElement, '再最適化中…', () => {
-      const opt = runOptimization(wi.roster, wi.task, wi.params)
+    void withLoading('再最適化しています…', () => runOptimization(wi.roster, wi.task, wi.params)).then((opt) => {
       if (!('infeasible' in opt)) wi.assignment = { ...opt.assignment }
       renderWhatIfAll()
     })
@@ -329,12 +316,13 @@ export function initWhatIfPanel(context: () => WhatIfContext): void {
         return
       }
       const roster = merged.employees
-      runHeavy(e.target as HTMLButtonElement, '再最適化中…', () => {
-        wi.roster = roster
-        const opt = runOptimization(wi.roster, wi.task, wi.params)
-        if (!('infeasible' in opt)) wi.assignment = { ...opt.assignment }
-        renderWhatIfAll()
-      })
+      wi.roster = roster
+      void withLoading('採用シナリオで再最適化しています…', () => runOptimization(wi.roster, wi.task, wi.params)).then(
+        (opt) => {
+          if (!('infeasible' in opt)) wi.assignment = { ...opt.assignment }
+          renderWhatIfAll()
+        },
+      )
     }
   })
 

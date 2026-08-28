@@ -150,3 +150,10 @@ tr.whatif-moved{background:#fef3dc;}
 /* #p6 採用候補のチェックボックス行 */
 .whatif-candidate{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12.5px;}
 .errtable.inline{margin:8px 0;}
+
+/* 重い計算中の共通ローディング演出（loading.ts）。画面全体を覆い多重実行も防ぐ */
+.loading-overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;background:rgba(249,249,247,0.85);z-index:100;}
+.loading-overlay.active{display:flex;}
+.loading-spinner{width:34px;height:34px;border:3px solid var(--grid);border-top-color:var(--a);border-radius:50%;animation:spin .7s linear infinite;}
+.loading-text{font-size:13px;color:var(--text-secondary);}
+@keyframes spin{to{transform:rotate(360deg);}}
