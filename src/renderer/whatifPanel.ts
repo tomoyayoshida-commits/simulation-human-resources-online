@@ -2,7 +2,7 @@
 
 import type { AllocationCounts, AssignmentDiff, Employee, SimParams, SimulationResult, TaskId, UnitId, ValidationError } from './types.ts'
 import { round2, TASK_IDS, TASK_LABELS, UNIT_IDS, UNIT_LABEL } from './constants.ts'
-import { deltaText, oku, pill } from './format.ts'
+import { deltaText, escapeAttr, escapeHtml, oku, pill } from './format.ts'
 import { $, setHtml } from './dom.ts'
 import { renderGaugesHtml } from './gauge.ts'
 
@@ -75,7 +75,8 @@ export function renderRosterCard(input: RosterCardInput): void {
   const rows = input.hiringAdd10
     .map((e) => {
       const checked = input.selectedIds.has(e.id) ? 'checked' : ''
-      return `<label style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12.5px;"><input type="checkbox" data-whatif-candidate="${e.id}" ${checked}> ${e.id}（営${e.sales}/管${e.mgmt}/開${e.dev}/育${e.training}/人件費${e.cost}）</label>`
+      // 社員番号はCSV由来。属性値・本文の両方でエスケープする（dataset 経由で読み戻す値は元のまま）
+      return `<label style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12.5px;"><input type="checkbox" data-whatif-candidate="${escapeAttr(e.id)}" ${checked}> ${escapeHtml(e.id)}（営${e.sales}/管${e.mgmt}/開${e.dev}/育${e.training}/人件費${e.cost}）</label>`
     })
     .join('')
   const total = input.baseCount + input.selectedIds.size
@@ -165,7 +166,7 @@ export function renderParamsErrors(errors: ValidationError[]): void {
   }
   el.innerHTML =
     '<table class="errtable" style="margin:8px 0;"><tr><th>項目</th><th class="num">実測値</th><th>期待範囲</th></tr>' +
-    errors.map((e) => `<tr><td class="err">${e.column}</td><td class="num err">${String(e.actual)}</td><td>${e.expected}</td></tr>`).join('') +
+    errors.map((e) => `<tr><td class="err">${escapeHtml(e.column)}</td><td class="num err">${escapeHtml(e.actual)}</td><td>${escapeHtml(e.expected)}</td></tr>`).join('') +
     '</table>'
   const btn = $('whatif-params-reoptimize') as HTMLButtonElement | null
   if (btn) btn.disabled = true
@@ -232,7 +233,7 @@ export function renderRosterTable(input: RosterTableInput): void {
     const base = baselineAssignment[e.id]
     const cur = assignment[e.id]
     const moved = base !== cur
-    html += `<tr${moved ? ' class="whatif-moved"' : ''}><td>${e.id}</td><td>${base ? UNIT_LABEL[base] : '-'}</td><td><select data-whatif-move="${e.id}">${UNIT_IDS
+    html += `<tr${moved ? ' class="whatif-moved"' : ''}><td>${escapeHtml(e.id)}</td><td>${base ? UNIT_LABEL[base] : '-'}</td><td><select data-whatif-move="${escapeAttr(e.id)}">${UNIT_IDS
       .map((u) => `<option value="${u}" ${u === cur ? 'selected' : ''}>${UNIT_LABEL[u]}</option>`)
       .join('')}</select></td></tr>`
   }

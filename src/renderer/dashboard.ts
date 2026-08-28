@@ -10,7 +10,7 @@ import {
   UNIT_NAME,
   UNIT_VAR,
 } from './constants.ts'
-import { oku, pill, signed } from './format.ts'
+import { escapeHtml, oku, pill, signed } from './format.ts'
 import { $ } from './dom.ts'
 import { renderGaugesHtml } from './gauge.ts'
 import { contribution, classifyType, membersByUnit, typeBreakdown } from './calcEngine.ts'
@@ -202,7 +202,8 @@ function renderResultBody(
     for (const e of employees) {
       const unit = result.assignment[e.id]
       if (!unit) continue
-      html += `<tr><td>${e.id}</td><td>${UNIT_LABEL[unit]}</td><td class="num">${contribution(e, unit).toFixed(1)}</td><td>${classifyType(e)}</td></tr>`
+      // 社員番号はCSVの生の文字列のためエスケープする（他は自前の定数・数値）
+      html += `<tr><td>${escapeHtml(e.id)}</td><td>${UNIT_LABEL[unit]}</td><td class="num">${contribution(e, unit).toFixed(1)}</td><td>${classifyType(e)}</td></tr>`
     }
     preview.innerHTML = html
   }

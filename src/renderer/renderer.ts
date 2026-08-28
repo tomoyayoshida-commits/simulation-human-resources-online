@@ -7,6 +7,7 @@ import { renderDashboard } from './dashboard.ts'
 import { renderCompareTasks, initCompareModeToggle } from './compareTasks.ts'
 import { renderCompareHiring } from './compareHiring.ts'
 import { DEFAULT_PARAMS, UNIT_IDS } from './constants.ts'
+import { escapeHtml } from './format.ts'
 import { computeSimulationResult } from './calcEngine.ts'
 import { generateReasonText } from './reasonText.ts'
 import { diffAssignment, evaluateAssignment, headcountOf, validateParams, type WhatIfState } from './whatif.ts'
@@ -394,10 +395,18 @@ function renderHiringImportError(ids: { summary: string; table: string }, errors
   if (errTable) {
     let html = '<tr><th>行番号</th><th>カラム</th><th class="num">実測値</th><th>期待範囲</th></tr>'
     for (const e of errors) {
-      html += `<tr><td>${e.row === 0 ? '-' : e.row}</td><td>${e.column}</td><td class="num err">${String(e.actual)}</td><td>${e.expected}</td></tr>`
+      html += errorRow(e)
     }
     errTable.innerHTML = html
   }
+}
+
+/**
+ * 検証エラー1行。actual はCSVの生の値がそのまま入るため必ずエスケープする
+ * （`テストケース/hire_test04_xss_script_injection.csv` の社員番号は `<script>` を含む）。
+ */
+function errorRow(e: ValidationError): string {
+  return `<tr><td>${e.row === 0 ? '-' : e.row}</td><td>${escapeHtml(e.column)}</td><td class="num err">${escapeHtml(e.actual)}</td><td>${escapeHtml(e.expected)}</td></tr>`
 }
 
 // 取込成功時：判定ピルを「取込OK」に変え件数を示す。エラー表は空にする（前回の残骸を消す）
@@ -419,7 +428,8 @@ function renderImportReport(employees: Employee[] | null, errors: ValidationErro
       '<tr><th>社員ID</th><th class="num">営業力</th><th class="num">管理力</th><th class="num">開拓力</th><th class="num">育成力</th><th class="num">人件費</th></tr>'
     const rows = employees ?? []
     for (const e of rows.slice(0, 5)) {
-      html += `<tr><td>${e.id}</td><td class="num">${e.sales}</td><td class="num">${e.mgmt}</td><td class="num">${e.dev}</td><td class="num">${e.training}</td><td class="num">${e.cost}</td></tr>`
+      // 社員番号はCSVの生の文字列。能力値・人件費は検証済みの数値なのでエスケープ不要。
+      html += `<tr><td>${escapeHtml(e.id)}</td><td class="num">${e.sales}</td><td class="num">${e.mgmt}</td><td class="num">${e.dev}</td><td class="num">${e.training}</td><td class="num">${e.cost}</td></tr>`
     }
     if (rows.length === 0) html += '<tr><td colspan="6">（取込に成功したデータがありません）</td></tr>'
     preview.innerHTML = html
@@ -444,7 +454,7 @@ function renderImportReport(employees: Employee[] | null, errors: ValidationErro
       html += '<tr><td colspan="4">エラーはありません。次のステップへ進めます。</td></tr>'
     } else {
       for (const e of errors) {
-        html += `<tr><td>${e.row === 0 ? '-' : e.row}</td><td>${e.column}</td><td class="num err">${String(e.actual)}</td><td>${e.expected}</td></tr>`
+        html += errorRow(e)
       }
     }
     errTable.innerHTML = html
