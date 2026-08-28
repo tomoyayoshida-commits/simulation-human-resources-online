@@ -4,16 +4,14 @@ import type {
   AllocationCounts,
   Employee,
   InfeasibleResult,
+  SimParams,
   SimulationResult,
   TaskId,
   UnitId,
 } from './types.ts'
 import {
-  BASE_REVENUE,
-  COST_MULTIPLIER,
   COST_UNIT_DIVISOR,
-  GROWTH,
-  MIN_HEADCOUNT,
+  DEFAULT_PARAMS,
   TASK_SPEC,
   UNIT_IDS,
 } from './constants.ts'
@@ -42,23 +40,27 @@ const PRUNE_EPS = 1e5
  * 外側ループ：人数配分の全列挙（§5.2）。
  * nX >= MIN_HEADCOUNT.X かつ nA+nB+nC === totalCount を満たす全配分。
  */
-export function enumerateHeadcounts(totalCount: number): AllocationCounts[] {
+export function enumerateHeadcounts(
+  totalCount: number,
+  params: SimParams = DEFAULT_PARAMS,
+): AllocationCounts[] {
   const result: AllocationCounts[] = []
-  for (let nA = MIN_HEADCOUNT.A; nA <= totalCount; nA++) {
-    for (let nB = MIN_HEADCOUNT.B; nA + nB <= totalCount; nB++) {
+  const min = params.minHeadcount
+  for (let nA = min.A; nA <= totalCount; nA++) {
+    for (let nB = min.B; nA + nB <= totalCount; nB++) {
       const nC = totalCount - nA - nB
-      if (nC >= MIN_HEADCOUNT.C) result.push({ A: nA, B: nB, C: nC })
+      if (nC >= min.C) result.push({ A: nA, B: nB, C: nC })
     }
   }
   return result
 }
 
 /** 人数配分から各事業部の実効補正係数（§5.1）を計算 */
-function effectiveFactors(counts: AllocationCounts): Record<UnitId, number> {
+function effectiveFactors(counts: AllocationCounts, params: SimParams): Record<UnitId, number> {
   const f: Record<UnitId, number> = { A: 1, B: 1, C: 1 }
   for (const u of UNIT_IDS) {
-    const rate = fulfillmentRate(u, counts[u])
-    f[u] = shortageFactor(u, rate) * surplusFactor(rate)
+    const rate = fulfillmentRate(u, counts[u], params)
+    f[u] = shortageFactor(u, rate, params) * surplusFactor(rate, params)
   }
   return f
 }
@@ -78,22 +80,22 @@ interface EmployeeBase {
   cost: number
 }
 
-function buildEmployeeBases(employees: Employee[]): EmployeeBase[] {
+function buildEmployeeBases(employees: Employee[], params: SimParams): EmployeeBase[] {
   return employees.map((e) => {
     const contrib: Record<UnitId, number> = { A: 0, B: 0, C: 0 }
-    for (const unit of UNIT_IDS) contrib[unit] = contribution(e, unit)
+    for (const unit of UNIT_IDS) contrib[unit] = contribution(e, unit, params)
     return { id: e.id, contrib, cost: e.cost }
   })
 }
 
 /** 売上寄与（§5.1） */
-function revValue(base: EmployeeBase, unit: UnitId, effFactor: number): number {
-  return (BASE_REVENUE[unit] * GROWTH[unit]) / 100 * effFactor * base.contrib[unit]
+function revValue(base: EmployeeBase, unit: UnitId, effFactor: number, params: SimParams): number {
+  return (params.baseRevenue[unit] * params.growth[unit]) / 100 * effFactor * base.contrib[unit]
 }
 
 /** 利益寄与（§5.1）。コストは calcEngine.unitCostTotal と同じ換算（÷COST_UNIT_DIVISOR）で億円に揃える。 */
-function profitValue(base: EmployeeBase, unit: UnitId, effFactor: number): number {
-  return revValue(base, unit, effFactor) - (base.cost * COST_MULTIPLIER) / COST_UNIT_DIVISOR
+function profitValue(base: EmployeeBase, unit: UnitId, effFactor: number, params: SimParams): number {
+  return revValue(base, unit, effFactor, params) - (base.cost * params.costMultiplier) / COST_UNIT_DIVISOR
 }
 
 /**
@@ -108,15 +110,16 @@ function buildValues(
   bases: EmployeeBase[],
   task: TaskId,
   eff: Record<UnitId, number>,
+  params: SimParams,
 ): Record<string, Record<UnitId, number>> {
   const { targetUnit, metric } = TASK_SPEC[task]
   const values: Record<string, Record<UnitId, number>> = {}
   for (const base of bases) {
     const perUnit: Record<UnitId, number> = { A: 0, B: 0, C: 0 }
     for (const unit of UNIT_IDS) {
-      const rev = revValue(base, unit, eff[unit])
+      const rev = revValue(base, unit, eff[unit], params)
       const isTarget = targetUnit === null || unit === targetUnit
-      const primary = !isTarget ? 0 : metric === 'profit' ? profitValue(base, unit, eff[unit]) : rev
+      const primary = !isTarget ? 0 : metric === 'profit' ? profitValue(base, unit, eff[unit], params) : rev
       const secondary = targetUnit === null ? 0 : rev
       perUnit[unit] = primary * LEX_WEIGHT + secondary
     }
@@ -160,14 +163,32 @@ function upperBoundRawTotal(
  *   → task2: primary=A利益なので A の定数項のみ LEX_WEIGHT 倍、secondary(全社売上)は ConstAll
  *   → task3/4: primary=B/Cの売上なので B/C の定数項のみ LEX_WEIGHT 倍、secondary は ConstAll
  */
-function shiftConstant(task: TaskId, eff: Record<UnitId, number>): number {
-  const constAll = UNIT_IDS.reduce((sum, u) => sum + eff[u] * BASE_REVENUE[u], 0)
+function shiftConstant(task: TaskId, eff: Record<UnitId, number>, params: SimParams): number {
+  const constAll = UNIT_IDS.reduce((sum, u) => sum + eff[u] * params.baseRevenue[u], 0)
   const { targetUnit } = TASK_SPEC[task]
   // 課題2の primary は A利益だが、コストに定数項は無い（全額が社員ごとの値）ため
   // 定数項は売上と同じ eff×BASE_REVENUE でよい。よって metric による分岐は要らない。
   return targetUnit === null
     ? constAll * LEX_WEIGHT
-    : eff[targetUnit] * BASE_REVENUE[targetUnit] * LEX_WEIGHT + constAll
+    : eff[targetUnit] * params.baseRevenue[targetUnit] * LEX_WEIGHT + constAll
+}
+
+/**
+ * 人数配分を固定して内側の割当だけを厳密に解く（機能14 What-if 軸1・docs/whatif-plan.md §5 Phase1）。
+ * runOptimization の候補ループ1回分（buildEmployeeBases → effectiveFactors → buildValues →
+ * solveAssignment）と同じ関数を呼ぶだけで、ロジックは複製しない。最低人数制約は課さない
+ * （手動 What-if では制約割れの影響を見ることも目的のため・docs/whatif-plan.md §4.5）。
+ */
+export function solveForHeadcount(
+  employees: Employee[],
+  task: TaskId,
+  counts: AllocationCounts,
+  params: SimParams = DEFAULT_PARAMS,
+): Record<string, UnitId> {
+  const bases = buildEmployeeBases(employees, params)
+  const eff = effectiveFactors(counts, params)
+  const values = buildValues(bases, task, eff, params)
+  return solveAssignment(employees, values, counts)
 }
 
 /**
@@ -178,14 +199,15 @@ function shiftConstant(task: TaskId, eff: Record<UnitId, number>): number {
 export function runOptimization(
   employees: Employee[],
   task: TaskId,
+  params: SimParams = DEFAULT_PARAMS,
 ): SimulationResult | InfeasibleResult {
-  const candidates = enumerateHeadcounts(employees.length)
+  const candidates = enumerateHeadcounts(employees.length, params)
   if (candidates.length === 0) {
     return { infeasible: true, reason: 'min_headcount' }
   }
 
   // 人数配分に依存しない値は候補ループの外で1回だけ求める（docs/pruning-plan.md ①）
-  const bases = buildEmployeeBases(employees)
+  const bases = buildEmployeeBases(employees, params)
 
   let best: SimulationResult | null = null
   let bestKey: { primary: number; secondary: number; nA: number; nB: number } | null = null
@@ -198,9 +220,9 @@ export function runOptimization(
   // bestScalar を(マージン込みで)超えられなければ、それ以降は全て UB が単調に
   // 小さくなるため打ち切ってよい。
   const prepared = candidates.map((counts) => {
-    const eff = effectiveFactors(counts)
-    const values = buildValues(bases, task, eff)
-    const ub = upperBoundRawTotal(bases, values, counts) + shiftConstant(task, eff)
+    const eff = effectiveFactors(counts, params)
+    const values = buildValues(bases, task, eff, params)
+    const ub = upperBoundRawTotal(bases, values, counts) + shiftConstant(task, eff, params)
     return { counts, values, ub }
   })
   prepared.sort((a, b) => b.ub - a.ub)
@@ -209,7 +231,7 @@ export function runOptimization(
     if (best !== null && ub < bestScalar - PRUNE_EPS) break
 
     const assignment = solveAssignment(employees, values, counts)
-    const result = computeSimulationResult(assignment, employees)
+    const result = computeSimulationResult(assignment, employees, params)
 
     // 最も58億円に近い候補（revenue_floor 用）を全候補から追跡。
     // UB降順で処理順が enumerateHeadcounts の元順（nA→nB昇順）と変わったため、

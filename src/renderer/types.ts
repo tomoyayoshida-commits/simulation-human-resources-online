@@ -68,3 +68,16 @@ export interface ValidationError {
   actual: unknown
   expected: string
 }
+
+/** What-if で差し替え可能な計算前提（機能14）。既定値は constants.DEFAULT_PARAMS。 */
+export interface SimParams {
+  weights: Record<UnitId, Weights>
+  baseRevenue: Record<UnitId, number>
+  growth: Record<UnitId, number>
+  optimalHeadcount: Record<UnitId, number>
+  minHeadcount: Record<UnitId, number>
+  shortageTable: Record<UnitId, { minRate: number; factor: number }[]>
+  surplusTable: { maxRate: number; factor: number }[]
+  prevYearRevenue: number
+  costMultiplier: number
+}

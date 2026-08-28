@@ -32,10 +32,12 @@ table{width:100%;border-collapse:collapse;font-size:12.5px;}
 th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--grid);}
 th{color:var(--text-muted);font-weight:600;font-size:11.5px;}
 td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
-.dropzone{border:2px dashed var(--baseline);border-radius:10px;padding:26px;text-align:center;color:var(--text-secondary);font-size:13px;background:#fbfbfa;}
+.dropzone{border:2px dashed var(--baseline);border-radius:10px;padding:26px;text-align:center;color:var(--text-secondary);font-size:13px;background:#fbfbfa;cursor:pointer;}
 .dropzone.dragover{border-color:var(--a);background:#eef4fc;}
+.dropzone:hover .file-select-link{text-decoration:underline;}
 .btn{display:inline-block;border:1px solid var(--a);background:var(--a);color:#fff;font-size:13px;padding:9px 18px;border-radius:7px;cursor:pointer;}
 .btn.secondary{background:#fff;color:var(--a);}
+.btn:hover:not(:disabled){text-decoration:underline;}
 .btn:disabled{opacity:0.4;cursor:not-allowed;filter:grayscale(40%);}
 .pill{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;padding:2px 9px;border-radius:9px;}
 .pill.good{background:#eaf7ea;color:#0a6b0a;}
@@ -72,6 +74,7 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
 .reason-box ul{margin:8px 0 0;padding-left:20px;}
 .errtable td.err{color:var(--critical);font-weight:600;}
 .note{font-size:11.5px;color:var(--text-muted);margin-top:6px;}
+.warn-text{font-size:11.5px;color:var(--critical);margin-top:6px;}
 .hint{font-size:12px;color:var(--text-secondary);background:#eef4fc;border:1px solid #cfe0f4;border-radius:8px;padding:10px 14px;margin-bottom:18px;}
 .footer-note{font-size:11px;color:var(--text-muted);margin-top:30px;border-top:1px solid var(--border);padding-top:12px;}
 .compare-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px;}
@@ -111,7 +114,7 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
 .home-hero{margin:10px 0 26px;}
 .home-hero h2{font-size:20px;margin:0 0 6px;}
 .home-hero p{font-size:13px;color:var(--text-secondary);margin:0;}
-.home-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:10px;}
+.home-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:10px;}
 .home-card{background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:22px 20px;display:flex;flex-direction:column;gap:10px;}
 .home-card .num{width:26px;height:26px;border-radius:50%;background:var(--grid);color:var(--text-secondary);font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;}
 .home-card h3{font-size:15px;margin:0;}
@@ -119,3 +122,6 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
 .home-card .btn{align-self:flex-start;margin-top:4px;}
 .home-link{font-size:11.5px;color:var(--text-muted);text-align:center;margin-top:14px;}
 .home-link a{color:var(--text-secondary);text-decoration:underline;cursor:pointer;}
+.whatif-sticky{position:sticky;top:0;z-index:5;background:var(--page);padding:10px 0;}
+input.whatif-changed{border-color:var(--a);background:#eef4fc;}
+tr.whatif-moved{background:#fef3dc;}

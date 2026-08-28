@@ -1,7 +1,7 @@
 // 設計書§9: 配置方針テキスト生成
 
-import type { SimulationResult, TaskId, UnitId } from './types.ts'
-import { OPTIMAL_HEADCOUNT, PREV_YEAR_REVENUE, round2, TASK_LABELS, taskTargetLabel } from './constants.ts'
+import type { SimParams, SimulationResult, TaskId, UnitId } from './types.ts'
+import { DEFAULT_PARAMS, round2, TASK_LABELS, taskTargetLabel } from './constants.ts'
 
 const UNIT_LABEL: Record<UnitId, string> = { A: 'A事業部', B: 'B事業部', C: 'C事業部' }
 
@@ -13,7 +13,11 @@ function pct(rate: number): string {
  * 配置方針・理由の文章を生成する（設計書§9）。
  * reason-box の innerHTML として使う <ul> 文字列を返す。
  */
-export function generateReasonText(result: SimulationResult, task: TaskId): string {
+export function generateReasonText(
+  result: SimulationResult,
+  task: TaskId,
+  params: SimParams = DEFAULT_PARAMS,
+): string {
   const bullets: string[] = []
   const { headcount, units } = result
 
@@ -30,15 +34,15 @@ export function generateReasonText(result: SimulationResult, task: TaskId): stri
     if (r.surplusFactor < 1) notes.push(`過剰補正 ${r.surplusFactor.toFixed(2)}`)
     const factorText = notes.length > 0 ? notes.join('・') + ' が適用' : '不足・過剰ペナルティなし（補正1.00）'
     bullets.push(
-      `${UNIT_LABEL[u]}：充足率 ${pct(r.fulfillmentRate)}（適正${OPTIMAL_HEADCOUNT[u]}名に対し${r.count}名）→ ${factorText}。`,
+      `${UNIT_LABEL[u]}：充足率 ${pct(r.fulfillmentRate)}（適正${params.optimalHeadcount[u]}名に対し${r.count}名）→ ${factorText}。`,
     )
   }
 
   // 3. 全社売上・利益と前年度差
-  const diff = round2(result.companyRevenue - PREV_YEAR_REVENUE)
+  const diff = round2(result.companyRevenue - params.prevYearRevenue)
   const sign = diff >= 0 ? '+' : ''
   bullets.push(
-    `全社売上は ${result.companyRevenue}億円で前年度売上（${PREV_YEAR_REVENUE}億円）を ${sign}${diff}億円 ${diff > 0 ? '上回り' : '下回り'}、全社利益は ${result.companyProfit}億円。`,
+    `全社売上は ${result.companyRevenue}億円で前年度売上（${params.prevYearRevenue}億円）を ${sign}${diff}億円 ${diff > 0 ? '上回り' : '下回り'}、全社利益は ${result.companyProfit}億円。`,
   )
 
   // 4. 課題2〜4は辞書式方針の説明

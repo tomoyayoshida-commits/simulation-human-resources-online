@@ -40,28 +40,31 @@ Electron + TypeScript。**外部API・ネットワーク通信は行わない／
 
 ```
 src/
-  main/main.ts          55行  Electronエントリ。BrowserWindow生成のみ。IPC・ファイルI/Oなし
+  main/main.ts          74行  Electronエントリ。BrowserWindow生成のみ。IPC・ファイルI/Oなし
   renderer/
-    index.html         198行  画面骨格。#p0〜#p5 の6パネル（モック由来の静的サンプル値は撤去し「未実行」プレースホルダに置換済み）
-    styles.css         120行  モック由来のスタイル
-    renderer.ts        222行  ★結線層。状態保持・画面遷移go()・CSV取込UI・実行/出力ボタン
-    types.ts            58行  型定義のみ
-    constants.ts        77行  ★全定数の単一の置き場。重み・売上・ペナルティ表・COLUMN_MAP・round2()
-    csv.ts             161行  CSVパース/エクスポート/採用データマージ
-    validation.ts       74行  範囲・件数チェック。ValidationError[]を返す純粋関数
-    calcEngine.ts      150行  ★貢献度→能力値→売上→コスト→利益。全て純粋関数
-    assignment.ts      149行  最小費用流(SSP+Johnsonポテンシャル+Dijkstra)。内側の割当を厳密解
-    optimizer.ts       194行  ★人数配分の全列挙×割当。課題1〜4の目的関数と辞書式合成
-    reasonText.ts       45行  配置方針テキスト生成
-    dashboard.ts       221行  #p3 のDOM更新
-    compareTasks.ts    165行  #p4 の4課題横断比較カード。事業部別バーは売上/利益の切替式（docs/solver-oracle-plan.mdとは無関係、A-1のUI改善）
-    compareHiring.ts    75行  #p5 の採用前後比較＋ROI表
-test/                          node:test。calcEngine / csv / optimizer / assignment.oracle の4ファイル・30テスト
+    index.html         274行  画面骨格。#p0〜#p6 の7パネル（モック由来の静的サンプル値は撤去し「未実行」プレースホルダに置換済み）
+    styles.css         124行  モック由来のスタイル＋What-if用の最小追加(§7)
+    renderer.ts        571行  ★結線層。状態保持・画面遷移go()・CSV取込UI・実行/出力ボタン・What-if(#p6)イベント配線
+    types.ts            83行  型定義のみ（SimParams含む・機能14）
+    constants.ts       149行  ★全定数の単一の置き場。重み・売上・ペナルティ表・COLUMN_MAP・round2()・DEFAULT_PARAMS
+    csv.ts             191行  CSVパース/エクスポート/採用データマージ
+    validation.ts       88行  範囲・件数チェック。ValidationError[]を返す純粋関数
+    calcEngine.ts      181行  ★貢献度→能力値→売上→コスト→利益。全て純粋関数
+    assignment.ts      179行  最小費用流(SSP+Johnsonポテンシャル+Dijkstra)。内側の割当を厳密解
+    optimizer.ts       281行  ★人数配分の全列挙×割当。課題1〜4の目的関数と辞書式合成。solveForHeadcount(機能14軸1)含む
+    reasonText.ts       56行  配置方針テキスト生成
+    dashboard.ts       265行  #p3 のDOM更新
+    compareTasks.ts    179行  #p4 の4課題横断比較カード。事業部別バーは売上/利益の切替式（docs/solver-oracle-plan.mdとは無関係、A-1のUI改善）
+    compareHiring.ts    90行  #p5 の採用前後比較＋ROI表
+    whatif.ts          118行  What-if分析（機能14）の純粋関数群。evaluateAssignment/validateParams/diffAssignment等。DOM非依存
+    whatifPanel.ts     345行  #p6 のDOM更新。表示専用で計算を持たない
+test/                          node:test。calcEngine / csv / optimizer / assignment.oracle / whatif の5ファイル・37テスト
   helpers/lpOracle.ts          assignment.oracle 用のHiGHS(MILP)ラッパー（テスト専用。src/からimportしない）
 ```
 
 - ★＝ロジックの中核。仕様変更時はまずこの4ファイルを見る。
-- `dashboard.ts` / `compareTasks.ts` / `compareHiring.ts` は表示専用で計算を持たない（例外は §8 の単位換算）。
+- `dashboard.ts` / `compareTasks.ts` / `compareHiring.ts` / `whatifPanel.ts` は表示専用で計算を持たない（例外は §8 の単位換算）。
+- What-if分析（機能14・製品カタログ未記載の追加機能）の設計・作業指示は `docs/whatif-plan.md`。`calcEngine.ts`/`optimizer.ts`の主要関数は`SimParams`（既定値`DEFAULT_PARAMS`）を末尾引数として受け取れる（式の形は変更していない）。`assignment.ts`はこのリファクタで無変更。
 
 ## 6. ドメイン定数（`constants.ts` に実装済み・再読不要）
 
@@ -109,7 +112,10 @@ test/                          node:test。calcEngine / csv / optimizer / assign
   - パターンは**正規表現**。テスト名の**半角**括弧はエスケープが要る：`全探索\(5名` か `全探索.5名`。
     全角（）はメタ文字でないためそのままでよい（例：`境界は上側`）。
   - `--test-reporter=dot` は成功を `.` 1文字にするが、マッチ0件のときも `.` になり区別できないので使わない。
-- **追加採用10名のCSVは未入手**。#p5 の採用前後比較は実データ未検証。
+- **追加採用10名のCSVは入手済み**：`~/development/資料/テストケース/採用01_正常10名.csv`（E101〜E110、既存CSVと同一フォーマット）。
+  取込・マージ・110名最適化（4課題）を実行して検証済み（2026-08-28）。100名側の4課題結果は本ファイルの実測値と完全一致、110名側も全課題 feasible。
+  同フォルダには ID衝突・CSVインジェクション・XSS・ゼロコスト・5000名規模等の異常系CSV（`採用02〜07`）と、CSV形状の異常系（`形状01〜09`）・計算ロジックの極端ケース（`計算01〜10`）・基本的な入力不正（`基本01〜10`）も揃っており、#p5・バリデーションの堅牢性テストに使える。
+  （ファイル名は2026-08-28に英語スラッグから日本語へ改名済み。旧 `hire_test*`→`採用*`、`hr_testcase*`→`基本*`、`hr_shape*`→`形状*`、`hr_calclogic*`→`計算*`。番号は据え置き。）
 
 ## 9. 作業規約
 

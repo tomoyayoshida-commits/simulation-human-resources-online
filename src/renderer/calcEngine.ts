@@ -1,37 +1,30 @@
 // 設計書§4: 計算エンジン（貢献度〜利益）
 
-import type { Employee, EmployeeType, SimulationResult, TaskId, UnitId, UnitResult } from './types.ts'
+import type { Employee, EmployeeType, SimParams, SimulationResult, TaskId, UnitId, UnitResult } from './types.ts'
 import {
-  BASE_REVENUE,
-  COST_MULTIPLIER,
   COST_UNIT_DIVISOR,
-  GROWTH,
-  OPTIMAL_HEADCOUNT,
-  PREV_YEAR_REVENUE,
+  DEFAULT_PARAMS,
   round2,
-  SHORTAGE_TABLE,
-  SURPLUS_TABLE,
   TASK_SPEC,
   UNIT_IDS,
-  WEIGHTS,
 } from './constants.ts'
 
 /** 社員貢献度（§4）。算出直後に round2。 */
-export function contribution(e: Employee, unit: UnitId): number {
-  const w = WEIGHTS[unit]
+export function contribution(e: Employee, unit: UnitId, params: SimParams = DEFAULT_PARAMS): number {
+  const w = params.weights[unit]
   return round2(e.sales * w.sales + e.mgmt * w.mgmt + e.dev * w.dev + e.training * w.training)
 }
 
 /** 事業部能力値（§4）＝配置社員の貢献度合計。算出直後に round2。 */
-export function unitAbility(unit: UnitId, members: Employee[]): number {
+export function unitAbility(unit: UnitId, members: Employee[], params: SimParams = DEFAULT_PARAMS): number {
   let sum = 0
-  for (const e of members) sum += contribution(e, unit)
+  for (const e of members) sum += contribution(e, unit, params)
   return round2(sum)
 }
 
 /** 充足率（§4）＝ count / 適正人数。丸めない生値（次段の係数表判定に使う）。 */
-export function fulfillmentRate(unit: UnitId, count: number): number {
-  return count / OPTIMAL_HEADCOUNT[unit]
+export function fulfillmentRate(unit: UnitId, count: number, params: SimParams = DEFAULT_PARAMS): number {
+  return count / params.optimalHeadcount[unit]
 }
 
 /**
@@ -40,13 +33,13 @@ export function fulfillmentRate(unit: UnitId, count: number): number {
  * rate < 1.0 は SHORTAGE_TABLE を上から見て rate >= minRate を満たす最初の行の factor。
  * 境界（例 90%ちょうど）は上側の帯に属する。
  */
-export function shortageFactor(unit: UnitId, rate: number): number {
+export function shortageFactor(unit: UnitId, rate: number, params: SimParams = DEFAULT_PARAMS): number {
   if (rate >= 1.0) return 1.0
-  for (const row of SHORTAGE_TABLE[unit]) {
+  for (const row of params.shortageTable[unit]) {
     if (rate >= row.minRate) return row.factor
   }
   // 理論上到達しない（最終行 minRate:0）。安全側に最小係数を返す。
-  return SHORTAGE_TABLE[unit][SHORTAGE_TABLE[unit].length - 1].factor
+  return params.shortageTable[unit][params.shortageTable[unit].length - 1].factor
 }
 
 /**
@@ -55,17 +48,17 @@ export function shortageFactor(unit: UnitId, rate: number): number {
  * rate >= 1.20 は SURPLUS_TABLE を上から見て rate <= maxRate を満たす最初の行の factor。
  * 境界（例 120%ちょうど）は下限を含み上限を含めない → rate=1.20 は 0.95 の帯。
  */
-export function surplusFactor(rate: number): number {
+export function surplusFactor(rate: number, params: SimParams = DEFAULT_PARAMS): number {
   if (rate < 1.2) return 1.0
-  for (const row of SURPLUS_TABLE) {
+  for (const row of params.surplusTable) {
     if (rate <= row.maxRate) return row.factor
   }
-  return SURPLUS_TABLE[SURPLUS_TABLE.length - 1].factor
+  return params.surplusTable[params.surplusTable.length - 1].factor
 }
 
 /** 基本売上（§4）。算出直後に round2。 */
-export function baseRevenue(unit: UnitId, ability: number): number {
-  return round2(BASE_REVENUE[unit] * (1 + (ability / 100) * GROWTH[unit]))
+export function baseRevenue(unit: UnitId, ability: number, params: SimParams = DEFAULT_PARAMS): number {
+  return round2(params.baseRevenue[unit] * (1 + (ability / 100) * params.growth[unit]))
 }
 
 /** 最終売上（§4）＝基本売上 × 不足補正 × 過剰補正。算出直後に round2。 */
@@ -74,22 +67,22 @@ export function finalRevenue(base: number, sFactor: number, xFactor: number): nu
 }
 
 /** 事業部コスト計（§4）＝Σ 人件費 × 3 を億円換算（÷COST_UNIT_DIVISOR）。算出直後に round2。 */
-export function unitCostTotal(members: Employee[]): number {
+export function unitCostTotal(members: Employee[], params: SimParams = DEFAULT_PARAMS): number {
   let sum = 0
-  for (const e of members) sum += e.cost * COST_MULTIPLIER
+  for (const e of members) sum += e.cost * params.costMultiplier
   return round2(sum / COST_UNIT_DIVISOR)
 }
 
 /** 事業部結果を構築（§4）。 */
-export function computeUnitResult(unit: UnitId, members: Employee[]): UnitResult {
+export function computeUnitResult(unit: UnitId, members: Employee[], params: SimParams = DEFAULT_PARAMS): UnitResult {
   const count = members.length
-  const ability = unitAbility(unit, members)
-  const rate = fulfillmentRate(unit, count)
-  const sFactor = shortageFactor(unit, rate)
-  const xFactor = surplusFactor(rate)
-  const base = baseRevenue(unit, ability)
+  const ability = unitAbility(unit, members, params)
+  const rate = fulfillmentRate(unit, count, params)
+  const sFactor = shortageFactor(unit, rate, params)
+  const xFactor = surplusFactor(rate, params)
+  const base = baseRevenue(unit, ability, params)
   const final = finalRevenue(base, sFactor, xFactor)
-  const costTotal = unitCostTotal(members)
+  const costTotal = unitCostTotal(members, params)
   const profit = round2(final - costTotal)
   return {
     unit,
@@ -123,12 +116,13 @@ export function membersByUnit(
 export function computeSimulationResult(
   assignment: Record<string, UnitId>,
   employees: Employee[],
+  params: SimParams = DEFAULT_PARAMS,
 ): SimulationResult {
   const grouped = membersByUnit(assignment, employees)
   const units: Record<UnitId, UnitResult> = {
-    A: computeUnitResult('A', grouped.A),
-    B: computeUnitResult('B', grouped.B),
-    C: computeUnitResult('C', grouped.C),
+    A: computeUnitResult('A', grouped.A, params),
+    B: computeUnitResult('B', grouped.B, params),
+    C: computeUnitResult('C', grouped.C, params),
   }
   let revenue = 0
   let profit = 0
@@ -144,7 +138,7 @@ export function computeSimulationResult(
     companyRevenue,
     companyProfit,
     assignment,
-    feasible: companyRevenue > PREV_YEAR_REVENUE,
+    feasible: companyRevenue > params.prevYearRevenue,
   }
 }
 

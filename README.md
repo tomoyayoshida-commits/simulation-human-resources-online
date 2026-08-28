@@ -34,6 +34,7 @@ src/
     assignment.ts / optimizer.ts   割当（min-cost flow）・最適化（§5）
     reasonText.ts                  配置方針テキスト生成（§9）
     dashboard.ts / compareTasks.ts / compareHiring.ts  DOM更新（§10）
+    whatif.ts / whatifPanel.ts     What-if分析（機能14）の計算・DOM更新（docs/whatif-plan.md）
 ```
 
 ## 実装状況
@@ -47,6 +48,7 @@ src/
 - [x] 手順6: 採用前後比較（機能7）… `compareHiring.ts`
 - [x] 手順7: CSV出力（機能8）… `csv.ts`
 - [x] 手順8: electron-builder による Windows パッケージング（`npm run build`）
+- [x] 手順9: What-if分析（機能14・製品カタログ未記載の追加機能。docs/whatif-plan.md）… `whatif.ts` / `whatifPanel.ts` / `#p6`
 
 テストは `npm test`（Node 標準 `node:test` ＋型ストリップ、設計書§11 準拠）。
 
@@ -65,6 +67,7 @@ WSL2 には wine が無いため、`package.json` の `build.win` は `zip` タ�
 - **コスト／利益の単位**：実データで検証した結果、人件費(1〜20)を売上と同じ「億円」とみなすと桁が2つずれ（コスト合計が売上の数十倍）、全社利益が常に大幅な赤字になる不整合が判明。人件費は「百万円」単位とみなし、コスト計算時に `COST_UNIT_DIVISOR = 100` で億円へ換算するよう `calcEngine.ts`（`unitCostTotal`）・`optimizer.ts`（`profitValue`）を修正済み。
 - **最適化の枝刈り（`optimizer.ts`・`docs/pruning-plan.md`）**：4課題比較の体感速度改善のため、人数配分の候補ごとに割当(MCMF)を解く前に上界(緩和問題の最適値)を計算し、UB降順で処理・打ち切りする branch-and-bound を導入。導入時に「丸め前raw値と丸め後実測値のスケール不一致」による誤答（実際に最適でない候補を選ぶ／`closestCandidate`の同点タイブレークが反復順に依存する）をランダム110名データの検証で検出し、候補固有の定数項（`shiftConstant`）を上界に加算する形で修正。再発防止として `test/optimizer.test.ts` に総当たり実装との完全一致を検証する回帰テストを追加（該当シードを固定）。実データ4課題では旧実装比で体感数秒〜1桁ms台まで短縮を確認（ケースにより不可行判定のフォールバックが全候補走査になるため短縮幅は課題依存）。
 - **割当(MCMF)の独立検証（`docs/solver-oracle-plan.md`）**：`assignment.ts`（自前MCMF実装）を守るテストが5名規模の1件しかなかったため、テスト専用依存として `highs`（HiGHSのWASM版、devDependency）を追加し、`test/assignment.oracle.test.ts` で完全単模な輸送問題としてMILP定式化した独立実装と目的関数値を比較する回帰テストを追加（`test/helpers/lpOracle.ts`）。本番コード（`src/`）には数理最適化ライブラリを一切importしていない（設計書_AI向け.md の制約を維持）。実データ4課題の結果に変化なし。
+- **追加採用10名データ**：`~/development/資料/テストケース/採用01_正常10名.csv`（旧 `hire_test01_simple_normal.csv`。E101〜E110、既存100名データと同一フォーマット）を入手・検証済み（2026-08-28）。取込・マージ・110名での4課題最適化を実行し、100名側の結果が既存の実測値と完全一致すること、110名側も全課題 feasible であることを確認。#p5 採用前後比較の実データ検証が可能になった。
 
 ## 未決事項（設計書§12）
 

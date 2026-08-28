@@ -1,6 +1,6 @@
 // 設計書§2/§3: 事業部別定数・丸め処理・CSVカラムマップ
 
-import type { Employee, TaskId, UnitId, Weights } from './types.ts'
+import type { Employee, SimParams, TaskId, UnitId, Weights } from './types.ts'
 
 export const UNIT_IDS: readonly UnitId[] = ['A', 'B', 'C'] as const
 
@@ -51,6 +51,22 @@ export const SURPLUS_TABLE: { maxRate: number; factor: number }[] = [
 
 export const PREV_YEAR_REVENUE = 58 // 億円
 export const COST_MULTIPLIER = 3
+
+/**
+ * What-if（機能14）が差し替え可能な計算前提の既定値（docs/whatif-plan.md §4.3）。
+ * 既存の個別 export をそのまま束ねただけで、値の二重定義は作らない。
+ */
+export const DEFAULT_PARAMS: SimParams = {
+  weights: WEIGHTS,
+  baseRevenue: BASE_REVENUE,
+  growth: GROWTH,
+  optimalHeadcount: OPTIMAL_HEADCOUNT,
+  minHeadcount: MIN_HEADCOUNT,
+  shortageTable: SHORTAGE_TABLE,
+  surplusTable: SURPLUS_TABLE,
+  prevYearRevenue: PREV_YEAR_REVENUE,
+  costMultiplier: COST_MULTIPLIER,
+}
 
 // 人件費(1〜20)は百万円単位、売上は億円単位のため、コスト計算時に百万円→億円へ換算する。
 // 実データ検証で判明：この換算なしだとコスト合計が売上の2桁上になり、利益が常に大幅な赤字になる
