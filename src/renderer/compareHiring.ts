@@ -1,7 +1,7 @@
 // 設計書§6/§10: 採用前後比較（#p5）
 
-import type { Employee, SimulationResult, TaskId, UnitId } from './types.ts'
-import { COST_MULTIPLIER, COST_UNIT_DIVISOR, PROFIT_SCALE, round2, UNIT_IDS, UNIT_VAR } from './constants.ts'
+import type { Employee, SimParams, SimulationResult, TaskId, UnitId } from './types.ts'
+import { COST_UNIT_DIVISOR, DEFAULT_PARAMS, PROFIT_SCALE, round2, UNIT_IDS, UNIT_VAR } from './constants.ts'
 import { oku, oku1, signed } from './format.ts'
 import { $ } from './dom.ts'
 import { runOptimization } from './optimizer.ts'
@@ -39,15 +39,21 @@ function afterCard(r: SimulationResult, before: SimulationResult): string {
 
 /**
  * 採用前後比較を実行して #p5 を更新（設計書§6）。
- * 既定の目的関数はタスク1（全社売上最大化）。
+ * 既定の目的関数はタスク1（全社売上最大化）。params未指定時は標準の前提パラメータを使う
+ * （#p5の「オプション」で前提を変えた場合はその値が渡される）。
  */
-export function renderCompareHiring(base: Employee[], additional: Employee[], task: TaskId = 1): void {
+export function renderCompareHiring(
+  base: Employee[],
+  additional: Employee[],
+  task: TaskId = 1,
+  params: SimParams = DEFAULT_PARAMS,
+): void {
   const grid = $('compare-hiring-grid')
   const summary = $('hiring-summary')
   const roi = $('hiring-roi')
 
-  const beforeRes = runOptimization(base, task)
-  const afterRes = runOptimization([...base, ...additional], task)
+  const beforeRes = runOptimization(base, task, params)
+  const afterRes = runOptimization([...base, ...additional], task, params)
 
   if ('infeasible' in beforeRes || 'infeasible' in afterRes) {
     if (grid)
@@ -63,7 +69,7 @@ export function renderCompareHiring(base: Employee[], additional: Employee[], ta
   // ROI（参考）
   // 億円表示のため calcEngine.unitCostTotal と同じ換算（÷COST_UNIT_DIVISOR）を通す
   const addCost = round2(
-    additional.reduce((s, e) => s + e.cost * COST_MULTIPLIER, 0) / COST_UNIT_DIVISOR,
+    additional.reduce((s, e) => s + e.cost * params.costMultiplier, 0) / COST_UNIT_DIVISOR,
   )
   const dRev = round2(afterRes.companyRevenue - beforeRes.companyRevenue)
   const dProfit = round2(afterRes.companyProfit - beforeRes.companyProfit)

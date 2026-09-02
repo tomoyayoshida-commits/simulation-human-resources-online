@@ -9,9 +9,11 @@ import type {
   TaskId,
   UnitId,
 } from './types.ts'
+import type { TaskMetric } from './constants.ts'
 import {
   COST_UNIT_DIVISOR,
   DEFAULT_PARAMS,
+  resolveMetric,
   TASK_SPEC,
   UNIT_IDS,
 } from './constants.ts'
@@ -102,17 +104,21 @@ function profitValue(base: EmployeeBase, unit: UnitId, effFactor: number, params
  * 課題ごとの割当価値 value(i,X)（§5.1）を辞書式スカラーに合成して返す。
  * value = primary * LEX_WEIGHT + secondary
  *
- * 課題1（targetUnit=null）は全事業部の売上がそのまま primary で secondary を持たない。
+ * 課題1（targetUnit=null）は全事業部の指標がそのまま primary で secondary を持たない。
  * 課題2〜4 は対象事業部だけが primary を持ち、全事業部が secondary＝全社売上で評価される
  * （§7-1：目的外事業部を価値0で放置すると顔ぶれが無差別になり制約判定がブレるため）。
+ *
+ * `metric` は呼び出し側が決めた最大化指標（既定は TASK_SPEC）。式は指標によらず同じで、
+ * primary に売上を入れるかコスト控除後の利益を入れるかだけが変わる。
  */
 function buildValues(
   bases: EmployeeBase[],
   task: TaskId,
   eff: Record<UnitId, number>,
   params: SimParams,
+  metric: TaskMetric,
 ): Record<string, Record<UnitId, number>> {
-  const { targetUnit, metric } = TASK_SPEC[task]
+  const { targetUnit } = TASK_SPEC[task]
   const values: Record<string, Record<UnitId, number>> = {}
   for (const base of bases) {
     const perUnit: Record<UnitId, number> = { A: 0, B: 0, C: 0 }
@@ -143,20 +149,23 @@ type ValueOrders = Record<UnitId, number[] | null>
  * 非負倍は順序を保つので、**事業部内の順位は人数配分に依存しない**。
  * よって contrib_u の降順を1回求めれば861候補すべてで使い回せる。
  *
- * 例外は**課題2のA事業部**だけ。primary が利益（rev − cost）でコスト項が入るため、
- * 順位が eff_A に依存する。この組は null を返し、従来どおり候補ごとに並べ替える。
+ * 例外は**指標が利益の課題の対象事業部**だけ（原文どおりなら課題2のA事業部。
+ * 「すべて利益」方針では課題3のB・課題4のCも該当する）。primary が利益（rev − cost）で
+ * コスト項が入るため順位が eff に依存する。この組は null を返し、従来どおり候補ごとに並べ替える。
  *
  * **ビット一致について**：並べ替えの結果を再利用するだけで、加算する値も加算順も変えない。
  * 安定ソートなので、値そのものを降順ソートした場合と同じ置換になる
  * （非負倍は順序を保ち、同値のタイブレークも入力順で一致する。係数が0なら全値0で和も0）。
  * したがって ub は従来と**ビット単位で同じ値**になり、UB降順の並びも枝刈り判定も変わらない。
  */
-function buildValueOrders(bases: EmployeeBase[], task: TaskId): ValueOrders {
-  const { targetUnit, metric } = TASK_SPEC[task]
+function buildValueOrders(bases: EmployeeBase[], task: TaskId, metric: TaskMetric): ValueOrders {
+  const { targetUnit } = TASK_SPEC[task]
   const orders = { A: null, B: null, C: null } as ValueOrders
   for (const u of UNIT_IDS) {
-    // コスト項が入る組は contrib だけでは順位が決まらない
-    if (metric === 'profit' && u === targetUnit) continue
+    // コスト項が入る組は contrib だけでは順位が決まらない。
+    // 判定は buildValues の isTarget と同じ形にする（課題1は targetUnit=null で全事業部が
+    // primary を持つため、利益指標なら3事業部すべてにコスト項が入る）。
+    if (metric === 'profit' && (targetUnit === null || u === targetUnit)) continue
     const idx = bases.map((_, i) => i)
     idx.sort((a, b) => bases[b].contrib[u] - bases[a].contrib[u])
     orders[u] = idx
@@ -182,7 +191,7 @@ function upperBoundRawTotal(
     const take = Math.min(counts[u], bases.length)
     const order = orders[u]
     if (order === null) {
-      // 順位が人数配分に依存する組（課題2のA事業部）だけ、候補ごとに並べ替える
+      // 順位が人数配分に依存する組（利益が目的の事業部）だけ、候補ごとに並べ替える
       const perUnit = bases.map((b) => values[b.id][u]).sort((a, b) => b - a)
       for (let i = 0; i < take; i++) total += perUnit[i]
     } else {
@@ -230,12 +239,14 @@ export function upperBoundsForCandidates(
   employees: Employee[],
   task: TaskId,
   params: SimParams = DEFAULT_PARAMS,
+  metric?: TaskMetric,
 ): number[] {
+  const m = resolveMetric(task, metric)
   const bases = buildEmployeeBases(employees, params)
-  const orders = buildValueOrders(bases, task)
+  const orders = buildValueOrders(bases, task, m)
   return enumerateHeadcounts(employees.length, params).map((counts) => {
     const eff = effectiveFactors(counts, params)
-    const values = buildValues(bases, task, eff, params)
+    const values = buildValues(bases, task, eff, params, m)
     return upperBoundRawTotal(bases, values, counts, orders)
   })
 }
@@ -251,10 +262,11 @@ export function solveForHeadcount(
   task: TaskId,
   counts: AllocationCounts,
   params: SimParams = DEFAULT_PARAMS,
+  metric?: TaskMetric,
 ): Record<string, UnitId> {
   const bases = buildEmployeeBases(employees, params)
   const eff = effectiveFactors(counts, params)
-  const values = buildValues(bases, task, eff, params)
+  const values = buildValues(bases, task, eff, params, resolveMetric(task, metric))
   return solveAssignment(employees, values, counts)
 }
 
@@ -267,7 +279,9 @@ export function runOptimization(
   employees: Employee[],
   task: TaskId,
   params: SimParams = DEFAULT_PARAMS,
+  metric?: TaskMetric,
 ): SimulationResult | InfeasibleResult {
+  const m = resolveMetric(task, metric)
   const candidates = enumerateHeadcounts(employees.length, params)
   if (candidates.length === 0) {
     return { infeasible: true, reason: 'min_headcount' }
@@ -286,12 +300,12 @@ export function runOptimization(
   // 有望な候補から先に厳密解(MCMF)を試す。best が見つかった後、残りの候補の UB が
   // bestScalar を(マージン込みで)超えられなければ、それ以降は全て UB が単調に
   // 小さくなるため打ち切ってよい。
-  // 上界の並べ替えは（課題2のA事業部を除き）人数配分に依存しないので、ここで1回だけ作る
-  const orders = buildValueOrders(bases, task)
+  // 上界の並べ替えは（利益が目的の事業部を除き）人数配分に依存しないので、ここで1回だけ作る
+  const orders = buildValueOrders(bases, task, m)
 
   const prepared = candidates.map((counts) => {
     const eff = effectiveFactors(counts, params)
-    const values = buildValues(bases, task, eff, params)
+    const values = buildValues(bases, task, eff, params, m)
     const ub = upperBoundRawTotal(bases, values, counts, orders) + shiftConstant(task, eff, params)
     return { counts, values, ub }
   })
@@ -321,7 +335,7 @@ export function runOptimization(
     if (!result.feasible) continue
 
     const key = {
-      primary: taskPrimaryValue(result, task),
+      primary: taskPrimaryValue(result, task, m),
       secondary: result.companyRevenue,
       nA: counts.A,
       nB: counts.B,

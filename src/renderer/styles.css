@@ -9,15 +9,15 @@
 *{box-sizing:border-box;}
 body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--page);color:var(--text-primary);}
 .topbar{background:var(--surface-1);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:4px;padding:0 20px;position:sticky;top:0;z-index:10;}
+.topbar[hidden]{display:none;}
 .topbar .brand-icon{width:44px;height:44px;object-fit:contain;flex-shrink:0;}
 .topbar h1{font-size:14px;margin:0;padding:12px 18px 12px 10px;border-right:1px solid var(--border);white-space:nowrap;}
-.phasebtn{border:none;background:none;padding:14px 16px;font-size:13px;color:var(--text-secondary);cursor:pointer;border-bottom:2px solid transparent;display:flex;align-items:center;gap:7px;}
-.phasebtn .num{width:20px;height:20px;border-radius:50%;background:var(--grid);color:var(--text-secondary);font-size:11px;display:flex;align-items:center;justify-content:center;}
-.phasebtn.active{color:var(--text-primary);font-weight:600;border-bottom-color:var(--a);}
-.phasebtn.active .num{background:var(--a);color:#fff;}
-.phasebtn.compare{margin-left:auto;}
-.phasebtn.compare .num{background:#f0efec;color:var(--text-muted);}
-.phasebtn.compare.active .num{background:var(--b);color:#fff;}
+.detail-summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--text-secondary);}
+.detail-summary::marker{color:var(--text-muted);}
+.breadcrumb{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text-muted);flex:1;padding:12px 0;}
+.breadcrumb .crumb-link{color:var(--a);cursor:pointer;background:none;border:none;font:inherit;padding:0;text-decoration:underline;}
+.breadcrumb .crumb-current{color:var(--text-primary);font-weight:600;}
+.breadcrumb .crumb-sep{color:var(--text-muted);}
 .wrap{max-width:1040px;margin:0 auto;padding:28px 24px 60px;}
 .panel{display:none;}
 .panel.active{display:block;animation:fade .15s ease;}
@@ -42,12 +42,6 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
 .pill.good{background:#eaf7ea;color:#0a6b0a;}
 .pill.warn{background:#fef3dc;color:#8a5a00;}
 .pill.crit{background:#fbe6e6;color:#9c2020;}
-.taskcards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px;}
-.taskcard{border:1px solid var(--border);border-radius:10px;padding:14px;cursor:pointer;background:var(--surface-1);}
-.taskcard.selected{border-color:var(--a);box-shadow:0 0 0 2px rgba(42,120,214,0.15);}
-.taskcard .tag{font-size:10.5px;color:var(--text-muted);}
-.taskcard h4{font-size:13px;margin:6px 0 4px;}
-.taskcard p{font-size:11.5px;color:var(--text-secondary);margin:0;}
 .bar-row{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
 .bar-row .label{width:78px;font-size:12.5px;color:var(--text-secondary);flex-shrink:0;}
 .bar-track{flex:1;height:16px;background:var(--grid);border-radius:3px;overflow:hidden;}
@@ -113,7 +107,7 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
 .home-hero{margin:10px 0 26px;}
 .home-hero h2{font-size:20px;margin:0 0 6px;}
 .home-hero p{font-size:13px;color:var(--text-secondary);margin:0;}
-.home-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:10px;}
+.home-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-bottom:10px;}
 .home-card{background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:22px 20px;display:flex;flex-direction:column;gap:10px;}
 .home-card .num{width:26px;height:26px;border-radius:50%;background:var(--grid);color:var(--text-secondary);font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;}
 .home-card h3{font-size:15px;margin:0;}
@@ -124,6 +118,16 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
 .whatif-sticky{position:sticky;top:0;z-index:5;background:var(--page);padding:10px 0;}
 input.whatif-changed{border-color:var(--a);background:#eef4fc;}
 tr.whatif-moved{background:#fef3dc;}
+
+.login-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--page);}
+.login-screen[hidden]{display:none;}
+.login-card{background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:36px 40px;text-align:center;max-width:360px;}
+.login-card .brand-icon{width:56px;height:56px;object-fit:contain;margin-bottom:10px;}
+.login-card h1{font-size:18px;margin:0 0 10px;}
+.login-card p{font-size:13px;color:var(--text-secondary);margin:0 0 18px;line-height:1.6;}
+.login-error{color:var(--critical);font-size:12.5px;margin-top:12px !important;}
+.login-user{margin-left:16px;font-size:12px;color:var(--text-secondary);white-space:nowrap;}
+.login-logout{margin-left:12px;}
 
 /* --- 以下、同じ指定が複数箇所のインラインstyleに散っていたものを集約 --- */
 /* 上に一段あける（カードを続けて並べるとき） */

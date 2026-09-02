@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>モック：エグゼクティブサマリー（実データ）</title>
+<style>
+:root{
+  color-scheme: light;
+  --surface-1:#fcfcfb; --page:#f9f9f7;
+  --text-primary:#0b0b0b; --text-secondary:#52514e; --text-muted:#898781;
+  --grid:#e1e0d9; --baseline:#c3c2b7; --border:rgba(11,11,11,0.10);
+  --a:#2a78d6; --b:#eb6834; --c:#1baf7a;
+  --good:#0ca30c; --warning:#fab219; --serious:#ec835a; --critical:#d03b3b;
+}
+*{box-sizing:border-box;}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--page);color:var(--text-primary);}
+.wrap{max-width:960px;margin:0 auto;padding:28px 24px 80px;}
+.mock-banner{background:#eef4fc;border:1px solid #cfe0f4;border-radius:8px;padding:10px 14px;font-size:12px;color:var(--text-secondary);margin-bottom:22px;}
+
+.exec-card{background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:30px 32px;}
+.exec-head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:1px solid var(--border);padding-bottom:16px;margin-bottom:20px;}
+.exec-head h2{font-size:18px;margin:0 0 4px;}
+.exec-head .meta{font-size:11.5px;color:var(--text-muted);}
+.exec-actions{display:flex;gap:8px;flex-shrink:0;}
+.exec-actions button{border:1px solid var(--a);background:#fff;color:var(--a);font-size:12px;padding:7px 14px;border-radius:7px;cursor:pointer;white-space:nowrap;}
+.exec-actions button.primary{background:var(--a);color:#fff;}
+.exec-actions button:hover{filter:brightness(0.97);}
+
+.exec-verdict{display:flex;gap:12px;align-items:flex-start;background:#eaf7ea;border:1px solid #bfe3bf;border-radius:10px;padding:16px 18px;margin-bottom:22px;}
+.exec-verdict .icon{font-size:22px;color:#0a6b0a;margin-top:1px;}
+.exec-verdict .body h3{font-size:14.5px;margin:0 0 5px;color:#0a6b0a;}
+.exec-verdict .body p{font-size:12.5px;margin:0;color:var(--text-secondary);line-height:1.7;}
+
+.exec-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:26px;}
+.exec-stat{border:1px solid var(--border);border-radius:9px;padding:12px 14px;}
+.exec-stat .k{font-size:10.5px;color:var(--text-muted);margin-bottom:4px;}
+.exec-stat .v{font-size:19px;font-weight:700;font-variant-numeric:tabular-nums;}
+.exec-stat .v.good{color:var(--good);}
+.exec-stat .d{font-size:10.5px;color:var(--text-secondary);margin-top:3px;}
+
+.exec-section-title{font-size:13px;font-weight:700;margin:0 0 10px;padding-top:20px;border-top:1px solid var(--border);}
+.exec-section-title:first-of-type{border-top:none;padding-top:0;}
+
+/* --- ①配置案比較の要約：4課題ミニランキング --- */
+.mini-rank{display:flex;flex-direction:column;gap:6px;margin-bottom:24px;}
+.mini-rank-row{display:flex;align-items:center;gap:10px;border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;}
+.mini-rank-row.win{border-color:var(--good);background:#f4fbf4;}
+.mini-rank-badge{color:#fff;font-size:10px;font-weight:600;border-radius:5px;padding:1px 6px;flex-shrink:0;width:38px;text-align:center;}
+.mini-rank-name{flex:1;color:var(--text-secondary);}
+.mini-rank-name b{color:var(--text-primary);}
+.mini-rank-num{font-variant-numeric:tabular-nums;font-weight:600;width:90px;text-align:right;flex-shrink:0;}
+.mini-rank-flag{font-size:10.5px;padding:1px 7px;border-radius:8px;flex-shrink:0;}
+.mini-rank-flag.good{background:#eaf7ea;color:#0a6b0a;}
+.mini-rank-flag.warn{background:#fef3dc;color:#8a5a00;}
+.mini-rank-tag{font-size:10px;font-weight:700;color:#0a6b0a;flex-shrink:0;width:34px;}
+
+/* --- ②採用前後の要約 --- */
+.hire-compact{display:grid;grid-template-columns:1fr auto 1fr auto;align-items:center;gap:14px;margin-bottom:24px;}
+.hire-compact .side{border:1px solid var(--border);border-radius:9px;padding:14px 16px;}
+.hire-compact .side.after{border-color:var(--good);}
+.hire-compact .side .tag{font-size:10.5px;font-weight:600;color:var(--text-muted);margin-bottom:6px;}
+.hire-compact .side.after .tag{color:#0a6b0a;}
+.hire-compact .side .rev{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;}
+.hire-compact .side .sub{font-size:11px;color:var(--text-secondary);margin-top:4px;}
+.hire-arrow{font-size:20px;color:var(--text-muted);}
+.hire-roi{text-align:center;}
+.hire-roi .v{font-size:26px;font-weight:800;color:var(--good);}
+.hire-roi .k{font-size:10px;color:var(--text-muted);}
+
+.exec-orgchart{display:flex;gap:14px;margin-bottom:8px;}
+.exec-unit{flex:1;border:1px solid var(--border);border-radius:9px;padding:12px 14px;}
+.exec-unit .head{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.exec-unit .dot{width:10px;height:10px;border-radius:2px;}
+.exec-unit .head b{font-size:12.5px;}
+.exec-unit .headcount{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;}
+.exec-unit .headcount .unit{font-size:11px;font-weight:500;color:var(--text-muted);}
+.exec-unit .fillnote{font-size:11px;color:var(--text-secondary);margin-top:4px;}
+.exec-footer{font-size:10.5px;color:var(--text-muted);margin-top:20px;border-top:1px solid var(--border);padding-top:10px;line-height:1.6;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="mock-banner">⚠ 静的HTMLのモックです。表示レイアウトはモックですが、数値は <code>human_resources_100.csv</code>（配置案比較）と <code>採用01_正常10名.csv</code>（採用前後比較）を実際に <code>runOptimization</code> に通した結果です。</div>
+
+  <div class="exec-card">
+    <div class="exec-head">
+      <div>
+        <h2>人員配置方針サマリー</h2>
+        <div class="meta">作成：人事部　対象：課題1（全社売上最大化）＋追加採用10名（採用01_正常10名.csv）</div>
+      </div>
+      <div class="exec-actions">
+        <button onclick="alert('モック：PDF出力（未実装）')">PDF出力</button>
+        <button onclick="alert('モック：リンク共有（未実装）')">リンクを共有</button>
+        <button class="primary" onclick="alert('モック：印刷（未実装）')">印刷</button>
+      </div>
+    </div>
+
+    <div class="exec-verdict">
+      <div class="icon">✓</div>
+      <div class="body">
+        <h3>結論：課題1の配置案を採用し、追加10名の採用を実施する</h3>
+        <p>4課題中、課題1が売上・利益・制約余裕のすべてで最大（61.53億円／39.70億円／余裕+3.53億円）。唯一の弱点はC事業部の充足率80%（不足補正0.90）だったが、採用01の10名を加えることでC事業部の充足率が100%まで改善し補正が解消。追加人件費1.85億円に対し利益は+2.51億円増加（ROI 1.36倍）で投資対効果もある。</p>
+      </div>
+    </div>
+
+    <div class="exec-stats">
+      <div class="exec-stat"><div class="k">全社売上（採用後）</div><div class="v">65.89<span style="font-size:12px;">億円</span></div><div class="d">採用前 61.53億円</div></div>
+      <div class="exec-stat"><div class="k">全社利益（採用後）</div><div class="v good">42.21<span style="font-size:12px;">億円</span></div><div class="d">採用前 39.70億円</div></div>
+      <div class="exec-stat"><div class="k">制約に対する余裕</div><div class="v">+7.89<span style="font-size:12px;">億円</span></div><div class="d">全社売上&gt;58億円 対比</div></div>
+      <div class="exec-stat"><div class="k">追加採用ROI</div><div class="v good">1.36<span style="font-size:12px;">倍</span></div><div class="d">利益+2.51億円／コスト1.85億円</div></div>
+    </div>
+
+    <div class="exec-section-title">① どこに配置すべきか（4課題比較・実データ）</div>
+    <div class="mini-rank">
+      <div class="mini-rank-row win">
+        <span class="mini-rank-tag">推奨</span>
+        <span class="mini-rank-badge" style="background:var(--a);">課題1</span>
+        <span class="mini-rank-name"><b>全社売上最大化</b>　A40／B40／C20名</span>
+        <span class="mini-rank-num">61.53億円</span>
+        <span class="mini-rank-flag good">● 全事業部リスク低</span>
+      </div>
+      <div class="mini-rank-row">
+        <span class="mini-rank-tag"></span>
+        <span class="mini-rank-badge" style="background:var(--a);">課題2</span>
+        <span class="mini-rank-name">A事業部利益最大化　A47／B41／C12名</span>
+        <span class="mini-rank-num">59.74億円</span>
+        <span class="mini-rank-flag warn">● C事業部48%不足</span>
+      </div>
+      <div class="mini-rank-row">
+        <span class="mini-rank-tag"></span>
+        <span class="mini-rank-badge" style="background:var(--b);">課題3</span>
+        <span class="mini-rank-name">B事業部売上最大化　A41／B49／C10名</span>
+        <span class="mini-rank-num">60.10億円</span>
+        <span class="mini-rank-flag warn">● C事業部40%不足</span>
+      </div>
+      <div class="mini-rank-row">
+        <span class="mini-rank-tag"></span>
+        <span class="mini-rank-badge" style="background:var(--c);">課題4</span>
+        <span class="mini-rank-name">C事業部売上最大化　A40／B35／C25名</span>
+        <span class="mini-rank-num">60.45億円</span>
+        <span class="mini-rank-flag good">● 全事業部補正なし</span>
+      </div>
+    </div>
+
+    <div class="exec-section-title">② そもそも採用すべきか（課題1・採用前後比較・実データ）</div>
+    <div class="hire-compact">
+      <div class="side">
+        <div class="tag">採用前・100名</div>
+        <div class="rev">61.53億円</div>
+        <div class="sub">利益 39.70億円／C事業部充足率 80%（不足補正0.90）</div>
+      </div>
+      <div class="hire-arrow">→</div>
+      <div class="side after">
+        <div class="tag">採用後・110名</div>
+        <div class="rev" style="color:var(--good);">65.89億円</div>
+        <div class="sub">利益 42.21億円（+2.51億円）／C事業部充足率 100%（補正なし）</div>
+      </div>
+      <div class="hire-roi">
+        <div class="v">1.36倍</div>
+        <div class="k">期待ROI</div>
+      </div>
+    </div>
+
+    <div class="exec-section-title">配置人数（採用後・110名）</div>
+    <div class="exec-orgchart">
+      <div class="exec-unit">
+        <div class="head"><span class="dot" style="background:var(--a);"></span><b>A事業部（飽和）</b></div>
+        <div class="headcount">44<span class="unit">名</span></div>
+        <div class="fillnote">充足率 110%・適正範囲</div>
+      </div>
+      <div class="exec-unit">
+        <div class="head"><span class="dot" style="background:var(--b);"></span><b>B事業部（成長）</b></div>
+        <div class="headcount">41<span class="unit">名</span></div>
+        <div class="fillnote">充足率 117%・適正範囲</div>
+      </div>
+      <div class="exec-unit">
+        <div class="head"><span class="dot" style="background:var(--c);"></span><b>C事業部（新規）</b></div>
+        <div class="headcount">25<span class="unit">名</span></div>
+        <div class="fillnote">充足率 100%・適正範囲（採用前80%から改善）</div>
+      </div>
+    </div>
+
+    <div class="exec-footer">
+      配置案比較のデータ元：human_resources_100.csv（既存100名）／課題1〜4を runOptimization で実行。<br>
+      採用前後比較のデータ元：human_resources_100.csv（採用前）＋採用01_正常10名.csv（採用後、課題1で再最適化）。<br>
+      本サマリーは静的HTMLのモックです。実運用にはFirestoreへの履歴保存・配置理由(reasonText)との連携が必要です。
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>モック：推奨レイヤー＋エグゼクティブサマリー（ダミーデータ）</title>
+<style>
+:root{
+  color-scheme: light;
+  --surface-1:#fcfcfb; --page:#f9f9f7;
+  --text-primary:#0b0b0b; --text-secondary:#52514e; --text-muted:#898781;
+  --grid:#e1e0d9; --baseline:#c3c2b7; --border:rgba(11,11,11,0.10);
+  --a:#2a78d6; --b:#eb6834; --c:#1baf7a;
+  --good:#0ca30c; --warning:#fab219; --serious:#ec835a; --critical:#d03b3b;
+}
+*{box-sizing:border-box;}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--page);color:var(--text-primary);}
+.wrap{max-width:1100px;margin:0 auto;padding:28px 24px 80px;}
+h1{font-size:20px;margin:0 0 4px;}
+.subtitle{color:var(--text-secondary);font-size:13px;margin:0 0 8px;}
+.mock-banner{background:#eef4fc;border:1px solid #cfe0f4;border-radius:8px;padding:10px 14px;font-size:12px;color:var(--text-secondary);margin-bottom:26px;}
+.section-title{font-size:15px;font-weight:700;margin:36px 0 4px;padding-top:20px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;}
+.section-title:first-of-type{border-top:none;padding-top:0;margin-top:0;}
+.section-desc{font-size:12.5px;color:var(--text-secondary);margin:0 0 16px;}
+
+/* ---- 推奨バナー（パートナー：お節介レイヤー） ---- */
+.verdict{display:flex;gap:14px;align-items:flex-start;border-radius:10px;padding:16px 18px;margin-bottom:16px;border:1px solid;}
+.verdict .icon{font-size:20px;line-height:1;flex-shrink:0;margin-top:1px;}
+.verdict .body h3{font-size:14px;margin:0 0 4px;}
+.verdict .body p{font-size:12.5px;margin:0;color:var(--text-secondary);line-height:1.6;}
+.verdict .body .action{display:inline-block;margin-top:8px;font-size:12px;font-weight:600;text-decoration:underline;cursor:pointer;}
+.verdict.v-good{background:#eaf7ea;border-color:#bfe3bf;}
+.verdict.v-good .icon,.verdict.v-good .action{color:#0a6b0a;}
+.verdict.v-warn{background:#fef3dc;border-color:#f3dca6;}
+.verdict.v-warn .icon,.verdict.v-warn .action{color:#8a5a00;}
+.verdict.v-crit{background:#fbe6e6;border-color:#f0bcbc;}
+.verdict.v-crit .icon,.verdict.v-crit .action{color:#9c2020;}
+
+.compare-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px;}
+.compare-card{background:var(--surface-1);border:1px solid var(--border);border-left:3px solid var(--baseline);border-radius:10px;padding:14px;position:relative;}
+.compare-card.recommended{border-left-color:var(--good);box-shadow:0 0 0 2px rgba(12,163,12,0.12);}
+.reco-tag{position:absolute;top:-9px;right:10px;background:var(--good);color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:8px;}
+.compare-head{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+.compare-badge{color:#fff;font-size:10.5px;font-weight:600;border-radius:6px;padding:2px 7px;flex-shrink:0;}
+.compare-head h4{font-size:12.5px;margin:0;line-height:1.3;}
+.compare-primary{border-bottom:1px solid var(--grid);padding-bottom:10px;margin-bottom:10px;}
+.compare-primary .k{font-size:10.5px;color:var(--text-muted);margin-bottom:2px;}
+.compare-primary .v{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1;}
+.compare-primary .v .unit{font-size:11px;font-weight:500;color:var(--text-secondary);margin-left:2px;}
+.compare-primary .d{font-size:11px;color:var(--text-secondary);margin-top:3px;}
+.compare-sub{display:flex;flex-direction:column;gap:4px;font-size:11.5px;margin-bottom:10px;}
+.compare-sub div{display:flex;justify-content:space-between;}
+.cs-k{color:var(--text-muted);}
+.cs-v{font-variant-numeric:tabular-nums;font-weight:500;}
+.compare-status{margin-bottom:10px;}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;padding:2px 9px;border-radius:9px;}
+.pill.good{background:#eaf7ea;color:#0a6b0a;}
+.pill.warn{background:#fef3dc;color:#8a5a00;}
+.pill.crit{background:#fbe6e6;color:#9c2020;}
+.bars-label{font-size:10.5px;color:var(--text-muted);margin:8px 0 5px;display:flex;justify-content:space-between;}
+
+/* ---- 充足率ミニゲージ（既存 gauge.ts の帯色ロジックを縮約表示） ---- */
+.mini-gauge-row{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-secondary);margin-bottom:5px;}
+.mini-gauge-row span.u{width:12px;flex-shrink:0;font-weight:600;}
+.mini-gauge-track{flex:1;height:8px;border-radius:2px;background:var(--grid);position:relative;overflow:hidden;}
+.mini-gauge-fill{height:100%;border-radius:2px;}
+.mini-gauge-row b{width:60px;text-align:right;font-size:10.5px;font-variant-numeric:tabular-nums;flex-shrink:0;}
+.mini-gauge-row b.status-good{color:#0a6b0a;}
+.mini-gauge-row b.status-warn{color:#8a5a00;}
+.mini-gauge-row b.status-crit{color:#9c2020;}
+
+.compare-summary{font-size:11.5px;color:var(--text-primary);line-height:1.6;background:#f5f5f3;border-radius:7px;padding:8px 10px;margin:0;}
+
+/* ---- 採用案比較（Y/N） ---- */
+.hire-grid{display:grid;grid-template-columns:1fr 1fr 220px;gap:12px;align-items:stretch;margin-bottom:16px;}
+.compare-before,.compare-after{background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:16px 18px;}
+.compare-after{border-color:var(--good);}
+.compare-head2{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+.compare-badge2{font-size:10.5px;font-weight:600;border-radius:6px;padding:2px 8px;}
+.badge-before{background:var(--baseline);color:#0b0b0b;}
+.badge-after{background:var(--good);color:#fff;}
+
+/* ---- ROI判定タイル ---- */
+.roi-tile{background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;justify-content:center;text-align:center;}
+.roi-tile .k{font-size:11px;color:var(--text-muted);margin-bottom:6px;}
+.roi-tile .v{font-size:30px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1;}
+.roi-tile .v.status-good{color:var(--good);}
+.roi-tile .v.status-warn{color:#a06a00;}
+.roi-tile .status-label{display:inline-flex;align-items:center;gap:5px;margin-top:8px;font-size:12px;font-weight:700;border-radius:9px;padding:3px 10px;}
+.roi-tile .status-label.good{background:#eaf7ea;color:#0a6b0a;}
+.roi-tile .sub{font-size:10.5px;color:var(--text-muted);margin-top:8px;line-height:1.5;}
+
+/* ---- 情報源：エグゼクティブサマリー（共有・出力用） ---- */
+.exec-card{background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:26px 28px;}
+.exec-head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:1px solid var(--border);padding-bottom:16px;margin-bottom:18px;}
+.exec-head h2{font-size:17px;margin:0 0 4px;}
+.exec-head .meta{font-size:11.5px;color:var(--text-muted);}
+.exec-actions{display:flex;gap:8px;}
+.exec-actions button{border:1px solid var(--a);background:#fff;color:var(--a);font-size:12px;padding:7px 14px;border-radius:7px;cursor:pointer;}
+.exec-actions button.primary{background:var(--a);color:#fff;}
+.exec-actions button:hover{filter:brightness(0.97);}
+.exec-verdict{display:flex;gap:12px;align-items:center;background:#eaf7ea;border:1px solid #bfe3bf;border-radius:10px;padding:14px 16px;margin-bottom:20px;}
+.exec-verdict .icon{font-size:24px;color:#0a6b0a;}
+.exec-verdict .body h3{font-size:14px;margin:0 0 2px;color:#0a6b0a;}
+.exec-verdict .body p{font-size:12px;margin:0;color:var(--text-secondary);}
+.exec-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;}
+.exec-stat{border:1px solid var(--border);border-radius:9px;padding:12px 14px;}
+.exec-stat .k{font-size:10.5px;color:var(--text-muted);margin-bottom:4px;}
+.exec-stat .v{font-size:19px;font-weight:700;font-variant-numeric:tabular-nums;}
+.exec-orgchart{display:flex;gap:16px;margin-bottom:6px;}
+.exec-unit{flex:1;border:1px solid var(--border);border-radius:9px;padding:12px 14px;}
+.exec-unit .head{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.exec-unit .dot{width:10px;height:10px;border-radius:2px;}
+.exec-unit .head b{font-size:12.5px;}
+.exec-unit .headcount{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;}
+.exec-unit .headcount .unit{font-size:11px;font-weight:500;color:var(--text-muted);}
+.exec-unit .fillnote{font-size:11px;color:var(--text-secondary);margin-top:4px;}
+.exec-footer{font-size:10.5px;color:var(--text-muted);margin-top:18px;border-top:1px solid var(--border);padding-top:10px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>モック：推奨レイヤー＋充足率表示＋エグゼクティブサマリー</h1>
+  <p class="subtitle">パートナー／情報源としての決断支援を検討するための表示形式サンプル。数値はすべてダミー。</p>
+  <div class="mock-banner">
+    ⚠ これは静的HTMLのモックです。実データ・実計算とは接続していません。既存の <code>compareTasks.ts</code> / <code>compareHiring.ts</code> / <code>gauge.ts</code> の構成要素をベースに、新しい表示要素（推奨バナー・充足率ミニゲージ・ROI判定・エグゼクティブサマリー）を重ねています。
+  </div>
+
+  <!-- ============ 1. 配置案比較（Where）＋推奨レイヤー ============ -->
+  <div class="section-title">① 配置案比較（Where）── どこに配置すべきか</div>
+  <p class="section-desc">4課題を横並びで比較。従来は数値の提示止まりだったところに、上部の推奨バナーと各カードの充足率ミニゲージを追加。</p>
+
+  <div class="verdict v-good">
+    <div class="icon">✓</div>
+    <div class="body">
+      <h3>推奨：課題1（全社売上最大化）の配置案を採用</h3>
+      <p>4課題とも制約（全社売上&gt;58億）は満たすが、課題2・4は充足率が危険域（B事業部86%／C事業部152%）に入り、翌期以降の退職・欠員リスクに弱い。課題1は全事業部が適正範囲内で、売上の伸びと安定性のバランスが最も良い。</p>
+      <span class="action">配置理由の詳細を見る ›</span>
+    </div>
+  </div>
+
+  <div class="compare-grid">
+    <!-- 課題1：推奨 -->
+    <div class="compare-card recommended">
+      <div class="reco-tag">推奨</div>
+      <div class="compare-head"><span class="compare-badge" style="background:var(--a);">課題1</span><h4>全社売上最大化</h4></div>
+      <div class="compare-primary">
+        <div class="k">全社売上（最大化対象）</div>
+        <div class="v" style="color:var(--a);">60.20<span class="unit">億円</span></div>
+        <div class="d" style="color:#006300;">前年度比 +2.10億円</div>
+      </div>
+      <div class="compare-sub">
+        <div><span class="cs-k">全社利益</span><span class="cs-v">18.40億円</span></div>
+      </div>
+      <div class="compare-status"><span class="pill good">● 制約を満たす（余裕+2.10億円）</span></div>
+      <div class="bars-label"><span>充足率</span><span>適正範囲 90〜120%</span></div>
+      <div class="mini-gauge-row"><span class="u">A</span><div class="mini-gauge-track"><div class="mini-gauge-fill" style="width:95%;background:var(--good);"></div></div><b class="status-good">95%・適正</b></div>
+      <div class="mini-gauge-row"><span class="u">B</span><div class="mini-gauge-track"><div class="mini-gauge-fill" style="width:97%;background:var(--good);"></div></div><b class="status-good">103%・適正</b></div>
+      <div class="mini-gauge-row"><span class="u">C</span><div class="mini-gauge-track"><div class="mini-gauge-fill" style="width:87%;background:var(--good);"></div></div><b class="status-good">104%・適正</b></div>
+      <p class="compare-summary">A38／B36／C26名。特定事業部に偏らないバランス型。3事業部すべて適正範囲内で、増員・欠員に対する耐性も高い。</p>
+    </div>
+
+    <!-- 課題2：注意 -->
+    <div class="compare-card">
+      <div class="compare-head"><span class="compare-badge" style="background:var(--a);">課題2</span><h4>A事業部利益最大化</h4></div>
+      <div class="compare-primary">
+        <div class="k">A事業部利益（最大化対象）</div>
+        <div class="v" style="color:var(--a);">14.80<span class="unit">億円</span></div>
+        <div class="d">課題1比 +1.20億円</div>
+      </div>
+      <div class="compare-sub">
+        <div><span class="cs-k">全社利益</span><span class="cs-v">17.60億円</span></div>
+      </div>
+      <div class="compare-status"><span class="pill warn">● 余裕+0.30億円のみ</span></div>
+      <div class="bars-label"><span>充足率</span><span>適正範囲 90〜120%</span></div>
+      <div class="mini-gauge-row"><span class="u">A</span><div class="mini-gauge-track"><div class="mini-gauge-fill" style="width:100%;background:var(--warning);"></div></div><b class="status-warn">110%・過剰域</b></div>
+      <div class="mini-gauge-row"><span class="u">B</span><div class="mini-gauge-track"><div class="mini-gauge-fill" style="width:86%;background:var(--critical);"></div></div><b class="status-crit">86%・不足</b></div>
+      <div class="mini-gauge-row"><span class="u">C</span><div class="mini-gauge-track"><div class="mini-gauge-fill" style="width:87%;background:var(--good);"></div></div><b class="status-good">104%・適正</b></div>
+      <p class="compare-summary">A利益は最大化されるが、B事業部が不足域（86%）に落ち込み、全社売上の余裕も0.30億円と薄い。</p>
+    </div>
+
+    <!-- 課題3：注意 -->
+    <div class="compare-card">
+      <div class="compare-head"><span class="compare-badge" style="background:var(--b);">課題3</span><h4>B事業部売上最大化</h4></div>
+      <div class="compare-primary">
+        <div class="k">B事業部売上（最大化対象）</div>
+        <div class="v" style="color:var(--b);">9.60<span class="unit">億円</span></div>
+        <div class="d">課題1比 -0.70億円</div>
+      </div>
+      <div class="compare-sub">
+        <div><span class="cs-k">全社利益</span><span class="cs-v">17.90億円</span></div>
+      </div>
+      <div class="compare-status"><span class="pill good">● 制約を満たす</span></div>
+      <div class="bars-label"><span>充足率</span><span>適正範囲 90〜120%</span></div>
+      <div class="mini-gauge-row"><span class="u">A</span><div class="mini-gauge-track"><div class="mini-gauge-fill" style="width:85%;background:var(--good);"></div></div><b class="status-good">85%・適正</b></div>
+      <div class="mini-gauge-row"><span class="u">B</span><div class="mini-gauge-track"><div class="mini-gauge-fill" style="width:100%;background:var(--warning);"></div></div><b class="status-warn">120%・過剰境界</b></div>
+      <div class="mini-gauge-row"><span class="u">C</span><div class="mini-gauge-track"><div class="mini-gauge-fill" style="width:80%;background:var(--good);"></div></div><b class="status-good">96%・適正</b></div>
+      <p class="compare-summary">B事業部への重点配置だが、充足率120%は過剰補正の境界にちょうど乗っており、僅かな配置変更で補正が発生し得る。</p>
+    </div>
+
+    <!-- 課題4：危険 -->
+    <div class="compare-card">
+      <div class="compare-head"><span class="compare-badge" style="background:var(--c);">課題4</span><h4>C事業部売上最大化</h4></div>
+      <div class="compare-primary">
+        <div class="k">C事業部売上（最大化対象）</div>
+        <div class="v" style="color:var(--c);">3.10<span class="unit">億円</span></div>
+        <div class="d">課題1比 -1.90億円</div>
+      </div>
+      <div class="compare-sub">
+        <div><span class="cs-k">全社利益</span><span class="cs-v">16.20億円</span></div>
+      </div>
+      <div class="compare-status"><span class="pill warn">● 余裕+0.30億円のみ</span></div>
+      <div class="bars-label"><span>充足率</span><span>適正範囲 90〜120%</span></div>
+      <div class="mini-gauge-row"><span class="u">A</span><div class="mini-gauge-track"><div class="mini-gauge-fill" style="width:80%;background:var(--good);"></div></div><b class="status-good">92%・適正</b></div>
+      <div class="mini-gauge-row"><span class="u">B</span><div class="mini-gauge-track"><div class="mini-gauge-fill" style="width:87%;background:var(--good);"></div></div><b class="status-good">100%・適正</b></div>
+      <div class="mini-gauge-row"><span class="u">C</span><div class="mini-gauge-track"><div class="mini-gauge-fill" style="width:100%;background:var(--critical);"></div></div><b class="status-crit">152%・過剰域</b></div>
+      <p class="compare-summary">C事業部の充足率152%は過剰補正ペナルティが強くかかる域で、追加投入分の効果が薄い配置になっている。</p>
+    </div>
+  </div>
+
+  <!-- ============ 2. 採用案比較（Y/N）＋ROI判定 ============ -->
+  <div class="section-title">② 採用案比較（Y/N）── そもそも採用すべきか</div>
+  <p class="section-desc">「変化の大きさ」ではなく「投資として割に合うか」を主眼に、ROIを比率で判定してタイルに出す。充足率の変化も添える。</p>
+
+  <div class="verdict v-good">
+    <div class="icon">✓</div>
+    <div class="body">
+      <h3>推奨：追加10名の採用を実施</h3>
+      <p>追加人件費1.20億円に対し利益は+1.80億円増加（ROI 1.5倍）。最も効果が大きいのはC事業部で、充足率が不足域（88%）から適正域（96%）まで改善する。</p>
+      <span class="action">配置理由の詳細を見る ›</span>
+    </div>
+  </div>
+
+  <div class="hire-grid">
+    <div class="compare-before">
+      <div class="compare-head2"><span class="compare-badge2 badge-before">採用前</span><h4 style="font-size:13px;margin:0;">100名</h4></div>
+      <div class="compare-primary" style="border-bottom:none;margin-bottom:6px;">
+        <div class="k">全社売上</div>
+        <div class="v">58.90<span class="unit">億円</span></div>
+      </div>
+      <div class="compare-sub"><div><span class="cs-k">全社利益</span><span class="cs-v">16.60億円</span></div></div>
+      <div class="mini-gauge-row" style="margin-top:10px;"><span class="u">C</span><div class="mini-gauge-track"><div class="mini-gauge-fill" style="width:70%;background:var(--critical);"></div></div><b class="status-crit">88%・不足</b></div>
+    </div>
+    <div class="compare-after">
+      <div class="compare-head2"><span class="compare-badge2 badge-after">採用後</span><h4 style="font-size:13px;margin:0;">110名</h4></div>
+      <div class="compare-primary" style="border-bottom:none;margin-bottom:6px;">
+        <div class="k">全社売上</div>
+        <div class="v" style="color:var(--good);">63.10<span class="unit">億円</span></div>
+        <div class="d" style="color:#006300;">採用前比 +4.20億円</div>
+      </div>
+      <div class="compare-sub"><div><span class="cs-k">全社利益</span><span class="cs-v" style="color:var(--good);">18.40億円　(+1.80億円)</span></div></div>
+      <div class="mini-gauge-row" style="margin-top:10px;"><span class="u">C</span><div class="mini-gauge-track"><div class="mini-gauge-fill" style="width:96%;background:var(--good);"></div></div><b class="status-good">96%・適正</b></div>
+    </div>
+    <div class="roi-tile">
+      <div class="k">期待ROI（利益増分 ÷ 追加人件費）</div>
+      <div class="v status-good">1.5<span style="font-size:16px;">倍</span></div>
+      <span class="status-label good">● 投資対効果あり</span>
+      <div class="sub">追加人件費 1.20億円<br>利益増分 +1.80億円</div>
+    </div>
+  </div>
+
+  <!-- ============ 3. 情報源：エグゼクティブサマリー ============ -->
+  <div class="section-title">③ 情報源：エグゼクティブサマリー（共有・出力用）</div>
+  <p class="section-desc">上層部にそのまま見せる／配る前提の1枚まとめ。数値の一覧ではなく「結論→根拠→組織図」の順で構成する。</p>
+
+  <div class="exec-card">
+    <div class="exec-head">
+      <div>
+        <h2>人員配置方針サマリー — 2026年度</h2>
+        <div class="meta">作成：人事部　2026-08-31　/　対象：課題1（全社売上最大化）＋追加採用10名</div>
+      </div>
+      <div class="exec-actions">
+        <button onclick="alert('モック：PDF出力（未実装）')">PDF出力</button>
+        <button onclick="alert('モック：リンク共有（未実装）')">リンクを共有</button>
+        <button class="primary" onclick="alert('モック：印刷（未実装）')">印刷</button>
+      </div>
+    </div>
+
+    <div class="exec-verdict">
+      <div class="icon">✓</div>
+      <div class="body">
+        <h3>結論：課題1の配置案＋追加採用10名を承認</h3>
+        <p>全社売上60.2億円→採用後63.1億円（前年度比+5.3億円）。3事業部とも充足率が適正範囲に収まり、リスクの低い配置。</p>
+      </div>
+    </div>
+
+    <div class="exec-stats">
+      <div class="exec-stat"><div class="k">全社売上（採用後）</div><div class="v" style="color:var(--a);">63.10億円</div></div>
+      <div class="exec-stat"><div class="k">全社利益（採用後）</div><div class="v" style="color:var(--good);">18.40億円</div></div>
+      <div class="exec-stat"><div class="k">制約に対する余裕</div><div class="v">+5.10億円</div></div>
+      <div class="exec-stat"><div class="k">追加採用ROI</div><div class="v" style="color:var(--good);">1.5倍</div></div>
+    </div>
+
+    <div class="exec-orgchart">
+      <div class="exec-unit">
+        <div class="head"><span class="dot" style="background:var(--a);"></span><b>A事業部（飽和）</b></div>
+        <div class="headcount">40<span class="unit">名</span></div>
+        <div class="fillnote">充足率 100%・適正範囲</div>
+      </div>
+      <div class="exec-unit">
+        <div class="head"><span class="dot" style="background:var(--b);"></span><b>B事業部（成長）</b></div>
+        <div class="headcount">36<span class="unit">名</span></div>
+        <div class="fillnote">充足率 103%・適正範囲</div>
+      </div>
+      <div class="exec-unit">
+        <div class="head"><span class="dot" style="background:var(--c);"></span><b>C事業部（新規）</b></div>
+        <div class="headcount">34<span class="unit">名</span></div>
+        <div class="fillnote">充足率 96%・適正範囲（採用前88%から改善）</div>
+      </div>
+    </div>
+
+    <div class="exec-footer">このサマリーはダミーデータによるモックです。実データでの生成には配置理由（reasonText）・履歴（Firestore）との連携が必要です。</div>
+  </div>
+
+</div>
+</body>
+</html>

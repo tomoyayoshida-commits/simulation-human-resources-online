@@ -5,13 +5,25 @@ import assert from 'node:assert/strict'
 import { enumerateHeadcounts, runOptimization, upperBoundsForCandidates } from '../src/renderer/optimizer.ts'
 import { solveAssignment } from '../src/renderer/assignment.ts'
 import { computeSimulationResult, contribution, fulfillmentRate, shortageFactor, surplusFactor } from '../src/renderer/calcEngine.ts'
-import { BASE_REVENUE, COST_MULTIPLIER, COST_UNIT_DIVISOR, GROWTH, UNIT_IDS } from '../src/renderer/constants.ts'
+import { BASE_REVENUE, COST_MULTIPLIER, COST_UNIT_DIVISOR, DEFAULT_PARAMS, GROWTH, UNIT_IDS } from '../src/renderer/constants.ts'
 import type { AllocationCounts, Employee, SimulationResult, TaskId, UnitId } from '../src/renderer/types.ts'
 
 function makeRng(seed: number): () => number {
   let s = seed
   return () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff
 }
+
+/**
+ * 最適化指標。#p4 の「最適化方針」で4課題の指標を揃えられるようになったため、
+ * 原文どおりの4通りだけでなく (課題 × 指標) の8通りすべてを検証する。
+ * 本番の TASK_SPEC / resolveMetric には依存せず、ここで独立に定義する。
+ */
+type Metric = 'revenue' | 'profit'
+const TARGET_UNIT: Record<TaskId, UnitId | null> = { 1: null, 2: 'A', 3: 'B', 4: 'C' }
+const ORIGINAL_METRIC: Record<TaskId, Metric> = { 1: 'revenue', 2: 'profit', 3: 'revenue', 4: 'revenue' }
+const ALL_COMBOS: [TaskId, Metric][] = ([1, 2, 3, 4] as TaskId[]).flatMap(
+  (t) => [[t, 'revenue'], [t, 'profit']] as [TaskId, Metric][],
+)
 
 /**
  * docs/pruning-plan.md の枝刈り(branch-and-bound)導入前の全候補総当たり実装。
@@ -22,7 +34,9 @@ function makeRng(seed: number): () => number {
 function bruteForceOptimize(
   employees: Employee[],
   task: TaskId,
+  metric: Metric = ORIGINAL_METRIC[task],
 ): SimulationResult | { infeasible: true; reason: 'revenue_floor'; closestCandidate?: SimulationResult } {
+  const target = TARGET_UNIT[task]
   const candidates = enumerateHeadcounts(employees.length)
   let best: SimulationResult | null = null
   let bestKey: { primary: number; secondary: number; nA: number; nB: number } | null = null
@@ -41,18 +55,13 @@ function bruteForceOptimize(
       const perUnit: Record<UnitId, number> = { A: 0, B: 0, C: 0 }
       for (const unit of UNIT_IDS) {
         const rev = (BASE_REVENUE[unit] * GROWTH[unit]) / 100 * eff[unit] * contribution(e, unit)
-        let primary: number
-        let secondary: number
-        if (task === 1) {
-          primary = rev
-          secondary = 0
-        } else {
-          secondary = rev
-          if (task === 2) {
-            primary = unit === 'A' ? rev - (e.cost * COST_MULTIPLIER) / COST_UNIT_DIVISOR : 0
-          } else if (task === 3) primary = unit === 'B' ? rev : 0
-          else primary = unit === 'C' ? rev : 0
-        }
+        const isTarget = target === null || unit === target
+        const primary = !isTarget
+          ? 0
+          : metric === 'profit'
+            ? rev - (e.cost * COST_MULTIPLIER) / COST_UNIT_DIVISOR
+            : rev
+        const secondary = target === null ? 0 : rev
         perUnit[unit] = primary * 1e6 + secondary
       }
       values[e.id] = perUnit
@@ -76,13 +85,13 @@ function bruteForceOptimize(
 
     const key = {
       primary:
-        task === 1
-          ? result.companyRevenue
-          : task === 2
-            ? result.units.A.profit
-            : task === 3
-              ? result.units.B.finalRevenue
-              : result.units.C.finalRevenue,
+        target === null
+          ? metric === 'profit'
+            ? result.companyProfit
+            : result.companyRevenue
+          : metric === 'profit'
+            ? result.units[target].profit
+            : result.units[target].finalRevenue,
       secondary: result.companyRevenue,
       nA: counts.A,
       nB: counts.B,
@@ -208,13 +217,13 @@ test('runOptimization: 枝刈り(docs/pruning-plan.md)ありでも全候補総�
       training: Math.floor(rnd() * 101),
       cost: 1 + Math.floor(rnd() * 20),
     }))
-    for (const task of [1, 2, 3, 4] as const) {
-      const pruned = runOptimization(emps, task)
-      const brute = bruteForceOptimize(emps, task)
+    for (const [task, metric] of ALL_COMBOS) {
+      const pruned = runOptimization(emps, task, DEFAULT_PARAMS, metric)
+      const brute = bruteForceOptimize(emps, task, metric)
       assert.deepEqual(
         pruned,
         brute,
-        `size=${size} seed=${seed} task=${task} で枝刈り結果と総当たり結果が不一致`,
+        `size=${size} seed=${seed} task=${task} metric=${metric} で枝刈り結果と総当たり結果が不一致`,
       )
     }
   }
@@ -224,20 +233,14 @@ test('runOptimization: 枝刈り(docs/pruning-plan.md)ありでも全候補総�
  * 上界の基準実装：候補ごとに value を降順ソートして上位k件を足す（巻き上げ前の形）。
  * optimizer.ts の内部に依存せず、buildValues 相当をここで再現する。
  */
-function referenceUpperBounds(employees: Employee[], task: TaskId): number[] {
+function referenceUpperBounds(employees: Employee[], task: TaskId, metric: Metric): number[] {
   const LEX = 1e6
   const contribs = employees.map((e) => {
     const c = {} as Record<UnitId, number>
     for (const u of UNIT_IDS) c[u] = contribution(e, u)
     return c
   })
-  const spec: Record<TaskId, { target: UnitId | null; metric: 'revenue' | 'profit' }> = {
-    1: { target: null, metric: 'revenue' },
-    2: { target: 'A', metric: 'profit' },
-    3: { target: 'B', metric: 'revenue' },
-    4: { target: 'C', metric: 'revenue' },
-  }
-  const { target, metric } = spec[task]
+  const target = TARGET_UNIT[task]
   return enumerateHeadcounts(employees.length).map((counts) => {
     const eff = {} as Record<UnitId, number>
     for (const u of UNIT_IDS) {
@@ -269,7 +272,8 @@ test('upperBoundsForCandidates: 並べ替えを巻き上げても上界がビッ
   // 「事業部内の順位は人数配分に依存しない」という前提が崩れると ub が静かにずれ、
   // 枝刈りが真の最適解を切り落としうる。**総当たり比較テストではこれを検出できない**
   // （実際に前提を壊しても全テストが通ってしまった）ため、ub を直接突き合わせる。
-  // 課題2のA事業部だけはコスト項で順位が人数配分に依存するので巻き上げ対象外。
+  // 指標が利益の課題の対象事業部だけはコスト項で順位が人数配分に依存するので巻き上げ対象外。
+  // 「すべて利益」方針では B・C もその状態になるため、(課題 × 指標) 8通りすべてを突き合わせる。
   // 同点が多いほど並べ替えのタイブレークが効くので、能力値を粗く量子化して作る。
   const rnd = makeRng(20260828)
   const emps: Employee[] = Array.from({ length: 64 }, (_, i) => ({
@@ -280,15 +284,15 @@ test('upperBoundsForCandidates: 並べ替えを巻き上げても上界がビッ
     training: Math.floor(rnd() * 6) * 20,
     cost: 1 + Math.floor(rnd() * 4) * 5,
   }))
-  for (const task of [1, 2, 3, 4] as const) {
-    const actual = upperBoundsForCandidates(emps, task)
-    const expected = referenceUpperBounds(emps, task)
-    assert.equal(actual.length, expected.length, `task=${task} の候補数`)
+  for (const [task, metric] of ALL_COMBOS) {
+    const actual = upperBoundsForCandidates(emps, task, DEFAULT_PARAMS, metric)
+    const expected = referenceUpperBounds(emps, task, metric)
+    assert.equal(actual.length, expected.length, `task=${task} metric=${metric} の候補数`)
     for (let i = 0; i < actual.length; i++) {
       // Object.is でビット一致を見る（=== は -0 と 0 を区別しない）
       assert.ok(
         Object.is(actual[i], expected[i]),
-        `task=${task} 候補${i} で上界が不一致: 巻き上げ後=${actual[i]} 基準=${expected[i]} 差=${actual[i] - expected[i]}`,
+        `task=${task} metric=${metric} 候補${i} で上界が不一致: 巻き上げ後=${actual[i]} 基準=${expected[i]} 差=${actual[i] - expected[i]}`,
       )
     }
   }
@@ -299,7 +303,7 @@ test('runOptimization: 貢献度が同点だらけでも総当たりと一致す
   // 「事業部内の順位は人数配分に依存しない」という前提が崩れると、枝刈りが真の最適解を
   // 切り落として総当たりと食い違う。前提が最も危ういのは**同点が多い**データなので、
   // 能力値を粗く量子化して同点を量産したケースで守る。
-  // 課題2のA事業部だけはコスト項が入り巻き上げ対象外なので、4課題すべてを回す。
+  // 指標が利益の課題の対象事業部はコスト項が入り巻き上げ対象外なので、8通りすべてを回す。
   // 最低人数の合計が60なので62名にすると候補が数個に絞られ、総当たりでも十分速い。
   const rnd = makeRng(20260828)
   const emps: Employee[] = Array.from({ length: 62 }, (_, i) => ({
@@ -312,11 +316,31 @@ test('runOptimization: 貢献度が同点だらけでも総当たりと一致す
     // 人件費も揃えると課題2（利益最大化）で同点がさらに増える
     cost: 1 + Math.floor(rnd() * 4) * 5,
   }))
-  for (const task of [1, 2, 3, 4] as const) {
+  for (const [task, metric] of ALL_COMBOS) {
     assert.deepEqual(
-      runOptimization(emps, task),
-      bruteForceOptimize(emps, task),
-      `同点多数データの task=${task} で枝刈り結果と総当たり結果が不一致`,
+      runOptimization(emps, task, DEFAULT_PARAMS, metric),
+      bruteForceOptimize(emps, task, metric),
+      `同点多数データの task=${task} metric=${metric} で枝刈り結果と総当たり結果が不一致`,
     )
   }
+})
+
+test('runOptimization: 課題1は指標を売上/利益どちらにしても同一解になる', () => {
+  // 全社コスト＝Σ人件費×3÷100 は「全員がどこかに配属される」以上、配置によらず一定。
+  // よって全社利益＝全社売上−定数で、辞書式スカラー (R−C)*1e6+R は R*1e6+R と同順になり、
+  // タイブレーク（nA昇順→nB昇順）まで含めて解が一致する。
+  // compareTasks の「すべて利益」方針はこの性質を前提に説明文を出すので、ここで回帰を張る。
+  const rnd = makeRng(31)
+  const emps: Employee[] = Array.from({ length: 100 }, (_, i) => ({
+    id: `P${String(i + 1).padStart(3, '0')}`,
+    sales: Math.floor(rnd() * 101),
+    mgmt: Math.floor(rnd() * 101),
+    dev: Math.floor(rnd() * 101),
+    training: Math.floor(rnd() * 101),
+    cost: 1 + Math.floor(rnd() * 20),
+  }))
+  assert.deepEqual(
+    runOptimization(emps, 1, DEFAULT_PARAMS, 'profit'),
+    runOptimization(emps, 1, DEFAULT_PARAMS, 'revenue'),
+  )
 })

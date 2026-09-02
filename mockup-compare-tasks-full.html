@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>モック：4課題比較（実データ・全要素＋推奨レイヤー・充足率ゲージ）</title>
+<style>
+:root{
+  color-scheme: light;
+  --surface-1:#fcfcfb; --page:#f9f9f7;
+  --text-primary:#0b0b0b; --text-secondary:#52514e; --text-muted:#898781;
+  --grid:#e1e0d9; --baseline:#c3c2b7; --border:rgba(11,11,11,0.10);
+  --a:#2a78d6; --b:#eb6834; --c:#1baf7a;
+  --good:#0ca30c; --warning:#fab219; --serious:#ec835a; --critical:#d03b3b;
+}
+*{box-sizing:border-box;}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--page);color:var(--text-primary);}
+.wrap{max-width:1220px;margin:0 auto;padding:28px 24px 80px;}
+h1{font-size:20px;margin:0 0 4px;}
+.subtitle{color:var(--text-secondary);font-size:13px;margin:0 0 8px;}
+.mock-banner{background:#eef4fc;border:1px solid #cfe0f4;border-radius:8px;padding:10px 14px;font-size:12px;color:var(--text-secondary);margin-bottom:22px;}
+
+.verdict{display:flex;gap:14px;align-items:flex-start;border-radius:10px;padding:16px 18px;margin-bottom:16px;border:1px solid;}
+.verdict .icon{font-size:20px;line-height:1;flex-shrink:0;margin-top:1px;}
+.verdict .body h3{font-size:14px;margin:0 0 4px;}
+.verdict .body p{font-size:12.5px;margin:0;color:var(--text-secondary);line-height:1.6;}
+.verdict.v-good{background:#eaf7ea;border-color:#bfe3bf;}
+.verdict.v-good .icon{color:#0a6b0a;}
+.verdict.v-good .body h3{color:#0a6b0a;}
+
+.mode-toggle{display:flex;align-items:center;gap:8px;margin-bottom:14px;}
+.mode-toggle-label{font-size:12px;color:var(--text-secondary);}
+.mode-toggle-btn{border:1px solid var(--border);background:var(--surface-1);color:var(--text-secondary);font-size:12px;padding:6px 14px;border-radius:7px;cursor:pointer;}
+.mode-toggle-btn.active{border-color:var(--a);background:var(--a);color:#fff;font-weight:600;}
+
+.compare-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px;}
+.compare-card{background:var(--surface-1);border:1px solid var(--border);border-left:3px solid var(--baseline);border-radius:10px;padding:14px;position:relative;}
+.compare-card.recommended{border-left-color:var(--good);box-shadow:0 0 0 2px rgba(12,163,12,0.12);}
+.reco-tag{position:absolute;top:-9px;right:10px;background:var(--good);color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:8px;}
+.compare-head{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+.compare-badge{color:#fff;font-size:10.5px;font-weight:600;border-radius:6px;padding:2px 7px;flex-shrink:0;}
+.compare-head h4{font-size:12.5px;margin:0;line-height:1.3;}
+.compare-primary{border-bottom:1px solid var(--grid);padding-bottom:10px;margin-bottom:10px;}
+.compare-primary .k{font-size:10.5px;color:var(--text-muted);margin-bottom:2px;}
+.compare-primary .v{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1;}
+.compare-primary .v .unit{font-size:11px;font-weight:500;color:var(--text-secondary);margin-left:2px;}
+.compare-primary .d{font-size:11px;color:var(--text-secondary);margin-top:3px;}
+.compare-primary .d.good{color:#006300;}
+.compare-bars{margin-bottom:10px;}
+.cbar-row{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-secondary);margin-bottom:5px;}
+.cbar-row span{width:12px;flex-shrink:0;}
+.cbar-track{flex:1;height:9px;background:var(--grid);border-radius:2px;overflow:hidden;}
+.cbar-fill{height:100%;}
+.cbar-row b{width:48px;text-align:right;font-size:11px;font-variant-numeric:tabular-nums;flex-shrink:0;}
+.compare-sub{display:flex;flex-direction:column;gap:4px;font-size:11.5px;margin-bottom:10px;}
+.compare-sub div{display:flex;justify-content:space-between;}
+.cs-k{color:var(--text-muted);}
+.cs-v{font-variant-numeric:tabular-nums;font-weight:500;}
+.compare-status{margin-bottom:10px;}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;padding:2px 9px;border-radius:9px;}
+.pill.good{background:#eaf7ea;color:#0a6b0a;}
+.pill.warn{background:#fef3dc;color:#8a5a00;}
+.pill.crit{background:#fbe6e6;color:#9c2020;}
+.bars-label{font-size:10.5px;color:var(--text-muted);margin:8px 0 5px;display:flex;justify-content:space-between;}
+
+/* ---- 充足率ミニゲージ（gauge.ts の帯色・区間幅をそのまま縮約） ---- */
+.gauge-mini{margin-bottom:9px;}
+.gauge-mini .glabel{font-size:10.5px;color:var(--text-secondary);margin-bottom:3px;display:flex;justify-content:space-between;}
+.gauge-mini .glabel b{color:var(--text-primary);}
+.gauge-mini .gtrack{position:relative;height:9px;border-radius:3px;overflow:hidden;display:flex;}
+.gauge-mini .gtrack .seg{height:100%;}
+.gauge-mini .marker{position:absolute;top:-2px;bottom:-2px;width:2px;background:#0b0b0b;}
+
+.compare-summary{font-size:11.5px;color:var(--text-primary);line-height:1.6;background:#f5f5f3;border-radius:7px;padding:8px 10px;margin:0;}
+.compare-reason{margin-top:8px;background:#f5f5f3;border-radius:7px;padding:8px 10px;}
+.compare-reason summary{font-size:11px;font-weight:600;color:var(--text-secondary);cursor:pointer;}
+.compare-reason[open] summary{margin-bottom:6px;}
+.compare-reason ul{margin:0;padding-left:16px;font-size:11px;line-height:1.7;color:var(--text-primary);}
+
+[data-bars="revenue"] .profit-bars{display:none;}
+[data-bars="profit"] .revenue-bars{display:none;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>モック：4課題比較（実データ・全要素＋推奨レイヤー・充足率ゲージ）</h1>
+  <p class="subtitle"><code>~/development/資料/human_resources_100.csv</code> を実際に <code>runOptimization</code> に通した結果です。表示形式のみモックで、数値は実データ・実計算そのもの。</p>
+  <div class="mock-banner">⚠ 表示レイアウトはHTML静的モック（アプリには未反映）ですが、中の数値・配置理由文はすべて実データでの計算結果です。「利益で見る／売上で見る」ボタンは実際に切り替わります。</div>
+
+  <div class="verdict v-good">
+    <div class="icon">✓</div>
+    <div class="body">
+      <h3>推奨：課題1（全社売上最大化）を採用</h3>
+      <p>売上61.53億円・利益39.70億円で4案中最大、制約に対する余裕も+3.53億円と最も大きい。唯一の注意点はC事業部の充足率80%（不足補正0.90・warn止まり）。C事業部の人員確保を優先したい場合は、全事業部が補正なし（充足率100%）で揃う課題4（売上60.45億円・課題1比-1.08億円）が代替案になる。</p>
+    </div>
+  </div>
+
+  <div class="mode-toggle">
+    <span class="mode-toggle-label">事業部別バー表示：</span>
+    <button class="mode-toggle-btn active" data-mode="profit" onclick="setMode('profit')">利益で見る</button>
+    <button class="mode-toggle-btn" data-mode="revenue" onclick="setMode('revenue')">売上で見る</button>
+  </div>
+
+  <div class="compare-grid" id="grid" data-bars="profit">
+
+    <!-- 課題1：推奨（実データ） -->
+    <div class="compare-card recommended">
+      <div class="reco-tag">推奨</div>
+      <div class="compare-head"><span class="compare-badge" style="background:var(--a);">課題1</span><h4>全社売上最大化</h4></div>
+      <div class="compare-primary">
+        <div class="k">全社売上（最大化対象）</div>
+        <div class="v" style="color:var(--a);">61.53<span class="unit">億円</span></div>
+        <div class="d good">前年度比 +3.53億円</div>
+      </div>
+      <div class="bars-label"><span>配置人数（A/B/C・合計100名）</span></div>
+      <div class="compare-bars">
+        <div class="cbar-row"><span>A</span><div class="cbar-track"><div class="cbar-fill" style="width:40%;background:var(--a);"></div></div><b>40名</b></div>
+        <div class="cbar-row"><span>B</span><div class="cbar-track"><div class="cbar-fill" style="width:40%;background:var(--b);"></div></div><b>40名</b></div>
+        <div class="cbar-row"><span>C</span><div class="cbar-track"><div class="cbar-fill" style="width:20%;background:var(--c);"></div></div><b>20名</b></div>
+      </div>
+      <div class="bars-label"><span>事業部別利益／売上（共通スケール 0〜32.34億円）</span></div>
+      <div class="compare-bars profit-bars">
+        <div class="cbar-row"><span>A</span><div class="cbar-track"><div class="cbar-fill" style="width:55.2%;background:var(--a);opacity:.6;"></div></div><b>16.56億</b></div>
+        <div class="cbar-row"><span>B</span><div class="cbar-track"><div class="cbar-fill" style="width:67.0%;background:var(--b);opacity:.6;"></div></div><b>20.11億</b></div>
+        <div class="cbar-row"><span>C</span><div class="cbar-track"><div class="cbar-fill" style="width:10.1%;background:var(--c);opacity:.6;"></div></div><b>3.03億</b></div>
+      </div>
+      <div class="compare-bars revenue-bars">
+        <div class="cbar-row"><span>A</span><div class="cbar-track"><div class="cbar-fill" style="width:77.7%;background:var(--a);opacity:.6;"></div></div><b>25.14億</b></div>
+        <div class="cbar-row"><span>B</span><div class="cbar-track"><div class="cbar-fill" style="width:90.0%;background:var(--b);opacity:.6;"></div></div><b>29.11億</b></div>
+        <div class="cbar-row"><span>C</span><div class="cbar-track"><div class="cbar-fill" style="width:22.5%;background:var(--c);opacity:.6;"></div></div><b>7.28億</b></div>
+      </div>
+      <div class="compare-sub"><div><span class="cs-k">全社利益</span><span class="cs-v">39.70億円</span></div></div>
+      <div class="compare-status"><span class="pill good">● 制約を満たす</span></div>
+      <div class="bars-label"><span>充足率</span><span></span></div>
+      <div class="gauge-mini">
+        <div class="glabel">A事業部　<b>100%</b>・補正なし</div>
+        <div class="gtrack">
+          <div class="seg" style="width:20%;background:var(--critical);"></div><div class="seg" style="width:15%;background:var(--serious);"></div><div class="seg" style="width:10%;background:var(--warning);"></div><div class="seg" style="width:15%;background:#cfe8cf;"></div><div class="seg" style="width:40%;background:var(--good);"></div>
+          <div class="marker" style="left:60%;"></div>
+        </div>
+      </div>
+      <div class="gauge-mini">
+        <div class="glabel">B事業部　<b>114%</b>・補正なし</div>
+        <div class="gtrack">
+          <div class="seg" style="width:20%;background:var(--critical);"></div><div class="seg" style="width:15%;background:var(--serious);"></div><div class="seg" style="width:10%;background:var(--warning);"></div><div class="seg" style="width:15%;background:#cfe8cf;"></div><div class="seg" style="width:40%;background:var(--good);"></div>
+          <div class="marker" style="left:69.5%;"></div>
+        </div>
+      </div>
+      <div class="gauge-mini">
+        <div class="glabel">C事業部　<b>80%</b>・不足補正0.90</div>
+        <div class="gtrack">
+          <div class="seg" style="width:20%;background:var(--serious);"></div><div class="seg" style="width:15%;background:var(--warning);"></div><div class="seg" style="width:10%;background:#f6e6b4;"></div><div class="seg" style="width:15%;background:#cfe8cf;"></div><div class="seg" style="width:40%;background:var(--good);"></div>
+          <div class="marker" style="left:35%;"></div>
+        </div>
+      </div>
+      <p class="compare-summary">人員を最適配分し全社売上を最大化。特定事業部に偏らないバランス型で、全社利益は39.70億円。</p>
+      <details class="compare-reason" open><summary>配置理由</summary>
+        <ul>
+          <li>選択課題は「全社売上最大化」。この目的に対し A:40名／B:40名／C:20名（合計100名）を配置した。</li>
+          <li>A事業部：充足率 100%（適正40名に対し40名）→ 不足・過剰ペナルティなし（補正1.00）。</li>
+          <li>B事業部：充足率 114%（適正35名に対し40名）→ 不足・過剰ペナルティなし（補正1.00）。</li>
+          <li>C事業部：充足率 80%（適正25名に対し20名）→ 不足補正 0.90 が適用。</li>
+          <li>全社売上は 61.53億円で前年度売上（58億円）を +3.53億円 上回り、全社利益は 39.7億円。</li>
+        </ul>
+      </details>
+    </div>
+
+    <!-- 課題2：注意（実データ） -->
+    <div class="compare-card">
+      <div class="compare-head"><span class="compare-badge" style="background:var(--a);">課題2</span><h4>A事業部利益最大化</h4></div>
+      <div class="compare-primary">
+        <div class="k">A事業部利益（最大化対象）</div>
+        <div class="v" style="color:var(--a);">19.44<span class="unit">億円</span></div>
+        <div class="d">課題1比 +2.88億円</div>
+      </div>
+      <div class="bars-label"><span>配置人数（A/B/C・合計100名）</span></div>
+      <div class="compare-bars">
+        <div class="cbar-row"><span>A</span><div class="cbar-track"><div class="cbar-fill" style="width:47%;background:var(--a);"></div></div><b>47名</b></div>
+        <div class="cbar-row"><span>B</span><div class="cbar-track"><div class="cbar-fill" style="width:41%;background:var(--b);"></div></div><b>41名</b></div>
+        <div class="cbar-row"><span>C</span><div class="cbar-track"><div class="cbar-fill" style="width:12%;background:var(--c);"></div></div><b>12名</b></div>
+      </div>
+      <div class="bars-label"><span>事業部別利益／売上（共通スケール 0〜32.34億円）</span></div>
+      <div class="compare-bars profit-bars">
+        <div class="cbar-row"><span>A</span><div class="cbar-track"><div class="cbar-fill" style="width:64.8%;background:var(--a);opacity:.6;"></div></div><b>19.44億</b></div>
+        <div class="cbar-row"><span>B</span><div class="cbar-track"><div class="cbar-fill" style="width:57.1%;background:var(--b);opacity:.6;"></div></div><b>17.14億</b></div>
+        <div class="cbar-row"><span>C</span><div class="cbar-track"><div class="cbar-fill" style="width:4.5%;background:var(--c);opacity:.6;"></div></div><b>1.34億</b></div>
+      </div>
+      <div class="compare-bars revenue-bars">
+        <div class="cbar-row"><span>A</span><div class="cbar-track"><div class="cbar-fill" style="width:88.9%;background:var(--a);opacity:.6;"></div></div><b>28.77億</b></div>
+        <div class="cbar-row"><span>B</span><div class="cbar-track"><div class="cbar-fill" style="width:84.3%;background:var(--b);opacity:.6;"></div></div><b>27.25億</b></div>
+        <div class="cbar-row"><span>C</span><div class="cbar-track"><div class="cbar-fill" style="width:11.5%;background:var(--c);opacity:.6;"></div></div><b>3.72億</b></div>
+      </div>
+      <div class="compare-sub"><div><span class="cs-k">全社利益</span><span class="cs-v">37.92億円</span></div></div>
+      <div class="compare-status"><span class="pill good">● 制約を満たす</span></div>
+      <div class="bars-label"><span>充足率</span><span></span></div>
+      <div class="gauge-mini">
+        <div class="glabel">A事業部　<b>118%</b>・補正なし</div>
+        <div class="gtrack">
+          <div class="seg" style="width:20%;background:var(--critical);"></div><div class="seg" style="width:15%;background:var(--serious);"></div><div class="seg" style="width:10%;background:var(--warning);"></div><div class="seg" style="width:15%;background:#cfe8cf;"></div><div class="seg" style="width:40%;background:var(--good);"></div>
+          <div class="marker" style="left:71.7%;"></div>
+        </div>
+      </div>
+      <div class="gauge-mini">
+        <div class="glabel">B事業部　<b>117%</b>・補正なし</div>
+        <div class="gtrack">
+          <div class="seg" style="width:20%;background:var(--critical);"></div><div class="seg" style="width:15%;background:var(--serious);"></div><div class="seg" style="width:10%;background:var(--warning);"></div><div class="seg" style="width:15%;background:#cfe8cf;"></div><div class="seg" style="width:40%;background:var(--good);"></div>
+          <div class="marker" style="left:71.4%;"></div>
+        </div>
+      </div>
+      <div class="gauge-mini">
+        <div class="glabel">C事業部　<b>48%</b>・不足補正0.70</div>
+        <div class="gtrack">
+          <div class="seg" style="width:20%;background:var(--serious);"></div><div class="seg" style="width:15%;background:var(--warning);"></div><div class="seg" style="width:10%;background:#f6e6b4;"></div><div class="seg" style="width:15%;background:#cfe8cf;"></div><div class="seg" style="width:40%;background:var(--good);"></div>
+          <div class="marker" style="left:13.7%;"></div>
+        </div>
+      </div>
+      <p class="compare-summary">最も人員が厚いのはA事業部（47名）。A事業部の利益を最優先で最大化する一方、全社利益は課題1比 -1.78億円。</p>
+      <details class="compare-reason"><summary>配置理由</summary>
+        <ul>
+          <li>選択課題は「A事業部利益最大化」。この目的に対し A:47名／B:41名／C:12名（合計100名）を配置した。</li>
+          <li>A事業部：充足率 118%（適正40名に対し47名）→ 不足・過剰ペナルティなし（補正1.00）。</li>
+          <li>B事業部：充足率 117%（適正35名に対し41名）→ 不足・過剰ペナルティなし（補正1.00）。</li>
+          <li>C事業部：充足率 48%（適正25名に対し12名）→ 不足補正 0.70 が適用。</li>
+          <li>全社売上は 59.74億円で前年度売上（58億円）を +1.74億円 上回り、全社利益は 37.92億円。</li>
+          <li>本配置はA事業部の利益を最優先で最大化したうえで、残りの人員は全社売上が最大となるよう配置している（目的外事業部を放置せず、二次目的として全社売上を確保）。</li>
+        </ul>
+      </details>
+    </div>
+
+    <!-- 課題3：注意（実データ） -->
+    <div class="compare-card">
+      <div class="compare-head"><span class="compare-badge" style="background:var(--b);">課題3</span><h4>B事業部売上最大化</h4></div>
+      <div class="compare-primary">
+        <div class="k">B事業部売上（最大化対象）</div>
+        <div class="v" style="color:var(--b);">32.34<span class="unit">億円</span></div>
+        <div class="d">課題1比 +3.23億円</div>
+      </div>
+      <div class="bars-label"><span>配置人数（A/B/C・合計100名）</span></div>
+      <div class="compare-bars">
+        <div class="cbar-row"><span>A</span><div class="cbar-track"><div class="cbar-fill" style="width:41%;background:var(--a);"></div></div><b>41名</b></div>
+        <div class="cbar-row"><span>B</span><div class="cbar-track"><div class="cbar-fill" style="width:49%;background:var(--b);"></div></div><b>49名</b></div>
+        <div class="cbar-row"><span>C</span><div class="cbar-track"><div class="cbar-fill" style="width:10%;background:var(--c);"></div></div><b>10名</b></div>
+      </div>
+      <div class="bars-label"><span>事業部別利益／売上（共通スケール 0〜32.34億円）</span></div>
+      <div class="compare-bars profit-bars">
+        <div class="cbar-row"><span>A</span><div class="cbar-track"><div class="cbar-fill" style="width:50.8%;background:var(--a);opacity:.6;"></div></div><b>15.24億</b></div>
+        <div class="cbar-row"><span>B</span><div class="cbar-track"><div class="cbar-fill" style="width:71.3%;background:var(--b);opacity:.6;"></div></div><b>21.38億</b></div>
+        <div class="cbar-row"><span>C</span><div class="cbar-track"><div class="cbar-fill" style="width:5.5%;background:var(--c);opacity:.6;"></div></div><b>1.66億</b></div>
+      </div>
+      <div class="compare-bars revenue-bars">
+        <div class="cbar-row"><span>A</span><div class="cbar-track"><div class="cbar-fill" style="width:74.6%;background:var(--a);opacity:.6;"></div></div><b>24.13億</b></div>
+        <div class="cbar-row"><span>B</span><div class="cbar-track"><div class="cbar-fill" style="width:100.0%;background:var(--b);opacity:.6;"></div></div><b>32.34億</b></div>
+        <div class="cbar-row"><span>C</span><div class="cbar-track"><div class="cbar-fill" style="width:11.2%;background:var(--c);opacity:.6;"></div></div><b>3.63億</b></div>
+      </div>
+      <div class="compare-sub"><div><span class="cs-k">全社利益</span><span class="cs-v">38.28億円</span></div></div>
+      <div class="compare-status"><span class="pill good">● 制約を満たす</span></div>
+      <div class="bars-label"><span>充足率</span><span></span></div>
+      <div class="gauge-mini">
+        <div class="glabel">A事業部　<b>102%</b>・補正なし</div>
+        <div class="gtrack">
+          <div class="seg" style="width:20%;background:var(--critical);"></div><div class="seg" style="width:15%;background:var(--serious);"></div><div class="seg" style="width:10%;background:var(--warning);"></div><div class="seg" style="width:15%;background:#cfe8cf;"></div><div class="seg" style="width:40%;background:var(--good);"></div>
+          <div class="marker" style="left:61.7%;"></div>
+        </div>
+      </div>
+      <div class="gauge-mini">
+        <div class="glabel">B事業部　<b>140%</b>・過剰補正0.95</div>
+        <div class="gtrack">
+          <div class="seg" style="width:20%;background:var(--critical);"></div><div class="seg" style="width:15%;background:var(--serious);"></div><div class="seg" style="width:10%;background:var(--warning);"></div><div class="seg" style="width:15%;background:#cfe8cf;"></div><div class="seg" style="width:40%;background:var(--good);"></div>
+          <div class="marker" style="left:86.7%;"></div>
+        </div>
+      </div>
+      <div class="gauge-mini">
+        <div class="glabel">C事業部　<b>40%</b>・不足補正0.70</div>
+        <div class="gtrack">
+          <div class="seg" style="width:20%;background:var(--serious);"></div><div class="seg" style="width:15%;background:var(--warning);"></div><div class="seg" style="width:10%;background:#f6e6b4;"></div><div class="seg" style="width:15%;background:#cfe8cf;"></div><div class="seg" style="width:40%;background:var(--good);"></div>
+          <div class="marker" style="left:11.4%;"></div>
+        </div>
+      </div>
+      <p class="compare-summary">最も人員が厚いのはB事業部（49名）。B事業部の売上を最優先で最大化する一方、全社利益は課題1比 -1.42億円。</p>
+      <details class="compare-reason"><summary>配置理由</summary>
+        <ul>
+          <li>選択課題は「B事業部売上最大化」。この目的に対し A:41名／B:49名／C:10名（合計100名）を配置した。</li>
+          <li>A事業部：充足率 102%（適正40名に対し41名）→ 不足・過剰ペナルティなし（補正1.00）。</li>
+          <li>B事業部：充足率 140%（適正35名に対し49名）→ 過剰補正 0.95 が適用。</li>
+          <li>C事業部：充足率 40%（適正25名に対し10名）→ 不足補正 0.70 が適用。</li>
+          <li>全社売上は 60.1億円で前年度売上（58億円）を +2.1億円 上回り、全社利益は 38.28億円。</li>
+          <li>本配置はB事業部の売上を最優先で最大化したうえで、残りの人員は全社売上が最大となるよう配置している（目的外事業部を放置せず、二次目的として全社売上を確保）。</li>
+        </ul>
+      </details>
+    </div>
+
+    <!-- 課題4：全事業部が補正なし（実データ） -->
+    <div class="compare-card">
+      <div class="compare-head"><span class="compare-badge" style="background:var(--c);">課題4</span><h4>C事業部売上最大化</h4></div>
+      <div class="compare-primary">
+        <div class="k">C事業部売上（最大化対象）</div>
+        <div class="v" style="color:var(--c);">10.75<span class="unit">億円</span></div>
+        <div class="d">課題1比 +3.47億円</div>
+      </div>
+      <div class="bars-label"><span>配置人数（A/B/C・合計100名）</span></div>
+      <div class="compare-bars">
+        <div class="cbar-row"><span>A</span><div class="cbar-track"><div class="cbar-fill" style="width:40%;background:var(--a);"></div></div><b>40名</b></div>
+        <div class="cbar-row"><span>B</span><div class="cbar-track"><div class="cbar-fill" style="width:35%;background:var(--b);"></div></div><b>35名</b></div>
+        <div class="cbar-row"><span>C</span><div class="cbar-track"><div class="cbar-fill" style="width:25%;background:var(--c);"></div></div><b>25名</b></div>
+      </div>
+      <div class="bars-label"><span>事業部別利益／売上（共通スケール 0〜32.34億円）</span></div>
+      <div class="compare-bars profit-bars">
+        <div class="cbar-row"><span>A</span><div class="cbar-track"><div class="cbar-fill" style="width:54.7%;background:var(--a);opacity:.6;"></div></div><b>16.42億</b></div>
+        <div class="cbar-row"><span>B</span><div class="cbar-track"><div class="cbar-fill" style="width:56.6%;background:var(--b);opacity:.6;"></div></div><b>16.99億</b></div>
+        <div class="cbar-row"><span>C</span><div class="cbar-track"><div class="cbar-fill" style="width:17.4%;background:var(--c);opacity:.6;"></div></div><b>5.23億</b></div>
+      </div>
+      <div class="compare-bars revenue-bars">
+        <div class="cbar-row"><span>A</span><div class="cbar-track"><div class="cbar-fill" style="width:76.9%;background:var(--a);opacity:.6;"></div></div><b>24.87億</b></div>
+        <div class="cbar-row"><span>B</span><div class="cbar-track"><div class="cbar-fill" style="width:76.8%;background:var(--b);opacity:.6;"></div></div><b>24.83億</b></div>
+        <div class="cbar-row"><span>C</span><div class="cbar-track"><div class="cbar-fill" style="width:33.2%;background:var(--c);opacity:.6;"></div></div><b>10.75億</b></div>
+      </div>
+      <div class="compare-sub"><div><span class="cs-k">全社利益</span><span class="cs-v">38.64億円</span></div></div>
+      <div class="compare-status"><span class="pill good">● 制約を満たす</span></div>
+      <div class="bars-label"><span>充足率</span><span>3事業部とも100%</span></div>
+      <div class="gauge-mini">
+        <div class="glabel">A事業部　<b>100%</b>・補正なし</div>
+        <div class="gtrack">
+          <div class="seg" style="width:20%;background:var(--critical);"></div><div class="seg" style="width:15%;background:var(--serious);"></div><div class="seg" style="width:10%;background:var(--warning);"></div><div class="seg" style="width:15%;background:#cfe8cf;"></div><div class="seg" style="width:40%;background:var(--good);"></div>
+          <div class="marker" style="left:60%;"></div>
+        </div>
+      </div>
+      <div class="gauge-mini">
+        <div class="glabel">B事業部　<b>100%</b>・補正なし</div>
+        <div class="gtrack">
+          <div class="seg" style="width:20%;background:var(--critical);"></div><div class="seg" style="width:15%;background:var(--serious);"></div><div class="seg" style="width:10%;background:var(--warning);"></div><div class="seg" style="width:15%;background:#cfe8cf;"></div><div class="seg" style="width:40%;background:var(--good);"></div>
+          <div class="marker" style="left:60%;"></div>
+        </div>
+      </div>
+      <div class="gauge-mini">
+        <div class="glabel">C事業部　<b>100%</b>・補正なし</div>
+        <div class="gtrack">
+          <div class="seg" style="width:20%;background:var(--serious);"></div><div class="seg" style="width:15%;background:var(--warning);"></div><div class="seg" style="width:10%;background:#f6e6b4;"></div><div class="seg" style="width:15%;background:#cfe8cf;"></div><div class="seg" style="width:40%;background:var(--good);"></div>
+          <div class="marker" style="left:60%;"></div>
+        </div>
+      </div>
+      <p class="compare-summary">最も人員が厚いのはA事業部（40名）。C事業部の売上を最優先で最大化する一方、全社利益は課題1比 -1.06億円。</p>
+      <details class="compare-reason"><summary>配置理由</summary>
+        <ul>
+          <li>選択課題は「C事業部売上最大化」。この目的に対し A:40名／B:35名／C:25名（合計100名）を配置した。</li>
+          <li>A事業部：充足率 100%（適正40名に対し40名）→ 不足・過剰ペナルティなし（補正1.00）。</li>
+          <li>B事業部：充足率 100%（適正35名に対し35名）→ 不足・過剰ペナルティなし（補正1.00）。</li>
+          <li>C事業部：充足率 100%（適正25名に対し25名）→ 不足・過剰ペナルティなし（補正1.00）。</li>
+          <li>全社売上は 60.45億円で前年度売上（58億円）を +2.45億円 上回り、全社利益は 38.64億円。</li>
+          <li>本配置はC事業部の売上を最優先で最大化したうえで、残りの人員は全社売上が最大となるよう配置している（目的外事業部を放置せず、二次目的として全社売上を確保）。</li>
+        </ul>
+      </details>
+    </div>
+
+  </div>
+</div>
+
+<script>
+function setMode(mode){
+  const grid = document.getElementById('grid');
+  grid.dataset.bars = mode;
+  document.querySelectorAll('.mode-toggle-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.mode === mode);
+  });
+}
+</script>
+</body>
+</html>

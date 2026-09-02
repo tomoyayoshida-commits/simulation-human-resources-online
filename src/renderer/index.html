@@ -5,27 +5,42 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <!-- default-src 'none' のホワイトリスト方式を維持。読み込み元は自分自身に閉じる。
      画像は CSV プレビュー等で data: を使う余地を残す。
-     Firebase Hosting/Auth/Firestore 導入時は connect-src 等に必要なドメインのみ追加する
-     （docs/web-firebase-plan.md 参照。全面緩和はしない）。 -->
+     Firebase Auth(Google Sign-In)導入のため connect-src/frame-src/img-src/script-src に必要なドメインのみ追加
+     （docs/web-firebase-plan.md 参照。全面緩和はしない。Firestore導入時はさらに追記する）。
+     script-src: signInWithPopup がgapi(https://apis.google.com/js/api.js)を動的読込するため必要。 -->
 <meta http-equiv="Content-Security-Policy"
-      content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'">
+      content="default-src 'none'; script-src 'self' https://apis.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.googleusercontent.com; font-src 'self'; connect-src 'self' https://*.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; frame-src https://summer011.web.app https://accounts.google.com">
 <title>侍の人材配置</title>
 <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-<div class="topbar">
-  <img class="brand-icon" src="./assets/samurai-fullmoon.png" alt="">
-  <h1>侍の<br>人材配置</h1>
-  <button class="phasebtn active" data-tab="p0"><span class="num">🏠</span>トップ</button>
-  <button class="phasebtn" data-tab="p1"><span class="num">1</span>データ取込</button>
-  <button class="phasebtn" data-tab="p2"><span class="num">2</span>課題選択・実行</button>
-  <button class="phasebtn" data-tab="p3"><span class="num">3</span>結果ダッシュボード</button>
-  <button class="phasebtn compare" data-tab="p4"><span class="num">📊</span>4課題を比較する</button>
-  <button class="phasebtn compare" data-tab="p5"><span class="num">👥</span>採用前後を比較する</button>
-  <button class="phasebtn compare" data-tab="p6"><span class="num">🔀</span>What-if分析</button>
+<!-- 認証状態の復元完了まで表示する中立画面。ログイン画面を先に出してしまうと、
+     既にログイン済みでも復元完了までの一瞬「ログイン画面→トップページ」と切り替わって見えるため、
+     判定がつくまではどちらも出さずここだけを表示する（auth.ts / renderer.ts の認証ガード）。 -->
+<div class="login-screen" id="auth-loading">
+  <div class="loading-spinner"></div>
 </div>
 
-<div class="wrap">
+<!-- 未ログイン・許可外アカウントの間はこの画面のみを表示する（auth.ts / renderer.ts の認証ガード） -->
+<div class="login-screen" id="login-screen" hidden>
+  <div class="login-card">
+    <img class="brand-icon" src="./assets/samurai-fullmoon.png" alt="">
+    <h1>侍の人材配置</h1>
+    <p>社内メンバー専用のツールです。会社のGoogleアカウントでログインしてください。</p>
+    <button class="btn" id="login-google">Googleでログイン</button>
+    <p class="login-error" id="login-error" hidden></p>
+  </div>
+</div>
+
+<div class="topbar" id="app-topbar" hidden>
+  <img class="brand-icon" src="./assets/samurai-fullmoon.png" alt="">
+  <h1>侍の<br>人材配置</h1>
+  <nav class="breadcrumb" id="breadcrumb"></nav>
+  <span class="login-user" id="login-user"></span>
+  <button class="btn secondary login-logout" id="logout-button">ログアウト</button>
+</div>
+
+<div class="wrap" id="app-wrap" hidden>
 
   <!-- 0. トップページ（目的別の3つの入口） -->
   <section class="panel active" id="p0">
@@ -36,245 +51,167 @@
     <div class="home-grid">
       <div class="home-card">
         <div class="num">1</div>
-        <h3>人員配置を決める</h3>
-        <p>売上最大化・A利益追求・B投資・C投資などの方針から選び、最適配置と配置方針・理由を得る。</p>
-        <button class="btn" data-go="p1">配置を実行する ▶</button>
+        <h3>配置を比較する</h3>
+        <p>4つの方針（課題1〜4）を並べ、どれが全社利益・各事業部にどう効くかを比較し、最適配置と配置方針・理由を得る。</p>
+        <button class="btn" data-go="p4">配置比較を始める ▶</button>
       </div>
       <div class="home-card">
         <div class="num">2</div>
-        <h3>経営方針を比較する</h3>
-        <p>4つの方針（課題1〜4）を並べ、どれが全社利益・各事業部にどう効くかを比較する。</p>
-        <button class="btn secondary" data-go="p4">4課題を比較する ▶</button>
-      </div>
-      <div class="home-card">
-        <div class="num">3</div>
         <h3>採用の投資判断をする</h3>
         <p>追加10名採用の前後比較とROIを確認し、採用可否の判断材料を得る。</p>
-        <button class="btn secondary" data-go="p5">採用前後を比較する ▶</button>
+        <button class="btn" data-go="p5">採用判断を始める ▶</button>
       </div>
-      <div class="home-card">
-        <div class="num">4</div>
-        <h3>前提を変えて試す</h3>
-        <p>人数配分・個別異動・前提パラメータ・採用シナリオを変え、基準ケースとの差分で影響を確認する。</p>
-        <button class="btn secondary" data-go="p6">What-if分析を開く ▶</button>
-      </div>
-    </div>
-    <div class="home-link">既にシミュレーション済みの場合は <a data-go="p3">前回の結果を見る</a></div>
-  </section>
-
-  <!-- 1. データ取込（+ D-2を統合） -->
-  <section class="panel" id="p1">
-    <h2>① 社員データ取込</h2>
-    <p class="subtitle">社員データを読み込み、取込結果と検証結果を同じ画面で確認する</p>
-    <div class="card">
-      <div class="dropzone" id="dropzone-100">📄 社員データをドラッグ&ドロップ、または <span class="file-select-link">ファイルを選択</span></div>
-      <input type="file" id="file-100" accept=".csv" hidden>
-      <p class="note">対応形式：CSVファイル（.csv）</p>
-    </div>
-
-    <div class="section-title">取込結果（先頭5名分プレビュー・全100名）</div>
-    <div class="card">
-      <table id="preview-100">
-        <tr><th>社員ID</th><th class="num">営業力</th><th class="num">管理力</th><th class="num">開拓力</th><th class="num">育成力</th><th class="num">人件費</th></tr>
-      </table>
-    </div>
-
-    <div class="section-title">入力検証レポート</div>
-    <div class="stat-row" id="validation-summary">
-      <div class="stat"><div class="k">取込件数</div><div class="v">0 / 100</div></div>
-      <div class="stat"><div class="k">エラー件数</div><div class="v">0</div></div>
-      <div class="stat"><div class="k">判定</div><div class="v"><span class="pill warn">未取込</span></div></div>
-    </div>
-    <div class="card">
-      <table class="errtable" id="validation-errors">
-        <tr><th>行番号</th><th>社員ID</th><th>カラム</th><th class="num">実測値</th><th>期待範囲</th></tr>
-      </table>
-      <p class="note">エラー行が1件でもある場合、次のステップ（課題選択・実行）には進めない。該当行を修正して再取込。</p>
-    </div>
-    <div style="text-align:right;margin-top:10px;">
-      <button class="btn secondary" id="next-to-p2" data-go="p2" disabled>次へ進む</button>
-      <p class="warn-text" id="import-invalid-warning" style="display:none;text-align:right;">不正なデータを修正しないとシミュレーションを実行できません。</p>
     </div>
   </section>
 
-  <!-- 2. 課題選択・実行 -->
-  <section class="panel" id="p2">
-    <h2>② 課題（目的）選択・実行</h2>
-    <p class="subtitle">チェックパターン1〜4のいずれかを選び、シミュレーションを実行する</p>
-    <div class="taskcards">
-      <div class="taskcard selected" data-task="1"><div class="tag">チェックパターン1</div><h4>全社売上最大化</h4><p>3事業部合計の売上を最大化</p></div>
-      <div class="taskcard" data-task="2"><div class="tag">チェックパターン2</div><h4>A事業部利益最大化</h4><p>飽和事業の利益を最大化</p></div>
-      <div class="taskcard" data-task="3"><div class="tag">チェックパターン3</div><h4>B事業部売上最大化</h4><p>成長事業へ集中投資</p></div>
-      <div class="taskcard" data-task="4"><div class="tag">チェックパターン4</div><h4>C事業部売上最大化</h4><p>新規事業へ集中投資</p></div>
-    </div>
-    <button class="btn" id="run-simulation">シミュレーション実行 ▶</button>
-    <p class="note">実行すると③結果ダッシュボードに自動的に切り替わる。</p>
-  </section>
-
-  <!-- 3. 結果ダッシュボード（すべて1画面に集約） -->
-  <section class="panel" id="p3">
-    <h2>③ 結果ダッシュボード</h2>
-    <p class="subtitle" id="dashboard-subtitle">未実行：②で課題を選択し、シミュレーションを実行すると結果が表示される</p>
-    <div class="hint">💡 ここが「結果」に関する情報のすべて。スクロールして配置人数→売上利益→制約→充足率→方針→CSV出力まで一続きで確認できる（画面遷移なし）。</div>
-
-    <div class="section-title">全社サマリー</div>
-    <div class="stat-row" id="company-summary">
-      <div class="stat"><div class="k">判定</div><div class="v"><span class="pill warn">未実行</span></div></div>
-    </div>
-
-    <div class="section-title">配置人数・タイプ別内訳</div>
-    <div class="card">
-      <div class="legend">
-        <span><i class="dot" style="background:var(--a);"></i>A事業部</span>
-        <span><i class="dot" style="background:var(--b);"></i>B事業部</span>
-        <span><i class="dot" style="background:var(--c);"></i>C事業部</span>
-      </div>
-      <div id="headcount-bars">
-        <p class="note">未実行</p>
-      </div>
-      <table style="margin-top:14px;" id="type-breakdown">
-        <tr><th>事業部</th><th class="num">配置人数</th><th class="num">営業型</th><th class="num">管理型</th><th class="num">開拓型</th><th class="num">育成型</th></tr>
-      </table>
-    </div>
-
-    <div class="section-title">事業部別 売上・利益</div>
-    <div class="card" id="unit-revenue-profit">
-      <p class="note">未実行</p>
-    </div>
-
-    <div class="section-title">制約条件チェック</div>
-    <div class="card">
-      <table id="constraint-check">
-        <tr><th>制約</th><th>基準</th><th>結果</th><th>余裕</th><th>判定</th></tr>
-      </table>
-      <p class="note">制約に違反する場合はこの表の該当行が赤警告となり、原因（最低人数／全社売上のどちらがボトルネックか）をここに表示する。</p>
-    </div>
-
-    <div class="section-title">充足率・ペナルティ帯</div>
-    <div class="card" id="fulfillment-gauges">
-      <p class="note">未実行</p>
-    </div>
-
-    <div class="section-title">配置方針・理由</div>
-    <div class="reason-box" id="reason-box">
-      <p class="note">未実行：シミュレーションを実行すると配置方針が表示される。</p>
-    </div>
-
-    <div class="section-title">配置結果の出力</div>
-    <div class="card">
-      <table id="assignment-preview">
-        <tr><th>社員ID</th><th>配置先事業部</th><th class="num">貢献度</th><th>タイプ（参考）</th></tr>
-      </table>
-      <div style="margin-top:12px;"><button class="btn" id="export-csv">配置結果CSVをダウンロード ⭳</button></div>
-    </div>
-  </section>
-
-  <!-- A-1 横断比較 -->
+  <!-- 配置比較（データ取込 → 4課題横断比較） -->
   <section class="panel" id="p4">
-    <h2>4課題横断比較ダッシュボード</h2>
-    <p class="subtitle">4課題分の要約カードを並べ、目的間のトレードオフを見比べる</p>
-
-    <div class="mode-toggle" id="compare-mode-toggle">
-      <span class="mode-toggle-label">事業部別バーの表示：</span>
-      <button class="mode-toggle-btn active" id="cmp-mode-profit" data-mode="profit">利益で見る</button>
-      <button class="mode-toggle-btn" id="cmp-mode-revenue" data-mode="revenue">売上で見る</button>
-    </div>
-
-    <div class="compare-grid" id="compare-tasks-grid">
-      <p class="note">未実行：①でデータを取り込んでから本画面に切り替えると、4課題分の結果が自動的に表示される。</p>
-    </div>
-    <p class="note">「配置人数」バーは4カード共通で合計100名スケール、「事業部別売上／利益」バーは上の切替で表示対象を選べ、いずれも4カード共通スケールに揃えているため、カードを横に見比べるだけで人員シフトと数値への効き方の違いが分かる。各カード下部の一文は配置の狙いとトレードオフの要約、「配置理由」欄は充足率・補正係数まで含めた詳細な根拠。</p>
-  </section>
-
-  <!-- 採用前後比較 -->
-  <section class="panel" id="p5">
-    <h2>採用前後比較</h2>
-    <p class="subtitle">採用前（100名）・追加採用（10名）を取り込んで比較する</p>
-    <div class="compare-grid pair">
+    <div id="p4-import-step">
+      <h2>配置比較：社員データ取込</h2>
+      <p class="subtitle">社員データを読み込み、取込結果と検証結果を同じ画面で確認する</p>
       <div class="card">
-        <div class="section-title" style="margin-top:0;">採用前（100名）</div>
-        <div class="dropzone" id="dropzone-hiring-100">📄 社員データをドラッグ&ドロップ、または <span class="file-select-link">ファイルを選択</span></div>
-        <input type="file" id="file-hiring-100" accept=".csv" hidden>
+        <div class="dropzone" id="dropzone-100">📄 社員データをドラッグ&ドロップ、または <span class="file-select-link">ファイルを選択</span></div>
+        <input type="file" id="file-100" accept=".csv" hidden>
         <p class="note">対応形式：CSVファイル（.csv）</p>
-        <div id="hiring-import-error-100" class="mt-12">
-          <div class="stat-row" id="hiring-validation-summary-100">
-            <div class="stat"><div class="k">判定</div><div class="v"><span class="pill warn">未取込</span></div></div>
-          </div>
-          <table class="errtable" id="hiring-validation-errors-100"></table>
-        </div>
+      </div>
+
+      <details class="card">
+        <summary class="detail-summary">詳細（取込結果プレビュー）</summary>
+        <div class="section-title" style="margin-top:14px;">取込結果（先頭5名分プレビュー・全100名）</div>
+        <table id="preview-100">
+          <tr><th>社員ID</th><th class="num">営業力</th><th class="num">管理力</th><th class="num">開拓力</th><th class="num">育成力</th><th class="num">人件費</th></tr>
+        </table>
+      </details>
+
+      <div class="section-title">入力検証レポート</div>
+      <div class="stat-row" id="validation-summary">
+        <div class="stat"><div class="k">取込件数</div><div class="v">0 / 100</div></div>
+        <div class="stat"><div class="k">エラー件数</div><div class="v">0</div></div>
+        <div class="stat"><div class="k">判定</div><div class="v"><span class="pill warn">未取込</span></div></div>
       </div>
       <div class="card">
-        <div class="section-title" style="margin-top:0;">追加採用（10名）</div>
-        <div class="dropzone" id="dropzone-10">📄 追加採用10名分データをドラッグ&ドロップ、または <span class="file-select-link">ファイルを選択</span></div>
-        <input type="file" id="file-10" accept=".csv" hidden>
-        <p class="note">対応形式：CSVファイル（.csv・社員データと同一形式）</p>
-        <div id="hiring-import-error-10" class="mt-12">
-          <div class="stat-row" id="hiring-validation-summary-10">
-            <div class="stat"><div class="k">判定</div><div class="v"><span class="pill warn">未取込</span></div></div>
-          </div>
-          <table class="errtable" id="hiring-validation-errors-10"></table>
+        <table class="errtable" id="validation-errors">
+          <tr><th>行番号</th><th>社員ID</th><th>カラム</th><th class="num">実測値</th><th>期待範囲</th></tr>
+        </table>
+        <p class="note">エラー行が1件でもある場合、比較画面には進めない。該当行を修正して再取込。</p>
+        <details class="card" id="validation-error-reasons-detail" hidden>
+          <summary class="detail-summary">エラー理由</summary>
+          <ul id="validation-error-reasons"></ul>
+        </details>
+      </div>
+
+      <details class="card">
+        <summary class="detail-summary">オプション</summary>
+        <p class="note" style="margin-top:10px;">前提パラメータを変えると、4課題すべてがこの前提で再計算される。数値は標準値からのズレが色付きで分かる。</p>
+        <div class="whatif-params" id="p4-params-card"></div>
+        <div id="p4-params-errors"></div>
+        <div class="actions" style="margin-top:10px;">
+          <button class="btn secondary" id="p4-params-reset">標準に戻す</button>
         </div>
+      </details>
+
+      <div class="actions" style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
+        <button class="btn secondary" id="p4-back">← 前の画面へ戻る</button>
+        <button class="btn" id="p4-proceed" disabled>4課題比較を見る ▶</button>
       </div>
     </div>
 
-    <div class="compare-grid pair" id="compare-hiring-grid">
-      <div class="compare-before">
-        <p class="note">未実行：上の2つの欄でCSVを取り込むと比較結果が表示される。</p>
+    <div id="p4-result-step" hidden>
+      <p class="home-link" style="text-align:left;margin-top:0;"><a id="p4-reimport">← 別のデータを取り込み直す</a></p>
+      <h2>4課題横断比較ダッシュボード</h2>
+      <p class="subtitle">4課題分の要約カードを並べ、目的間のトレードオフを見比べる</p>
+
+      <div class="mode-toggle" id="compare-policy-toggle">
+        <span class="mode-toggle-label">最適化方針：</span>
+        <button class="mode-toggle-btn active" id="cmp-policy-original" data-policy="original">原文どおり</button>
+        <button class="mode-toggle-btn" id="cmp-policy-revenue" data-policy="revenue">すべて売上</button>
+        <button class="mode-toggle-btn" id="cmp-policy-profit" data-policy="profit">すべて利益</button>
       </div>
-    </div>
 
-    <p class="compare-summary" id="hiring-summary" style="margin-bottom:14px;"></p>
+      <div class="mode-toggle" id="compare-mode-toggle">
+        <span class="mode-toggle-label">見出し・事業部別バーの表示：</span>
+        <button class="mode-toggle-btn active" id="cmp-mode-profit" data-mode="profit">利益で見る</button>
+        <button class="mode-toggle-btn" id="cmp-mode-revenue" data-mode="revenue">売上で見る</button>
+      </div>
 
-    <div class="card">
-      <h3 style="font-size:14px;margin:0 0 10px;">採用ROI（参考）</h3>
-      <table id="hiring-roi">
-        <tr><th></th><th class="num">追加人件費コスト</th><th class="num">売上増分</th><th class="num">利益増分</th></tr>
-      </table>
+      <div class="compare-grid" id="compare-tasks-grid"></div>
+      <p class="note">「最適化方針」は<strong>どの指標で配置を選ぶか</strong>を決める。既定の「原文どおり」は課題原文のまま（課題1=全社売上／課題2=A事業部利益／課題3=B事業部売上／課題4=C事業部売上）で、これが提出物の正。ただし課題2だけ指標が違うため4枚を横に並べても「どの事業部を優遇するか」の対照にならないので、指標を揃えた「すべて売上」「すべて利益」を用意してある。なお全社コストは配置によらず一定なので、課題1は方針を変えても同じ配置になる。</p>
+      <p class="note">「見出し・事業部別バーの表示」は<strong>選んだ配置をどの指標で見るか</strong>だけを変える（再計算なし）。見出しは課題ごとの対象範囲（課題1は全社、課題2〜4は対象事業部）を保ったまま指標だけが切り替わる。「配置人数」バーは4カード共通で合計100名スケール、事業部別バーもいずれも4カード共通スケールに揃えているため、カードを横に見比べるだけで人員シフトと数値への効き方の違いが分かる。「概要」欄は配置の狙いとトレードオフの要約、「配置理由」欄は充足率・補正係数まで含めた詳細な根拠。</p>
+
+      <div class="actions" style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
+        <button class="btn secondary" id="p4-result-back">← 前の画面へ戻る</button>
+      </div>
     </div>
   </section>
 
-  <!-- What-if 分析 -->
-  <section class="panel" id="p6">
-    <h2>What-if 分析</h2>
-    <p class="subtitle">前提・母集団・配置を変えたときに結果がどう動くかを、基準ケースとの差分で確認する</p>
-    <div class="hint">💡 人数配分と個別異動は動かした瞬間に再計算される。前提パラメータと採用シナリオは最適配置の解き直しが必要なため「再最適化」ボタンで実行する（最大約1.2秒）。</div>
+  <!-- 採用判断（データ取込 → 採用前後比較） -->
+  <section class="panel" id="p5">
+    <div id="p5-import-step">
+      <h2>採用判断：データ取込</h2>
+      <p class="subtitle">採用前（100名）・追加採用（10名）を取り込んで比較する</p>
+      <div class="compare-grid pair">
+        <div class="card">
+          <div class="section-title" style="margin-top:0;">採用前（100名）</div>
+          <div class="dropzone" id="dropzone-hiring-100">📄 社員データをドラッグ&ドロップ、または <span class="file-select-link">ファイルを選択</span></div>
+          <input type="file" id="file-hiring-100" accept=".csv" hidden>
+          <p class="note">対応形式：CSVファイル（.csv）</p>
+          <div id="hiring-import-error-100" class="mt-12">
+            <div class="stat-row" id="hiring-validation-summary-100">
+              <div class="stat"><div class="k">判定</div><div class="v"><span class="pill warn">未取込</span></div></div>
+            </div>
+            <table class="errtable" id="hiring-validation-errors-100"></table>
+            <details class="card" id="hiring-error-reasons-detail-100" hidden>
+              <summary class="detail-summary">エラー理由</summary>
+              <ul id="hiring-error-reasons-100"></ul>
+            </details>
+          </div>
+        </div>
+        <div class="card">
+          <div class="section-title" style="margin-top:0;">追加採用（10名）</div>
+          <div class="dropzone" id="dropzone-10">📄 追加採用10名分データをドラッグ&ドロップ、または <span class="file-select-link">ファイルを選択</span></div>
+          <input type="file" id="file-10" accept=".csv" hidden>
+          <p class="note">対応形式：CSVファイル（.csv・社員データと同一形式）</p>
+          <div id="hiring-import-error-10" class="mt-12">
+            <div class="stat-row" id="hiring-validation-summary-10">
+              <div class="stat"><div class="k">判定</div><div class="v"><span class="pill warn">未取込</span></div></div>
+            </div>
+            <table class="errtable" id="hiring-validation-errors-10"></table>
+            <details class="card" id="hiring-error-reasons-detail-10" hidden>
+              <summary class="detail-summary">エラー理由</summary>
+              <ul id="hiring-error-reasons-10"></ul>
+            </details>
+          </div>
+        </div>
+      </div>
 
-    <div class="section-title" style="margin-top:8px;">基準ケース</div>
-    <div class="card">
-      <div class="taskcards" id="whatif-task-cards"></div>
-      <p class="note" id="whatif-baseline-note">未実行：先に①データ取込で社員データを取り込んでください。</p>
+      <details class="card">
+        <summary class="detail-summary">オプション</summary>
+        <p class="note" style="margin-top:10px;">前提パラメータを変えると、採用前後どちらの比較もこの前提で再計算される。数値は標準値からのズレが色付きで分かる。</p>
+        <div class="whatif-params" id="p5-params-card"></div>
+        <div id="p5-params-errors"></div>
+        <div class="actions" style="margin-top:10px;">
+          <button class="btn secondary" id="p5-params-reset">標準に戻す</button>
+        </div>
+      </details>
+
+      <div class="actions" style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
+        <button class="btn secondary" id="p5-back">← 前の画面へ戻る</button>
+        <button class="btn" id="p5-proceed" disabled>採用前後比較を見る ▶</button>
+      </div>
     </div>
 
-    <div class="stat-row whatif-sticky" id="whatif-summary">
-      <div class="stat"><div class="k">判定</div><div class="v"><span class="pill warn">未実行</span></div></div>
+    <div id="p5-result-step" hidden>
+      <p class="home-link" style="text-align:left;margin-top:0;"><a id="p5-reimport">← 別のデータを取り込み直す</a></p>
+      <h2>採用前後比較</h2>
+      <div class="compare-grid pair" id="compare-hiring-grid"></div>
+      <p class="compare-summary" id="hiring-summary" style="margin-bottom:14px;"></p>
+      <div class="card">
+        <h3 style="font-size:14px;margin:0 0 10px;">採用ROI（参考）</h3>
+        <table id="hiring-roi">
+          <tr><th></th><th class="num">追加人件費コスト</th><th class="num">売上増分</th><th class="num">利益増分</th></tr>
+        </table>
+      </div>
     </div>
-
-    <div class="section-title">① 母集団（採用シナリオ）</div>
-    <div class="card" id="whatif-roster-card">
-      <p class="note">未実行</p>
-    </div>
-
-    <div class="section-title">② 前提パラメータ</div>
-    <div class="card whatif-params" id="whatif-params-card"></div>
-    <div id="whatif-params-errors"></div>
-    <div class="actions spaced">
-      <button class="btn secondary" id="whatif-params-reset">標準に戻す</button>
-      <button class="btn" id="whatif-params-reoptimize">この前提で再最適化 ▶</button>
-    </div>
-
-    <div class="section-title">③ 配置（人数配分・個別異動）</div>
-    <div class="card" id="whatif-headcount-card"></div>
-    <div class="card mt-12 scroll-card" id="whatif-roster-table-card"></div>
-    <div class="actions spaced">
-      <button class="btn secondary" id="whatif-reset-assignment">基準の配置に戻す</button>
-    </div>
-
-    <div class="section-title">結果詳細</div>
-    <div class="card" id="whatif-unit-table"></div>
-    <div class="card mt-12" id="whatif-gauges"></div>
-    <div class="card mt-12" id="whatif-diff-summary"></div>
-    <div class="reason-box mt-12" id="whatif-reason-box"></div>
-    <div class="mt-12"><button class="btn" id="whatif-export-csv">この What-if 配置をCSV出力 ⭳</button></div>
   </section>
 
 </div>

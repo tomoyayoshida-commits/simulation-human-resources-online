@@ -9,6 +9,8 @@ import { $ } from './dom.ts'
 export interface HiringImportIds {
   summary: string
   table: string
+  reasonDetail: string
+  reasonList: string
 }
 
 /**
@@ -21,6 +23,34 @@ function errorRow(e: ValidationError): string {
 }
 
 const ERROR_TABLE_HEAD = '<tr><th>行番号</th><th>カラム</th><th class="num">実測値</th><th>期待範囲</th></tr>'
+
+/**
+ * エラー1件を人が読める理由文にする（表示専用・検証ロジックは持たない）。
+ * validateEmployees が返す column/expected/actual の組み合わせから、なぜ弾かれたかを判定する。
+ */
+function errorReason(e: ValidationError): string {
+  const where = e.row === 0 ? '全体' : `${e.row}行目`
+  const expected = String(e.expected)
+  const actual = escapeHtml(e.actual)
+  if (e.column === '(件数)') {
+    return `取込件数が${escapeHtml(e.expected)}に一致しません（実際は${actual}件）。ファイルの行数（ヘッダー除く）を確認してください。`
+  }
+  if (e.column === '社員番号') {
+    if (e.actual === '(空)') return `${where}の社員番号が空です。社員番号は社員を一意に識別するキーとして使われるため必須です。`
+    if (expected.includes('重複')) return `${where}の社員番号「${actual}」が他の行と重複しています（${escapeHtml(expected)}）。社員番号は一意である必要があります。`
+    if (expected.includes('数式')) return `${where}の社員番号「${actual}」は = + - @ で始まっており、表計算ソフトが数式として誤解釈するため使用できません。`
+    return `${where}の社員番号「${actual}」が不正です（期待：${escapeHtml(expected)}）。`
+  }
+  return `${where}の${escapeHtml(e.column)}「${actual}」が期待範囲（${escapeHtml(expected)}）から外れています。CSVの該当セルの数値を確認してください。`
+}
+
+/** エラー理由の折り畳みを更新する。エラーがなければ非表示にする。 */
+function renderErrorReasons(detailId: string, listId: string, errors: ValidationError[]): void {
+  const detail = $(detailId) as HTMLDetailsElement | null
+  const list = $(listId)
+  if (detail) detail.hidden = errors.length === 0
+  if (list) list.innerHTML = errors.map((e) => `<li>${errorReason(e)}</li>`).join('')
+}
 
 /** ドロップゾーン＋ファイル選択の配線。読み取ったテキストを onText に渡す。 */
 export function setupDropzone(dropId: string, inputId: string, onText: (text: string) => void): void {
@@ -66,9 +96,10 @@ export function renderHiringImportError(
   if (errTable) {
     errTable.innerHTML = ERROR_TABLE_HEAD + errors.map(errorRow).join('')
   }
+  renderErrorReasons(ids.reasonDetail, ids.reasonList, errors)
 }
 
-/** 取込成功時：判定ピルを「取込OK」に変え件数を示す。エラー表は空にする（前回の残骸を消す） */
+/** 取込成功時：判定ピルを「取込OK」に変え件数を示す。エラー表・エラー理由は空にする（前回の残骸を消す） */
 export function renderHiringImportOk(ids: HiringImportIds, count: number): void {
   const summary = $(ids.summary)
   const errTable = $(ids.table)
@@ -76,6 +107,7 @@ export function renderHiringImportOk(ids: HiringImportIds, count: number): void 
     summary.innerHTML = `<div class="stat"><div class="k">判定</div><div class="v"><span class="pill good">取込OK（${count}件）</span></div></div>`
   }
   if (errTable) errTable.innerHTML = ''
+  renderErrorReasons(ids.reasonDetail, ids.reasonList, [])
 }
 
 /** 入力検証レポート（#p1・機能13/D-2）。プレビュー・サマリー・エラー表・次へボタンの活性を更新する。 */
@@ -114,10 +146,5 @@ export function renderImportReport(employees: Employee[] | null, errors: Validat
         : errors.map(errorRow).join('')
     errTable.innerHTML = ERROR_TABLE_HEAD + body
   }
-
-  // エラーが1件でもある間は次のステップへ進めない（誤った状態で②以降に進むのを防ぐ）
-  const nextBtn = $('next-to-p2') as HTMLButtonElement | null
-  if (nextBtn) nextBtn.disabled = !ok
-  const invalidWarning = $('import-invalid-warning')
-  if (invalidWarning) invalidWarning.style.display = ok ? 'none' : 'block'
+  renderErrorReasons('validation-error-reasons-detail', 'validation-error-reasons', errors)
 }

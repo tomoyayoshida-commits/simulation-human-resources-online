@@ -49,11 +49,15 @@ export function evaluateAssignment(
   return { result, minHeadcountViolations, movedFromBaseline }
 }
 
+/** Σ weights の許容誤差。入力欄の刻み(0.01)由来の丸め誤差を弾かないための猶予。 */
+const WEIGHT_SUM_TOLERANCE = 0.001
+
 /**
  * SimParams の入力検証（docs/whatif-plan.md §4.6）。ここで返すのは「再最適化」ボタンを
- * disabled にするべき違反のみ。Σ minHeadcount ≤ roster数 と Σ weights ≈ 1.0 は§4.6の通り
- * 弾かず警告のみとする方針のため、ここには含めない（呼び出し側が params と roster.length から
- * 別途警告表示する）。
+ * disabled にするべき違反のみ。Σ minHeadcount ≤ roster数は§4.6の通り弾かず警告のみと
+ * する方針のため、ここには含めない（呼び出し側が params と roster.length から別途警告表示する）。
+ * Σ weights ≈ 1.0 は2026-09-02の合意によりブロック対象に変更（重みが1にならない配分は
+ * 貢献度の意味が崩れるため）。
  */
 export function validateParams(params: SimParams): ValidationError[] {
   const errors: ValidationError[] = []
@@ -85,6 +89,10 @@ export function validateParams(params: SimParams): ValidationError[] {
       if (!(v >= 0)) {
         errors.push({ row: 0, column: `重み(${u}・${label})`, actual: v, expected: '0以上' })
       }
+    }
+    const weightSum = WEIGHT_FIELDS.reduce((sum, { key }) => sum + params.weights[u][key], 0)
+    if (Math.abs(weightSum - 1) > WEIGHT_SUM_TOLERANCE) {
+      errors.push({ row: 0, column: `重み合計(${u})`, actual: Math.round(weightSum * 100) / 100, expected: '1.00' })
     }
   }
   if (!(params.prevYearRevenue >= 0)) {

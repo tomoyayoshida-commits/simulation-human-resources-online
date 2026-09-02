@@ -1,7 +1,8 @@
 // 設計書§9: 配置方針テキスト生成
 
 import type { SimParams, SimulationResult, TaskId } from './types.ts'
-import { DEFAULT_PARAMS, round2, TASK_LABELS, taskTargetLabel, UNIT_IDS, UNIT_LABEL } from './constants.ts'
+import type { TaskMetric } from './constants.ts'
+import { DEFAULT_PARAMS, round2, taskLabel, taskTargetLabel, UNIT_IDS, UNIT_LABEL } from './constants.ts'
 import { pct } from './format.ts'
 
 /**
@@ -12,13 +13,14 @@ export function generateReasonText(
   result: SimulationResult,
   task: TaskId,
   params: SimParams = DEFAULT_PARAMS,
+  metric?: TaskMetric,
 ): string {
   const bullets: string[] = []
   const { headcount, units } = result
 
   // 1. 課題（目的）と人数配分
   bullets.push(
-    `選択課題は「${TASK_LABELS[task]}」。この目的に対し A:${headcount.A}名／B:${headcount.B}名／C:${headcount.C}名（合計${headcount.A + headcount.B + headcount.C}名）を配置した。`,
+    `選択課題は「${taskLabel(task, metric)}」。この目的に対し A:${headcount.A}名／B:${headcount.B}名／C:${headcount.C}名（合計${headcount.A + headcount.B + headcount.C}名）を配置した。`,
   )
 
   // 2. 各事業部の充足率と適用係数
@@ -43,7 +45,7 @@ export function generateReasonText(
   // 4. 課題2〜4は辞書式方針の説明
   if (task !== 1) {
     bullets.push(
-      `本配置は${taskTargetLabel(task)}を最優先で最大化したうえで、残りの人員は全社売上が最大となるよう配置している（目的外事業部を放置せず、二次目的として全社売上を確保）。`,
+      `本配置は${taskTargetLabel(task, metric)}を最優先で最大化したうえで、残りの人員は全社売上が最大となるよう配置している（目的外事業部を放置せず、二次目的として全社売上を確保）。`,
     )
   }
 

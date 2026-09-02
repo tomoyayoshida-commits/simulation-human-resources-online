@@ -1,9 +1,11 @@
 // 設計書§4: 計算エンジン（貢献度〜利益）
 
 import type { Employee, EmployeeType, SimParams, SimulationResult, TaskId, UnitId, UnitResult } from './types.ts'
+import type { TaskMetric } from './constants.ts'
 import {
   COST_UNIT_DIVISOR,
   DEFAULT_PARAMS,
+  resolveMetric,
   round2,
   TASK_SPEC,
   UNIT_IDS,
@@ -145,13 +147,15 @@ export function computeSimulationResult(
 /**
  * 課題の最大化対象の値を結果から取り出す（§5.1）。
  * 最適化側の選択キー（optimizer）と表示側（compareTasks）が同じ定義を使うための単一の入口。
- * 課題1は全社売上、課題2〜4は `TASK_SPEC` の対象事業部の指標。
+ * 対象範囲（全社／対象事業部）は課題で固定。指標は既定が `TASK_SPEC`、
+ * `metric` を渡すと上書きできる（#p4の「最適化方針」で4課題の指標を揃えるため）。
  */
-export function taskPrimaryValue(result: SimulationResult, task: TaskId): number {
-  const { targetUnit, metric } = TASK_SPEC[task]
-  if (targetUnit === null) return result.companyRevenue
+export function taskPrimaryValue(result: SimulationResult, task: TaskId, metric?: TaskMetric): number {
+  const { targetUnit } = TASK_SPEC[task]
+  const m = resolveMetric(task, metric)
+  if (targetUnit === null) return m === 'profit' ? result.companyProfit : result.companyRevenue
   const unit = result.units[targetUnit]
-  return metric === 'profit' ? unit.profit : unit.finalRevenue
+  return m === 'profit' ? unit.profit : unit.finalRevenue
 }
 
 /**

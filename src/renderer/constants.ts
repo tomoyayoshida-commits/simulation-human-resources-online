@@ -137,13 +137,6 @@ export const EXPORT_HEADERS = {
   assignedUnit: '配置先事業部',
 } as const
 
-export const TASK_LABELS: Record<TaskId, string> = {
-  1: '全社売上最大化',
-  2: 'A事業部利益最大化',
-  3: 'B事業部売上最大化',
-  4: 'C事業部売上最大化',
-}
-
 /**
  * 課題ごとの「何を最大化するか」の定義（設計書§5.1）。
  *
@@ -166,9 +159,42 @@ export const TASK_SPEC: Record<TaskId, TaskSpec> = {
   4: { targetUnit: 'C', metric: 'revenue' },
 }
 
+/**
+ * 最大化対象の指標。
+ *
+ * 課題原文は指標が混在している（課題2だけ利益）。#p4の「最適化方針」で4課題の指標を
+ * 揃えて対照比較するため、TASK_SPEC の既定を呼び出し側から上書きできるようにしてある。
+ * 省略時は必ず原文どおり（＝TASK_SPEC）に落ちるので、既存の呼び出しの挙動は変わらない。
+ */
+export type TaskMetric = TaskSpec['metric']
+
+/** 指標の解決。未指定なら原文どおり。 */
+export function resolveMetric(task: TaskId, metric?: TaskMetric): TaskMetric {
+  return metric ?? TASK_SPEC[task].metric
+}
+
+/** 最大化対象の範囲の呼称（「全社」「A事業部」）。指標によらず課題で決まる。 */
+function scopeLabel(task: TaskId): string {
+  const { targetUnit } = TASK_SPEC[task]
+  return targetUnit === null ? '全社' : `${targetUnit}事業部`
+}
+
+/** 課題名（例：「A事業部利益最大化」）。指標を上書きすると名前も追随する。 */
+export function taskLabel(task: TaskId, metric?: TaskMetric): string {
+  return `${scopeLabel(task)}${resolveMetric(task, metric) === 'profit' ? '利益' : '売上'}最大化`
+}
+
 /** 最大化対象の呼称（例：「A事業部の利益」「全社売上」）。表示・説明文で使う。 */
-export function taskTargetLabel(task: TaskId): string {
-  const { targetUnit, metric } = TASK_SPEC[task]
-  const metricLabel = metric === 'profit' ? '利益' : '売上'
+export function taskTargetLabel(task: TaskId, metric?: TaskMetric): string {
+  const { targetUnit } = TASK_SPEC[task]
+  const metricLabel = resolveMetric(task, metric) === 'profit' ? '利益' : '売上'
   return targetUnit === null ? `全社${metricLabel}` : `${targetUnit}事業部の${metricLabel}`
+}
+
+/** 課題名（原文どおりの指標）。指標を切り替える箇所では taskLabel() を使う。 */
+export const TASK_LABELS: Record<TaskId, string> = {
+  1: taskLabel(1),
+  2: taskLabel(2),
+  3: taskLabel(3),
+  4: taskLabel(4),
 }

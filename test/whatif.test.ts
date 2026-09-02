@@ -163,18 +163,19 @@ test('validateParams: §4.6の各行を検出する', () => {
   const withNegativeCostMultiplier: SimParams = { ...DEFAULT_PARAMS, costMultiplier: -1 }
   assert.ok(validateParams(withNegativeCostMultiplier).some((e) => e.column.includes('コスト係数')))
 
-  // Σ minHeadcount超過・Σ weights不一致は§4.6の方針により弾かない（警告のみ）
+  // Σ minHeadcount超過は§4.6の方針により弾かない（警告のみ）
   const withHugeMin: SimParams = {
     ...DEFAULT_PARAMS,
     minHeadcount: { A: 1000, B: 1000, C: 1000 },
   }
   assert.equal(validateParams(withHugeMin).length, 0)
 
+  // Σ weights ≈ 1.0 は2026-09-02の合意によりブロック対象（貢献度の意味が崩れるため）
   const withSkewedWeights: SimParams = {
     ...DEFAULT_PARAMS,
     weights: { ...DEFAULT_PARAMS.weights, A: { sales: 0.9, mgmt: 0.9, dev: 0.9, training: 0.9 } },
   }
-  assert.equal(validateParams(withSkewedWeights).length, 0)
+  assert.ok(validateParams(withSkewedWeights).some((e) => e.column.includes('重み合計')))
 })
 
 test('diffAssignment: 異動を(from,to,count)に集計する', () => {
