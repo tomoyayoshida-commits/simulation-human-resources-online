@@ -159,6 +159,10 @@ tr.whatif-moved{background:#fef3dc;}
 .whatif-candidate{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12.5px;}
 .errtable.inline{margin:8px 0;}
 
+/* 配置の前提条件：全社最低売上の数字 */
+.cond-revenue-value{font-size:20px;font-weight:700;color:var(--a);font-variant-numeric:tabular-nums;}
+.cond-revenue-value::after{content:'億円超';font-size:12px;margin-left:3px;}
+
 /* 機能15 作業机（docs/workbench-plan.md §4.3〜§4.4） */
 .wb-totals{display:flex;gap:20px;margin:10px 0 8px;}
 .wb-stat{display:flex;flex-direction:column;}
@@ -190,8 +194,16 @@ tr.whatif-moved{background:#fef3dc;}
 .wb-card-type{display:inline-block;font-size:10px;color:var(--text-muted);}
 .wb-card-main{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px;}
 .wb-card-others{font-size:10px;color:var(--text-muted);font-variant-numeric:tabular-nums;}
+/* 顔写真つきカード（docs/profile-plan.md §4.6）。写真をONにすると1枚が高くなるため、
+   520pxの列に同時に見える枚数が減る。俯瞰したいときは #wb-show-photos でOFFにして従来の密度へ戻す。 */
+.wb-card.with-photo{display:flex;align-items:center;gap:8px;}
+.wb-card-body{min-width:0;flex:1;}
+.wb-card-photo{width:40px;height:40px;flex:0 0 40px;border-radius:6px;object-fit:cover;background:var(--border);user-select:none;}
+.wb-card-photo-none{display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;opacity:.75;}
+.wb-card-name{font-weight:400;color:var(--text-secondary);margin-left:4px;}
 .wb-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:14px 0 6px;}
 .wb-sort-label{font-size:12px;color:var(--text-secondary);margin-right:4px;}
+.wb-photo-label{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--text-secondary);}
 .wb-sort{font-size:12px;padding:5px 8px;border-radius:6px;border:1px solid var(--border);}
 .wb-diff{font-size:11.5px;color:var(--text-secondary);margin:0;}
 
@@ -201,3 +213,20 @@ tr.whatif-moved{background:#fef3dc;}
 .loading-spinner{width:34px;height:34px;border:3px solid var(--grid);border-top-color:var(--a);border-radius:50%;animation:spin .7s linear infinite;}
 .loading-text{font-size:13px;color:var(--text-secondary);}
 @keyframes spin{to{transform:rotate(360deg);}}
+
+/* 人材プロフィール管理 #p6（docs/profile-plan.md §4.4）。
+   使用頻度が初期登録＋入社・退職時のみなので、トップの導線は主動線を薄めない小さなリンクにする（§8-2） */
+.home-admin-link{margin:18px 0 0;text-align:center;}
+.link-button{background:none;border:none;padding:0;font-size:12.5px;color:var(--text-secondary);text-decoration:underline;cursor:pointer;font-family:inherit;}
+.link-button:hover{color:var(--a);}
+.profile-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin-top:10px;}
+.profile-item{display:flex;align-items:center;gap:8px;background:var(--page);border:1px solid var(--border);border-radius:7px;padding:6px 8px;}
+.profile-face{width:40px;height:40px;flex:0 0 40px;border-radius:6px;object-fit:cover;background:var(--grid);}
+.profile-face-none{display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--text-muted);text-align:center;line-height:1.1;}
+.profile-meta{min-width:0;flex:1;}
+.profile-id{font-size:11px;font-weight:600;font-variant-numeric:tabular-nums;}
+.profile-name{font-size:12px;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.profile-del{background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:12px;padding:2px 4px;}
+.profile-del:hover{color:var(--critical);}
+.profile-errors{margin:8px 0 0;padding-left:18px;font-size:11.5px;color:var(--critical);}
+.profile-warn ul{margin:6px 0 0;padding-left:18px;font-size:11.5px;color:var(--text-secondary);}

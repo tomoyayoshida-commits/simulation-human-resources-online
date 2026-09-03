@@ -8,7 +8,8 @@
 // 画面遷移（go）そのものはタブ切替のみを担う。
 
 import type { Employee, SimParams, ValidationError } from './types.ts'
-import { importEmployees, mergeEmployees } from './csv.ts'
+import type { ProfileRow } from './csv.ts'
+import { importEmployees, importProfiles, matchProfilePhotos, mergeEmployees } from './csv.ts'
 import { currentCardResult, initCompareModeToggle, initWorkbenchLaunch, renderCompareTasks } from './compareTasks.ts'
 import { initWorkbenchPanel, openWorkbench } from './workbenchPanel.ts'
 import { renderCompareHiring } from './compareHiring.ts'
@@ -19,12 +20,16 @@ import {
   renderImportConditions,
   renderImportReport,
   setupDropzone,
+  setupFilesDropzone,
 } from './importPanel.ts'
+import { renderProfileCsvStatus, renderProfileDraft, renderProfilePhotosStatus, renderRegisteredProfiles } from './profilePanel.ts'
+import { normalizePhoto } from './photo.ts'
 import { createParamsOptionsPanel } from './paramsOptions.ts'
 import { withLoading } from './loading.ts'
 import { $ } from './dom.ts'
 import { escapeHtml } from './format.ts'
 import { completeRedirectSignIn, signInWithGoogle, signOutUser, watchAuthState } from './auth.ts'
+import { deleteProfile, getProfiles, loadProfiles, saveProfiles } from './profileStore.ts'
 
 // ---- アプリ状態 ----
 const state: {
@@ -159,6 +164,8 @@ function initImports(): void {
   renderImportConditions()
   // 配置比較(#p4)：社員データ取込 → ボタン押下で4課題比較の結果ステップへ
   const updateP4ProceedBtn = (): void => {
+    const params = p4Params.getParams()
+    renderImportConditions(params.prevYearRevenue, params.optimalHeadcount, params.minHeadcount)
     const proceedBtn = $('p4-proceed') as HTMLButtonElement | null
     if (proceedBtn) proceedBtn.disabled = !(state.employees100 && p4Params.isValid())
     $('p4-file-actions')?.toggleAttribute('hidden', !state.employees100)
@@ -204,6 +211,8 @@ function initImports(): void {
       assignment: { ...card.result.assignment },
       baseline: card.result,
       history: [],
+      // docs/profile-plan.md §4.2: 未取得なら空。カードは番号のみで描画され作業机は正常に動く。
+      profiles: getProfiles(),
     })
     showStep('p4', 'bench')
   })
@@ -279,7 +288,7 @@ function initImports(): void {
     })
   })
   $('p5-back')?.addEventListener('click', () => void go('p0'))
-  $('p5-result-back')?.addEventListener('click', () => void go('p0'))
+  $('p5-result-back')?.addEventListener('click', () => showStep('p5', 'import'))
 
   restoreSession()
 
@@ -354,11 +363,133 @@ function initImports(): void {
   }
 }
 
+// ---- 人材プロフィール管理(#p6)の配線（docs/profile-plan.md §4.4） ----
+
+/** 縮小済みの顔写真1枚。matchProfilePhotos は `{ name }` だけを見るのでこの形で渡せる。 */
+interface LoadedPhoto {
+  name: string
+  dataUrl: string
+}
+
+const profileState: { rows: ProfileRow[] | null; photos: LoadedPhoto[] } = { rows: null, photos: [] }
+
+/** 警告文で列挙する名前の上限。全件出すと100件のリストで画面が埋まる。 */
+const WARN_SAMPLE = 5
+
+function sample(names: string[]): string {
+  const head = names.slice(0, WARN_SAMPLE).join('、')
+  return names.length > WARN_SAMPLE ? `${head} ほか${names.length - WARN_SAMPLE}件` : head
+}
+
+/**
+ * 名簿・写真・（取込済みなら）スキルCSVを突き合わせて保存内容を組み立てる。
+ * 片側欠落はすべて警告であり保存は止めない（§4.4）。プロフィールは計算に入らないため、
+ * 欠けていても配置比較は正しく動く。
+ */
+function rebuildProfileDraft(): void {
+  const rows = profileState.rows
+  if (!rows) {
+    renderProfileDraft(null)
+    return
+  }
+  const match = matchProfilePhotos(rows, profileState.photos)
+  const profiles = match.pairs.map(({ row, file }) => ({ id: row.id, name: row.name, photo: file?.dataUrl ?? '' }))
+
+  const warnings: string[] = []
+  if (match.missingFiles.length > 0) {
+    warnings.push(`名簿が指定した写真が見つかりません（${match.missingFiles.length}件）：${sample(match.missingFiles)}`)
+  }
+  if (match.unusedFiles.length > 0) {
+    warnings.push(`名簿から参照されていない写真があります（${match.unusedFiles.length}件）：${sample(match.unusedFiles)}`)
+  }
+  const employees = state.employees100
+  if (employees) {
+    const rosterIds = new Set(employees.map((e) => e.id))
+    const profileIds = new Set(rows.map((r) => r.id))
+    const notInRoster = rows.filter((r) => !rosterIds.has(r.id)).map((r) => r.id)
+    const notInProfiles = employees.filter((e) => !profileIds.has(e.id)).map((e) => e.id)
+    if (notInRoster.length > 0) {
+      warnings.push(`取込済みの社員データに存在しない社員番号です（${notInRoster.length}件）：${sample(notInRoster)}`)
+    }
+    if (notInProfiles.length > 0) {
+      warnings.push(`名簿に無いため番号のみで表示される社員がいます（${notInProfiles.length}件）：${sample(notInProfiles)}`)
+    }
+  }
+  renderProfileDraft({ profiles, warnings })
+}
+
+function initProfileAdmin(): void {
+  setupDropzone('dropzone-profile-csv', 'file-profile-csv', (text) => {
+    const { rows, errors } = importProfiles(text)
+    profileState.rows = rows
+    renderProfileCsvStatus(rows, errors)
+    rebuildProfileDraft()
+  })
+
+  setupFilesDropzone('dropzone-profile-photos', 'file-profile-photos', (files) => {
+    // 選択された時点で128pxへ縮小する（§4.5）。元のまま保持すると100名で数百MBになる。
+    void (async () => {
+      const loaded: LoadedPhoto[] = []
+      const errors: string[] = []
+      for (const f of files) {
+        try {
+          loaded.push({ name: f.name, dataUrl: await normalizePhoto(f) })
+        } catch (e) {
+          errors.push(`${f.name}：${e instanceof Error ? e.message : String(e)}`)
+        }
+      }
+      profileState.photos = loaded
+      renderProfilePhotosStatus(loaded.length, errors)
+      rebuildProfileDraft()
+    })()
+  })
+
+  const saveBtn = $('profile-save') as HTMLButtonElement | null
+  saveBtn?.addEventListener('click', () => {
+    const rows = profileState.rows
+    if (!rows) return
+    const match = matchProfilePhotos(rows, profileState.photos)
+    const profiles = match.pairs.map(({ row, file }) => ({ id: row.id, name: row.name, photo: file?.dataUrl ?? '' }))
+    const label = saveBtn.textContent
+    saveBtn.disabled = true
+    saveBtn.textContent = '保存しています…'
+    void saveProfiles(profiles)
+      .then(() => {
+        renderRegisteredProfiles(getProfiles())
+        saveBtn.textContent = `保存しました（${profiles.length}件）`
+      })
+      .catch((e: unknown) => {
+        saveBtn.textContent = label ?? 'マスタに保存する'
+        saveBtn.disabled = false
+        window.alert(`保存に失敗しました。${e instanceof Error ? e.message : String(e)}`)
+      })
+  })
+
+  // 登録済み一覧の削除（§8-8で物理削除と決定）
+  $('profile-registered')?.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement | null)?.closest<HTMLElement>('[data-profile-del]')
+    const id = btn?.dataset.profileDel
+    if (!id) return
+    if (!window.confirm(`${id} のプロフィールを削除します。よろしいですか？`)) return
+    void deleteProfile(id)
+      .then(() => renderRegisteredProfiles(getProfiles()))
+      .catch((err: unknown) => window.alert(`削除に失敗しました。${err instanceof Error ? err.message : String(err)}`))
+  })
+
+  // #p6 に入るたびに最新のマスタを出す（他の人が別ブラウザで登録した分を拾う）
+  document.querySelectorAll<HTMLElement>('[data-go="p6"]').forEach((el) => {
+    el.addEventListener('click', () => {
+      void loadProfiles(true).then(renderRegisteredProfiles)
+    })
+  })
+}
+
 // ---- 初期化 ----
 function main(): void {
   initNavigation()
   initCompareModeToggle()
   initWorkbenchPanel()
+  initProfileAdmin()
   initImports() // 内部でrestoreSession()を呼び、必要なら復元した画面のbreadcrumbまで描画する
 }
 
@@ -429,6 +560,10 @@ function initAuthGuard(): void {
     if (!appInitialized) {
       appInitialized = true
       main()
+      // docs/profile-plan.md §4.3: 人材プロフィールはログイン直後にバックグラウンドで取り込む。
+      // ユーザーはこの後CSV取込→4課題比較（実データで約0.95〜1.6秒）と進むため、
+      // 作業机に着くころには揃っている。await しないのは主動線をこの取得で待たせないため。
+      void loadProfiles()
     }
   })
 }

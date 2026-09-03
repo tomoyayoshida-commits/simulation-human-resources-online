@@ -6,11 +6,11 @@ import { escapeHtml, pill } from './format.ts'
 import { $, setHtml } from './dom.ts'
 import { MIN_HEADCOUNT, OPTIMAL_HEADCOUNT, PREV_YEAR_REVENUE, UNIT_IDS, UNIT_LABEL } from './constants.ts'
 
-/** 配置比較(#p4)の取込条件カード：デフォルト値の全社最低売上・事業部別の適正/最低人数を表示する（起動時に1回でよい静的表示）。 */
-export function renderImportConditions(): void {
-  setHtml('cond-min-revenue', `${PREV_YEAR_REVENUE}億円超`)
+/** 配置比較(#p4)の取込条件カード：全社最低売上・事業部別の適正/最低人数を表示する。パラメータ対応版。 */
+export function renderImportConditions(prevYearRevenue: number = PREV_YEAR_REVENUE, optimalHeadcount: Record<string, number> = OPTIMAL_HEADCOUNT, minHeadcount: Record<string, number> = MIN_HEADCOUNT): void {
+  setHtml('cond-min-revenue', `<span class="cond-revenue-value">${prevYearRevenue}</span>`)
   const rows = UNIT_IDS.map(
-    (u) => `<tr><td>${UNIT_LABEL[u]}</td><td class="num">${OPTIMAL_HEADCOUNT[u]}名</td><td class="num">${MIN_HEADCOUNT[u]}名</td></tr>`,
+    (u) => `<tr><td>${UNIT_LABEL[u]}</td><td class="num">${optimalHeadcount[u]}名</td><td class="num">${minHeadcount[u]}名</td></tr>`,
   ).join('')
   setHtml('cond-headcount-table', '<tr><th></th><th class="num">適正人数</th><th class="num">最低人数</th></tr>' + rows)
 }
@@ -84,6 +84,36 @@ export function setupDropzone(dropId: string, inputId: string, onText: (text: st
     drop.classList.remove('dragover')
     const file = e.dataTransfer?.files?.[0]
     if (file) onText(await file.text())
+  })
+}
+
+/**
+ * 複数ファイルを受け取るドロップゾーンの配線（docs/profile-plan.md §4.4・顔写真の一括選択用）。
+ * setupDropzone は「テキスト1ファイルを読んで文字列で渡す」形に固定されており、
+ * #p4・#p5 の4箇所が依存しているため signature を変えずに別関数として足す。
+ */
+export function setupFilesDropzone(dropId: string, inputId: string, onFiles: (files: File[]) => void): void {
+  const drop = $(dropId)
+  const input = $(inputId) as HTMLInputElement | null
+  if (!drop || !input) return
+
+  drop.addEventListener('click', () => input.click())
+  input.addEventListener('change', () => {
+    const files = Array.from(input.files ?? [])
+    if (files.length > 0) onFiles(files)
+    // 同じファイルを選び直しても change が発火するようにクリアする
+    input.value = ''
+  })
+  drop.addEventListener('dragover', (e) => {
+    e.preventDefault()
+    drop.classList.add('dragover')
+  })
+  drop.addEventListener('dragleave', () => drop.classList.remove('dragover'))
+  drop.addEventListener('drop', (e) => {
+    e.preventDefault()
+    drop.classList.remove('dragover')
+    const files = Array.from(e.dataTransfer?.files ?? [])
+    if (files.length > 0) onFiles(files)
   })
 }
 
