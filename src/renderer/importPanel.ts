@@ -2,8 +2,18 @@
 // 表示専用で計算を持たない（CLAUDE.md §5）。取り込んだデータの保持と後続処理は renderer.ts 側。
 
 import type { Employee, ValidationError } from './types.ts'
-import { escapeHtml } from './format.ts'
-import { $ } from './dom.ts'
+import { escapeHtml, pill } from './format.ts'
+import { $, setHtml } from './dom.ts'
+import { MIN_HEADCOUNT, OPTIMAL_HEADCOUNT, PREV_YEAR_REVENUE, UNIT_IDS, UNIT_LABEL } from './constants.ts'
+
+/** 配置比較(#p4)の取込条件カード：デフォルト値の全社最低売上・事業部別の適正/最低人数を表示する（起動時に1回でよい静的表示）。 */
+export function renderImportConditions(): void {
+  setHtml('cond-min-revenue', `${PREV_YEAR_REVENUE}億円超`)
+  const rows = UNIT_IDS.map(
+    (u) => `<tr><td>${UNIT_LABEL[u]}</td><td class="num">${OPTIMAL_HEADCOUNT[u]}名</td><td class="num">${MIN_HEADCOUNT[u]}名</td></tr>`,
+  ).join('')
+  setHtml('cond-headcount-table', '<tr><th></th><th class="num">適正人数</th><th class="num">最低人数</th></tr>' + rows)
+}
 
 /** #p5 は左（採用前100名）・右（追加採用10名）の2つの独立取込を持つため、対象のDOM ID組を受け取る。 */
 export interface HiringImportIds {
@@ -47,9 +57,8 @@ function errorReason(e: ValidationError): string {
 /** エラー理由の折り畳みを更新する。エラーがなければ非表示にする。 */
 function renderErrorReasons(detailId: string, listId: string, errors: ValidationError[]): void {
   const detail = $(detailId) as HTMLDetailsElement | null
-  const list = $(listId)
   if (detail) detail.hidden = errors.length === 0
-  if (list) list.innerHTML = errors.map((e) => `<li>${errorReason(e)}</li>`).join('')
+  setHtml(listId, errors.map((e) => `<li>${errorReason(e)}</li>`).join(''))
 }
 
 /** ドロップゾーン＋ファイル選択の配線。読み取ったテキストを onText に渡す。 */
@@ -79,6 +88,23 @@ export function setupDropzone(dropId: string, inputId: string, onText: (text: st
 }
 
 /**
+ * 採用前後比較(#p5)の取込結果表示（判定ピル・エラー表・エラー理由の3箇所をまとめて書き換える）。
+ * 成功と失敗の違いはピルの色と文言、そしてエラー表を出すかどうかだけなので、書き換え順序と
+ * 「前回の残骸を必ず消す」という性質をここ1箇所に持たせる。
+ */
+function renderHiringImport(
+  ids: HiringImportIds,
+  kind: 'good' | 'crit',
+  message: string,
+  errors: ValidationError[],
+  errorTableHtml: string,
+): void {
+  setHtml(ids.summary, `<div class="stat"><div class="k">判定</div><div class="v">${pill(kind, message)}</div></div>`)
+  setHtml(ids.table, errorTableHtml)
+  renderErrorReasons(ids.reasonDetail, ids.reasonList, errors)
+}
+
+/**
  * 採用前後比較(#p5)の取込エラー表示。
  * alert()はElectronで主プロセスとの同期IPCを介するため、file inputのchangeイベント直後に
  * 呼ぶと描画が一瞬止まって固まったように見える。取込報告(#p1)と同様にインライン表示する。
@@ -88,63 +114,46 @@ export function renderHiringImportError(
   errors: ValidationError[],
   message: string,
 ): void {
-  const summary = $(ids.summary)
-  const errTable = $(ids.table)
-  if (summary) {
-    summary.innerHTML = `<div class="stat"><div class="k">判定</div><div class="v"><span class="pill crit">${message}</span></div></div>`
-  }
-  if (errTable) {
-    errTable.innerHTML = ERROR_TABLE_HEAD + errors.map(errorRow).join('')
-  }
-  renderErrorReasons(ids.reasonDetail, ids.reasonList, errors)
+  renderHiringImport(ids, 'crit', message, errors, ERROR_TABLE_HEAD + errors.map(errorRow).join(''))
 }
 
 /** 取込成功時：判定ピルを「取込OK」に変え件数を示す。エラー表・エラー理由は空にする（前回の残骸を消す） */
 export function renderHiringImportOk(ids: HiringImportIds, count: number): void {
-  const summary = $(ids.summary)
-  const errTable = $(ids.table)
-  if (summary) {
-    summary.innerHTML = `<div class="stat"><div class="k">判定</div><div class="v"><span class="pill good">取込OK（${count}件）</span></div></div>`
-  }
-  if (errTable) errTable.innerHTML = ''
-  renderErrorReasons(ids.reasonDetail, ids.reasonList, [])
+  renderHiringImport(ids, 'good', `取込OK（${count}件）`, [], '')
 }
 
 /** 入力検証レポート（#p1・機能13/D-2）。プレビュー・サマリー・エラー表・次へボタンの活性を更新する。 */
 export function renderImportReport(employees: Employee[] | null, errors: ValidationError[]): void {
   // プレビュー（先頭5名）
-  const preview = $('preview-100')
-  if (preview) {
-    let html =
-      '<tr><th>社員ID</th><th class="num">営業力</th><th class="num">管理力</th><th class="num">開拓力</th><th class="num">育成力</th><th class="num">人件費</th></tr>'
-    const rows = employees ?? []
-    for (const e of rows.slice(0, 5)) {
-      // 社員番号はCSVの生の文字列。能力値・人件費は検証済みの数値なのでエスケープ不要。
-      html += `<tr><td>${escapeHtml(e.id)}</td><td class="num">${e.sales}</td><td class="num">${e.mgmt}</td><td class="num">${e.dev}</td><td class="num">${e.training}</td><td class="num">${e.cost}</td></tr>`
-    }
-    if (rows.length === 0) html += '<tr><td colspan="6">（取込に成功したデータがありません）</td></tr>'
-    preview.innerHTML = html
-  }
+  const rows = employees ?? []
+  // 社員番号はCSVの生の文字列。能力値・人件費は検証済みの数値なのでエスケープ不要。
+  const previewRows = rows
+    .slice(0, 5)
+    .map(
+      (e) =>
+        `<tr><td>${escapeHtml(e.id)}</td><td class="num">${e.sales}</td><td class="num">${e.mgmt}</td><td class="num">${e.dev}</td><td class="num">${e.training}</td><td class="num">${e.cost}</td></tr>`,
+    )
+    .join('')
+  setHtml(
+    'preview-100',
+    '<tr><th>社員ID</th><th class="num">営業力</th><th class="num">管理力</th><th class="num">開拓力</th><th class="num">育成力</th><th class="num">人件費</th></tr>' +
+      previewRows +
+      (rows.length === 0 ? '<tr><td colspan="6">（取込に成功したデータがありません）</td></tr>' : ''),
+  )
 
   // サマリー
   const count = employees?.length ?? 0
   const ok = errors.length === 0 && employees !== null
-  const summary = $('validation-summary')
-  if (summary) {
-    summary.innerHTML = `
+  setHtml(
+    'validation-summary',
+    `
       <div class="stat"><div class="k">取込件数</div><div class="v">${count} / 100</div></div>
       <div class="stat"><div class="k">エラー件数</div><div class="v" style="color:${errors.length > 0 ? 'var(--critical)' : 'inherit'};">${errors.length}</div></div>
-      <div class="stat"><div class="k">判定</div><div class="v">${ok ? '<span class="pill good">取込OK</span>' : '<span class="pill crit">取込を保留</span>'}</div></div>`
-  }
+      <div class="stat"><div class="k">判定</div><div class="v">${ok ? pill('good', '取込OK') : pill('crit', '取込を保留')}</div></div>`,
+  )
 
-  // エラーテーブル
-  const errTable = $('validation-errors')
-  if (errTable) {
-    const body =
-      errors.length === 0
-        ? '<tr><td colspan="4">エラーはありません。次のステップへ進めます。</td></tr>'
-        : errors.map(errorRow).join('')
-    errTable.innerHTML = ERROR_TABLE_HEAD + body
-  }
+  // エラーテーブル：画面を圧縮するため、エラーが無いときはカードごと隠す（取込条件の確認は上の折り畳みに集約済み）
+  $('validation-errors-card')?.toggleAttribute('hidden', errors.length === 0)
+  setHtml('validation-errors', ERROR_TABLE_HEAD + errors.map(errorRow).join(''))
   renderErrorReasons('validation-error-reasons-detail', 'validation-error-reasons', errors)
 }

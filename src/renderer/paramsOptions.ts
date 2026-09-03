@@ -50,6 +50,8 @@ export interface ParamsOptionsPanel {
   isValid: () => boolean
   /** フォームを描画し、変更のたびに onChange を呼ぶ（呼び出し側で「見る」ボタンの活性等を更新する用）。 */
   init: (onChange: () => void) => void
+  /** セッション復元用：外部から前提パラメータを差し替えて再描画する。init前後どちらでも呼べる。 */
+  setParams: (p: SimParams) => void
 }
 
 /**
@@ -157,6 +159,10 @@ export function createParamsOptionsPanel(idPrefix: string): ParamsOptionsPanel {
         renderForm()
         onChange()
       })
+    },
+    setParams(p: SimParams): void {
+      params = cloneParams(p)
+      renderForm()
     },
   }
 }

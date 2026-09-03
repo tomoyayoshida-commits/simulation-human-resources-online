@@ -15,6 +15,11 @@ Electron版`simulation-human-resources`から複製した専用リポジトリ�
 評価対象は「配置結果」＋「配置方針とその理由」。
 
 ## 3. 開発環境
+**作業ディレクトリはこのリポジトリ**（2026-09-02 以降）。セッション開始時にまずここへ移動する：
+`\\wsl.localhost\Ubuntu\home\tomoyayoshida\development\simulation-human-resources-online`
+`Desktop\8月28日B` および `Desktop\本課題　必要資料` は**参照資料の置き場**であり作業場所ではない（§10）。
+PowerShellツールは呼び出しごとにcwdが`C:\Users\pluser1`へ戻るため、`Set-Location`に頼らず毎回明示的にcdする。
+
 WSL2 Ubuntu。PowerShellから実行時は**ログインシェル経由必須**（node管理はfnm）：
 `wsl -d Ubuntu -- bash -lic "cd ~/development/simulation-human-resources-online && npm test"`
 （`bash -c`のみだと`node: command not found`。PowerShellは`2>/dev/null`をパス誤解するため使わない）
@@ -29,7 +34,7 @@ WSL2 Ubuntu。PowerShellから実行時は**ログインシェル経由必須**�
 | `npm run test:e2e` | Playwright移行待ちで無効 |
 | `npm run snapshot` | 実データ4課題を`docs/baseline-snapshot.txt`と照合。`-- --write`で更新 |
 | `npm run lint` | oxlint |
-| `npm run build` | `tsc -b`→`vite build`。デプロイは`firebase deploy` |
+| `npm run build` | `tsc -b`→`vite build`。続けて`firebase deploy`まで実行する（§9） |
 
 ## 5. ディレクトリ構成（src/renderer/）
 - ★=中核。仕様変更時はまずここ
@@ -39,12 +44,14 @@ WSL2 Ubuntu。PowerShellから実行時は**ログインシェル経由必須**�
 - `optimizer.ts`★ 人数配分の全列挙×割当。課題1〜4の目的関数・辞書式合成・solveForHeadcount
 - `assignment.ts` 最小費用流(SSP+Johnson+Dijkstra)で内側割当を厳密解
 - `types.ts` / `format.ts`（escapeHtml等）/ `dom.ts` / `csv.ts` / `validation.ts` / `reasonText.ts`
-- `importPanel.ts` / `dashboard.ts` / `gauge.ts` / `compareTasks.ts` / `compareHiring.ts` / `whatifPanel.ts` — 表示専用（計算持たない）
-- `whatif.ts` What-if(機能14)の純粋関数群 / `whatifController.ts` #p6の状態・配線
+- `importPanel.ts` / `compareTasks.ts` / `compareHiring.ts` / `workbenchPanel.ts` — 表示専用（計算持たない）
+- `whatif.ts` What-if(機能14)の純粋関数群。現在は本番からは呼ばれず`workbenchPanel.ts`が唯一の利用者
+- `workbench.ts` 作業机(機能15)の純粋関数群（`docs/workbench-plan.md`）
 - `firebase.ts` / `auth.ts` Firebase初期化・Google認証（Phase (c)）
-- `test/` node:test 7ファイル66件。`helpers/lpOracle.ts`はHiGHSラッパー（テスト専用）。`e2e/run.mjs`は実行不可。`snapshot.ts`は別枠
+- 画面パネルは `#p0`（トップ）／`#p4`（配置比較：`import`→`result`→`bench`の3ステップ）／`#p5`（採用判断：`import`→`result`の2ステップ）の3つのみ
+- `test/` node:test 9ファイル93件。`helpers/lpOracle.ts`はHiGHSラッパー（テスト専用）。`e2e/run.mjs`は実行不可。`snapshot.ts`は別枠
 - 表示の重複を作らない（事業部名・色・億円表記・エスケープ等は`constants.ts`/`format.ts`に集約済み）
-- What-if設計は`docs/whatif-plan.md`。主要関数は`SimParams`を末尾引数で受け取れる（式は不変）
+- What-if設計は`docs/whatif-plan.md`。作業机設計は`docs/workbench-plan.md`。主要関数は`SimParams`を末尾引数で受け取れる（式は不変）
 
 ## 6. ドメイン定数（`constants.ts`に実装済み）
 | 事業部 | 特性 | 重み(営/管/開/育) | 基準売上 | 成長係数 | 適正 | 最低 |
@@ -73,16 +80,23 @@ WSL2 Ubuntu。PowerShellから実行時は**ログインシェル経由必須**�
 - 社員番号は空と`= + - @`始まりを入力検証で弾く（空はキー衝突、数式始まりは取込事故として報告。`constants.FORMULA_TRIGGER`がCSV出力ガードと共有）
 - CSV入出力はフォーミュラインジェクション対策・RFC4180準拠済み。`'`始まりもガード対象（片方だけ直すと非対称になり往復不可に戻るので対で扱う）
 - 上界の並べ替えは候補ループ外に巻き上げ済み（`optimizer.buildValueOrders`）。例外は**利益がprimaryになる事業部**（コスト項がありeffに依存）。判定は`buildValues`の`isTarget`と同形＝課題1（targetUnit=null）は利益指標だと3事業部すべてが例外。総当たり比較テストではこの退行は検出できない（`upperBoundsForCandidates`のビット一致テストが唯一の守り）
-- #p4の「最適化方針」で(課題×指標)8通りを解くため、`runOptimization`等は第4引数`metric`で`TASK_SPEC`の指標を上書きできる。省略時は原文どおりで挙動不変。テストは8通り全部を総当たりと突き合わせる
+- #p4はカードごとの「最適化：売上／利益」で(課題×指標)8通りから選ぶため、`runOptimization`等は第4引数`metric`で`TASK_SPEC`の指標を上書きできる。省略時は原文どおりで挙動不変。テストは8通り全部を総当たりと突き合わせる
 - 最適化速度は解決済み：実データ4課題で約0.95秒、8通り先読みでも約1.6秒（枝刈り導入前は約10秒という情報は古い）。`npm test`の37秒は枝刈り無し基準実装のテスト1本(32秒・8通り)が占める。詳細`docs/pruning-plan.md`
 - E2Eは画面が要る（WSL2はWSLg経由）。期待値は`docs/baseline-snapshot.txt`と紐づくため計算仕様変更時は要更新
 - `--test-name-pattern`はマッチ0件でもexit 0。`✔`表示で実行確認必須。正規表現なので半角括弧はエスケープ要（全角は不要）
 - 追加採用10名CSV入手済み：`~/development/資料/テストケース/採用01_正常10名.csv`。異常系CSV（採用02〜07・形状01〜09・計算01〜10・基本01〜10）も同フォルダにあり堅牢性テストに使える
 
 ## 9. 作業規約
+- **Agentツール（サブエージェント委任）は使用禁止**。得られる見返りに対してコストが釣り合わない。調査・実装は自分（メインエージェント）で直接行う
 - **数式・定数・アルゴリズムの変更前に必ず確認を取る**。齟齬を見つけたら直す前に報告
-- 変更後は`npm test`。**計算ロジックを触ったら`npm run snapshot`**で差分確認。結果を変えるなら先に確認→`-- --write`で更新
-  （実データ：`~/development/資料/human_resources_100.csv`）
+- **閲覧はGrep優先でトークンを節約する**。ファイル全体のReadは最後の手段。まず`Grep`で該当箇所を絞り、
+  `Read`は`offset`/`limit`で必要な範囲だけ読む（`git diff --stat`・`wc -l`で当たりを付けてから開く）
+- **必要な部分以外は書き換えない**。`Write`による全文上書きではなく`Edit`で最小限の差分を当てる。
+  ついでの整形・リネーム・import並べ替え・コメント調整はしない（別セッションが同じツリーを編集するため衝突する）
+- **`npm test`は毎回実行しなくてよい**。計算ロジック（`calcEngine.ts`/`optimizer.ts`/`assignment.ts`等）を触ったときだけ実行する。表示専用ファイル（§5の「表示専用」群）やドキュメントのみの変更では不要
+- **計算ロジックを触ったら`npm run snapshot`**で差分確認。結果を変えるなら先に確認→`-- --write`で更新（実データ：`~/development/資料/human_resources_100.csv`）
+- **Playwright・Chromium等を使った実ブラウザでの探査的動作確認は不要（実施禁止ではなく不要）**。本アプリはGoogle認証（許可ドメイン限定）でゲートされておりこの環境では実ログインできず、無理に用意した確認は形だけになる。動作確認は作業者（ユーザー）が本番URLで行うため、`tsc -b`・`npm test`・`npm run build`が通ることの確認に留める
+- **作業者は本番環境で確認するため、上記確認が済んだら`npm run build`→`firebase deploy`まで実行して公開状態にする**（`dist/`を作るだけで止めない。ローカルの`npm run dev`/`preview`確認では代用しない）。デプロイ後は公開URLを伝える
 - コメントは`// 設計書§N: ...`形式でなぜそうしたかを書く
 - レンダラーにNode APIを持ち込まない
 - 一時スクリプトはプロジェクト直下に作り使用後削除（`/tmp`不可）

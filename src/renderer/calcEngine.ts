@@ -144,11 +144,18 @@ export function computeSimulationResult(
   }
 }
 
+/** 全社人数＝3事業部の配置人数の合計（#p4のカード見出し・#p5の採用前後比較が同じ和を各自で書いていた）。 */
+export function totalHeadcount(result: SimulationResult): number {
+  let sum = 0
+  for (const u of UNIT_IDS) sum += result.headcount[u]
+  return sum
+}
+
 /**
  * 課題の最大化対象の値を結果から取り出す（§5.1）。
  * 最適化側の選択キー（optimizer）と表示側（compareTasks）が同じ定義を使うための単一の入口。
  * 対象範囲（全社／対象事業部）は課題で固定。指標は既定が `TASK_SPEC`、
- * `metric` を渡すと上書きできる（#p4の「最適化方針」で4課題の指標を揃えるため）。
+ * `metric` を渡すと上書きできる（#p4で課題ごとに最適化指標を切り替えるため）。
  */
 export function taskPrimaryValue(result: SimulationResult, task: TaskId, metric?: TaskMetric): number {
   const { targetUnit } = TASK_SPEC[task]

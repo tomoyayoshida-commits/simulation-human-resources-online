@@ -69,7 +69,7 @@ export interface ValidationError {
   expected: string
 }
 
-/** 基準の割当から現在の割当への異動（機能14）。whatif.ts が生成し whatifPanel.ts が表示する。 */
+/** 基準の割当から現在の割当への異動（機能14）。whatif.ts が生成し workbenchPanel.ts（機能15）が表示する。 */
 export interface AssignmentDiff {
   from: UnitId
   to: UnitId

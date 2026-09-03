@@ -17,7 +17,7 @@ npm install       # 依存インストール
 npm run dev       # Vite dev サーバ起動（ブラウザで http://localhost:5173 を開く）
 npm run build     # tsc 型チェック → vite build（dist/ に静的サイトを生成）
 npm run preview   # dist/ を静的サイトとしてローカル配信（本番相当の確認）
-npm test          # node:test による単体テスト（65件）
+npm test          # node:test による単体テスト（93件）
 npm run test:e2e  # Playwright移行待ちのため一時的に無効（旧Electron実機E2Eは撤去）
 npm run snapshot  # 実データ4課題の結果が変わっていないかを基準ファイルと照合
 npm run lint      # oxlint
@@ -56,10 +56,15 @@ src/
 - [x] 手順6: 採用前後比較（機能7）… `compareHiring.ts`
 - [x] 手順7: CSV出力（機能8）… `csv.ts`
 - [x] 手順8: Web(SPA) + Firebase への移植（Electron除去。ホスティング/認証/永続化はdocs/web-firebase-plan.mdの段階実装で対応中）
-- [x] 手順9: What-if分析（機能14・製品カタログ未記載の追加機能。docs/whatif-plan.md）… `whatif.ts` / `whatifPanel.ts` / `#p6`
+- [x] 手順9: What-if分析（機能14・製品カタログ未記載の追加機能。docs/whatif-plan.md）… `whatif.ts`（v0.8.0で`#p6`ごと撤去。純粋関数は`workbenchPanel.ts`が再利用）
 - [x] 手順10: 表示層のリファクタリング（v0.6・docs/refactor-plan.md）… 重複定義の集約と `renderer.ts` の分割
+- [x] 手順11: 作業机（機能15・製品カタログ未記載の追加機能。docs/workbench-plan.md）… `#p4`の第3ステップ`p4-bench-step`。
+  最適解（4課題比較のカード）を出発点に、1名ずつドラッグ&ドロップ（クリック操作のフォールバック併設）で
+  配置を微調整し、Δと制約違反（全社売上下限・最低人数）をその場で確認できる。数式・定数・アルゴリズムは無変更、
+  既存の`whatif.ts`/`optimizer.solveForHeadcount`/`csv.buildAssignmentCsv`を再利用。`workbench.ts`（純粋関数）
+  / `workbenchPanel.ts`（表示・DOM配線）。
 
-テストは `npm test`（Node 標準 `node:test` ＋型ストリップ、設計書§11 準拠）。全65件。
+テストは `npm test`（Node 標準 `node:test` ＋型ストリップ、設計書§11 準拠）。全93件。
 単体テストは純粋関数までしか触れないため、取込UI〜状態〜描画の配線を確認する結線テストは
 旧Electron実機E2E（21項目）が担っていたが、Web化に伴い撤去。Playwright版への移行待ち
 （`npm run test:e2e` は現在無効。`docs/web-firebase-plan.md` 参照）。

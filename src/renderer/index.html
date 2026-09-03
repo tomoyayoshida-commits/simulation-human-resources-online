@@ -52,7 +52,7 @@
       <div class="home-card">
         <div class="num">1</div>
         <h3>配置を比較する</h3>
-        <p>4つの方針（課題1〜4）を並べ、どれが全社利益・各事業部にどう効くかを比較し、最適配置と配置方針・理由を得る。</p>
+        <p>4つの最大化方針（全社売上／A事業部利益／B事業部売上／C事業部売上）を並べ、どれが全社利益・各事業部にどう効くかを比較し、最適配置と配置方針・理由を得る。</p>
         <button class="btn" data-go="p4">配置比較を始める ▶</button>
       </div>
       <div class="home-card">
@@ -73,6 +73,10 @@
         <div class="dropzone" id="dropzone-100">📄 社員データをドラッグ&ドロップ、または <span class="file-select-link">ファイルを選択</span></div>
         <input type="file" id="file-100" accept=".csv" hidden>
         <p class="note">対応形式：CSVファイル（.csv）</p>
+        <div class="actions" id="p4-file-actions" style="margin-top:10px;" hidden>
+          <button class="btn secondary" id="p4-file-change">ファイルを変更</button>
+          <button class="btn secondary" id="p4-file-clear">取り込みを解除</button>
+        </div>
       </div>
 
       <details class="card">
@@ -90,6 +94,13 @@
         <div class="stat"><div class="k">判定</div><div class="v"><span class="pill warn">未取込</span></div></div>
       </div>
       <div class="card">
+        <div class="section-title" style="margin-top:0;">配置の前提条件</div>
+        <p class="note" style="margin:6px 0 10px;">全社最低売上：<strong id="cond-min-revenue"></strong></p>
+        <table class="errtable" id="cond-headcount-table">
+          <tr><th></th><th class="num">適正人数</th><th class="num">最低人数</th></tr>
+        </table>
+      </div>
+      <div class="card" id="validation-errors-card" hidden>
         <table class="errtable" id="validation-errors">
           <tr><th>行番号</th><th>社員ID</th><th>カラム</th><th class="num">実測値</th><th>期待範囲</th></tr>
         </table>
@@ -102,8 +113,7 @@
 
       <details class="card">
         <summary class="detail-summary">オプション</summary>
-        <p class="note" style="margin-top:10px;">前提パラメータを変えると、4課題すべてがこの前提で再計算される。数値は標準値からのズレが色付きで分かる。</p>
-        <div class="whatif-params" id="p4-params-card"></div>
+        <div class="whatif-params" id="p4-params-card" style="margin-top:10px;"></div>
         <div id="p4-params-errors"></div>
         <div class="actions" style="margin-top:10px;">
           <button class="btn secondary" id="p4-params-reset">標準に戻す</button>
@@ -117,16 +127,8 @@
     </div>
 
     <div id="p4-result-step" hidden>
-      <p class="home-link" style="text-align:left;margin-top:0;"><a id="p4-reimport">← 別のデータを取り込み直す</a></p>
       <h2>4課題横断比較ダッシュボード</h2>
       <p class="subtitle">4課題分の要約カードを並べ、目的間のトレードオフを見比べる</p>
-
-      <div class="mode-toggle" id="compare-policy-toggle">
-        <span class="mode-toggle-label">最適化方針：</span>
-        <button class="mode-toggle-btn active" id="cmp-policy-original" data-policy="original">原文どおり</button>
-        <button class="mode-toggle-btn" id="cmp-policy-revenue" data-policy="revenue">すべて売上</button>
-        <button class="mode-toggle-btn" id="cmp-policy-profit" data-policy="profit">すべて利益</button>
-      </div>
 
       <div class="mode-toggle" id="compare-mode-toggle">
         <span class="mode-toggle-label">見出し・事業部別バーの表示：</span>
@@ -135,11 +137,17 @@
       </div>
 
       <div class="compare-grid" id="compare-tasks-grid"></div>
-      <p class="note">「最適化方針」は<strong>どの指標で配置を選ぶか</strong>を決める。既定の「原文どおり」は課題原文のまま（課題1=全社売上／課題2=A事業部利益／課題3=B事業部売上／課題4=C事業部売上）で、これが提出物の正。ただし課題2だけ指標が違うため4枚を横に並べても「どの事業部を優遇するか」の対照にならないので、指標を揃えた「すべて売上」「すべて利益」を用意してある。なお全社コストは配置によらず一定なので、課題1は方針を変えても同じ配置になる。</p>
-      <p class="note">「見出し・事業部別バーの表示」は<strong>選んだ配置をどの指標で見るか</strong>だけを変える（再計算なし）。見出しは課題ごとの対象範囲（課題1は全社、課題2〜4は対象事業部）を保ったまま指標だけが切り替わる。「配置人数」バーは4カード共通で合計100名スケール、事業部別バーもいずれも4カード共通スケールに揃えているため、カードを横に見比べるだけで人員シフトと数値への効き方の違いが分かる。「概要」欄は配置の狙いとトレードオフの要約、「配置理由」欄は充足率・補正係数まで含めた詳細な根拠。</p>
 
       <div class="actions" style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
         <button class="btn secondary" id="p4-result-back">← 前の画面へ戻る</button>
+      </div>
+    </div>
+
+    <!-- 機能15 作業机：1名ずつドラッグ&ドロップで配置を微調整する（docs/workbench-plan.md） -->
+    <div id="p4-bench-step" hidden>
+      <div id="wb-root"></div>
+      <div class="actions" style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
+        <button class="btn secondary" id="p4-bench-back">← 前の画面へ戻る</button>
       </div>
     </div>
   </section>
@@ -186,8 +194,7 @@
 
       <details class="card">
         <summary class="detail-summary">オプション</summary>
-        <p class="note" style="margin-top:10px;">前提パラメータを変えると、採用前後どちらの比較もこの前提で再計算される。数値は標準値からのズレが色付きで分かる。</p>
-        <div class="whatif-params" id="p5-params-card"></div>
+        <div class="whatif-params" id="p5-params-card" style="margin-top:10px;"></div>
         <div id="p5-params-errors"></div>
         <div class="actions" style="margin-top:10px;">
           <button class="btn secondary" id="p5-params-reset">標準に戻す</button>
@@ -201,7 +208,6 @@
     </div>
 
     <div id="p5-result-step" hidden>
-      <p class="home-link" style="text-align:left;margin-top:0;"><a id="p5-reimport">← 別のデータを取り込み直す</a></p>
       <h2>採用前後比較</h2>
       <div class="compare-grid pair" id="compare-hiring-grid"></div>
       <p class="compare-summary" id="hiring-summary" style="margin-bottom:14px;"></p>
@@ -210,6 +216,9 @@
         <table id="hiring-roi">
           <tr><th></th><th class="num">追加人件費コスト</th><th class="num">売上増分</th><th class="num">利益増分</th></tr>
         </table>
+      </div>
+      <div class="actions" style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
+        <button class="btn secondary" id="p5-result-back">← 前の画面へ戻る</button>
       </div>
     </div>
   </section>

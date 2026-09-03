@@ -62,3 +62,25 @@ export function pct(rate: number): string {
 export function pill(kind: 'good' | 'warn' | 'crit', text: string): string {
   return `<span class="pill ${kind}">${text}</span>`
 }
+
+/**
+ * バー幅を 0〜100(%) に収める。
+ * 共通スケールを超える値（例：利益が PROFIT_SCALE を超える事業部）や負値が来ても
+ * トラックからはみ出さないよう、幅を出す箇所は必ずここを通す。
+ */
+export function clampPct(value: number): number {
+  return Math.max(0, Math.min(100, value))
+}
+
+/**
+ * 横棒1行（styles.css の .cbar-row）。
+ * #p4のカード（人数バー・金額バー）と #p5の採用前後比較が同じマークアップを各自で持っていたのを集約した。
+ * `dim` は金額系バー＝塗りを薄くして人数バーと見分けるための指定。
+ */
+export function barRow(label: string, widthPct: number, color: string, value: string, dim = false): string {
+  return (
+    `<div class="cbar-row"><span>${label}</span><div class="cbar-track">` +
+    `<div class="cbar-fill" style="width:${clampPct(widthPct).toFixed(1)}%;background:${color};${dim ? 'opacity:.6;' : ''}"></div>` +
+    `</div><b>${value}</b></div>`
+  )
+}

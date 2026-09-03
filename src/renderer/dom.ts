@@ -12,3 +12,9 @@ export function setHtml(id: string, html: string): void {
   const el = $(id)
   if (el) el.innerHTML = html
 }
+
+/** 指定IDの要素に textContent を設定する。要素が無ければ何もしない。 */
+export function setText(id: string, text: string): void {
+  const el = $(id)
+  if (el) el.textContent = text
+}
