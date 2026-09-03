@@ -4,7 +4,7 @@
 // WorkbenchState は task/roster/params/assignment を持つため WhatIfState を構造的部分型として満たし、
 // 呼び出し側は `evaluateAssignment(workbenchState, baselineAssignment)` をそのまま呼べる（§4.2）。
 
-import type { Employee, EmployeeType, SimParams, SimulationResult, TaskId, UnitId } from './types.ts'
+import type { Employee, EmployeeProfile, EmployeeType, ProfileMap, SimParams, SimulationResult, TaskId, UnitId } from './types.ts'
 import type { TaskMetric } from './constants.ts'
 import type { WhatIfEvaluation } from './whatif.ts'
 import { UNIT_IDS } from './constants.ts'
@@ -21,6 +21,12 @@ export interface WorkbenchState {
   baseline: SimulationResult
   /** 元に戻す用の履歴（直前の assignment を積む・上限 MAX_HISTORY） */
   history: Record<string, UnitId>[]
+  /**
+   * 氏名・顔写真（docs/profile-plan.md §4.2）。計算には使わない表示専用データ。
+   * 任意にしてあるのは、マスタ未登録・取得前・テストのいずれでも作業机が
+   * 番号のみのカードで正常に動く必要があるため（受入基準2）。
+   */
+  profiles?: ProfileMap
 }
 
 /** 履歴の保持上限（§4.7）。 */
@@ -97,6 +103,8 @@ export interface WorkbenchCard {
   type: EmployeeType
   /** (社員, 事業部, params) だけで決まる貢献度。所属に依存しないため事業部ごとに1回だけ求めて焼き込む（§4.3）。 */
   contributions: Record<UnitId, number>
+  /** 氏名・顔写真（docs/profile-plan.md §4.2）。マスタ未登録なら undefined。 */
+  profile?: EmployeeProfile
 }
 
 /**
@@ -107,7 +115,7 @@ export function buildWorkbenchCards(state: WorkbenchState): WorkbenchCard[] {
   return state.roster.map((e) => {
     const contributions = {} as Record<UnitId, number>
     for (const u of UNIT_IDS) contributions[u] = contribution(e, u, state.params)
-    return { employee: e, unit: state.assignment[e.id], type: classifyType(e), contributions }
+    return { employee: e, unit: state.assignment[e.id], type: classifyType(e), contributions, profile: state.profiles?.[e.id] }
   })
 }
 

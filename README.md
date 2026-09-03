@@ -63,8 +63,34 @@ src/
   配置を微調整し、Δと制約違反（全社売上下限・最低人数）をその場で確認できる。数式・定数・アルゴリズムは無変更、
   既存の`whatif.ts`/`optimizer.solveForHeadcount`/`csv.buildAssignmentCsv`を再利用。`workbench.ts`（純粋関数）
   / `workbenchPanel.ts`（表示・DOM配線）。
+- [x] 手順12: 人材プロフィール（氏名・顔写真。`docs/profile-plan.md`）… Firestore の `employees/{社員番号}` を
+  マスタとし、ドキュメントIDを社員番号にすることで紐づけ処理そのものを不要にした。通常フローの取込は
+  スキルCSV1本のままで、作業机のカードに氏名と顔写真が自動で出る（未登録者は番号のみのカードで正常に動く）。
+  登録は管理画面 `#p6`（名簿CSV＋写真の一括登録・個別差し替え・削除）で初期登録と入社・退職時のみ使う。
+  写真は取込時に 128×128 JPEG へ縮小（EXIF回転を吸収）してから保存する。
+  `photo.ts`（画像正規化）/ `profileStore.ts`（Firestore I/O・キャッシュ）/ `profilePanel.ts`（`#p6` 表示）。
+  これは `docs/web-firebase-plan.md` Phase (d) の一部先行実装にあたる（`datasets`/`simulationRuns` は未着手）。
+- [x] 手順13: 保存と3通りの出力（`docs/export-plan.md`）… 作業机から出力を切り離し、
+  「この案を保存」→ Firestore `simulationRuns/{runId}` に追記 → `#p7`（保存した配置案）で出力、という流れにした。
+  出力は ①データCSV（往復可能な全項目）／②告知用PDF（全100名の新体制表・顔写真つき・**人件費と能力値を含まない**）／
+  ③エグゼクティブサマリPDF（A4一枚・個人名なし）の3通り。PDFはライブラリを入れず印刷CSS＋`window.print()`で出す
+  （日本語フォント同梱で数百KB増えるのを避けるため）。
+  制約違反の配置は**記録として保存はできるが出力はできない**（作業机にあった門を出力側へ移した）。
+  `runStore.ts`（Firestore I/O）/ `exportDocs.ts`（文書HTML生成・純粋関数）/ `exportPanel.ts`（`#p7` 表示）。
+  保存済みドキュメントは Security Rules で更新・削除を禁じている（配った文書の元が後から書き換わらないようにするため）。
+  これで `web-firebase-plan.md` Phase (d) の残りは `datasets` と `firestoreSync.ts` のみ。
+- [x] 手順14: 採用判断の作業机（機能15b・`docs/hiring-workbench-plan.md`）… `#p5` の第3ステップ `p5-bench-step`。
+  盤面は A/B/C に**4列目「採用候補（未採用）」**を足した4列で、カードを列に置く＝採ってそこへ配属、
+  プールに残す＝採らない。これで「誰を採り、どこに置くか」が1つの操作になる。
+  未採用は `assignment` のキー削除で表現し、`membersByUnit`/`headcountOf` がキーの無い社員を飛ばすため
+  売上・人件費・充足率がすべて自動で正しくなる（`calcEngine`/`optimizer`/`assignment`/`whatif` は無変更）。
+  Δは2段で出す：**採用前比**（採用の効果）と**最適解比**（手で譲った分）。
+  採用前100名CSVに「配置先事業部」列があれば現行配置を起点にし（分岐1・既存社員は既定でロック）、
+  無ければ採用前の最適解を起点にする（分岐2）。列の取込は `csv.ts` の `parseAssignmentColumn` を新設（往復可能に）。
+  出力は持たず、[この案を保存] から手順13 の `#p7` へ合流する。
+  `hiringWorkbench.ts`（純粋関数）/ `hiringWorkbenchPanel.ts`（表示専用）。
 
-テストは `npm test`（Node 標準 `node:test` ＋型ストリップ、設計書§11 準拠）。全93件。
+テストは `npm test`（Node 標準 `node:test` ＋型ストリップ、設計書§11 準拠）。全161件。
 単体テストは純粋関数までしか触れないため、取込UI〜状態〜描画の配線を確認する結線テストは
 旧Electron実機E2E（21項目）が担っていたが、Web化に伴い撤去。Playwright版への移行待ち
 （`npm run test:e2e` は現在無効。`docs/web-firebase-plan.md` 参照）。

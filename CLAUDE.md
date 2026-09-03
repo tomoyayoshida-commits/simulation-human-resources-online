@@ -7,7 +7,9 @@
 
 ## 2. 何を作っているか
 100名（採用後110名）をA/B/C事業部へ配置し売上・利益を最適化するアプリ。Web(SPA)+TypeScript+Firebase。
-社内限定公開のためFirebase Auth（Google認証・許可リスト）＋Firestore（永続化・履歴）を使い、外部通信あり。
+社内限定公開のためFirebase Auth（Google認証・許可リスト）を使い、外部通信あり。
+Firestoreは**`employees`（人材プロフィール＝氏名・顔写真のマスタ）のみ実装済み**（`profileStore.ts`・`docs/profile-plan.md`）。
+`datasets`/`simulationRuns`（取込・実行履歴の永続化）は未着手（`docs/web-firebase-plan.md` Phase (d)）。
 **数理最適化ライブラリは不使用**（自前実装で十分高速）。
 旧方針「Electron・外部通信なし」は2026-08-28に撤回（社内共有・履歴要件のため。`docs/web-firebase-plan.md`）。
 Electron版`simulation-human-resources`から複製した専用リポジトリ。
@@ -44,14 +46,17 @@ WSL2 Ubuntu。PowerShellから実行時は**ログインシェル経由必須**�
 - `optimizer.ts`★ 人数配分の全列挙×割当。課題1〜4の目的関数・辞書式合成・solveForHeadcount
 - `assignment.ts` 最小費用流(SSP+Johnson+Dijkstra)で内側割当を厳密解
 - `types.ts` / `format.ts`（escapeHtml等）/ `dom.ts` / `csv.ts` / `validation.ts` / `reasonText.ts`
-- `importPanel.ts` / `compareTasks.ts` / `compareHiring.ts` / `workbenchPanel.ts` — 表示専用（計算持たない）
-- `whatif.ts` What-if(機能14)の純粋関数群。現在は本番からは呼ばれず`workbenchPanel.ts`が唯一の利用者
+- `importPanel.ts` / `compareTasks.ts` / `compareHiring.ts` / `workbenchPanel.ts` / `hiringWorkbenchPanel.ts` — 表示専用（計算持たない）
+- `whatif.ts` What-if(機能14)の純粋関数群。本番の利用者は`workbenchPanel.ts`と`hiringWorkbench.ts`
 - `workbench.ts` 作業机(機能15)の純粋関数群（`docs/workbench-plan.md`）
-- `firebase.ts` / `auth.ts` Firebase初期化・Google認証（Phase (c)）
-- 画面パネルは `#p0`（トップ）／`#p4`（配置比較：`import`→`result`→`bench`の3ステップ）／`#p5`（採用判断：`import`→`result`の2ステップ）の3つのみ
-- `test/` node:test 9ファイル93件。`helpers/lpOracle.ts`はHiGHSラッパー（テスト専用）。`e2e/run.mjs`は実行不可。`snapshot.ts`は別枠
+- `hiringWorkbench.ts` 採用判断の作業机(機能15b)の純粋関数群（`docs/hiring-workbench-plan.md`）。
+  未採用は`assignment`のキー削除で表現する（`membersByUnit`/`headcountOf`が飛ばすため計算側は無変更）
+- `firebase.ts` / `auth.ts` Firebase初期化・Google認証（Phase (c)）。`firebase.ts`は`db`（Firestore・永続キャッシュ有効）も持つ
+- `photo.ts` 顔写真の正規化（File→128px JPEG data URI）／`profileStore.ts` `employees`マスタのI/Oとキャッシュ／`profilePanel.ts` `#p6`表示専用（`docs/profile-plan.md`）
+- 画面パネルは `#p0`（トップ）／`#p4`（配置比較：`import`→`result`→`bench`の3ステップ）／`#p5`（採用判断：`import`→`result`→`bench`の3ステップ）／`#p6`（管理：人材プロフィール登録）／`#p7`（保存した配置案：`list`→`export`）
+- `test/` node:test 13ファイル161件。`helpers/lpOracle.ts`はHiGHSラッパー（テスト専用）。`e2e/run.mjs`は実行不可。`snapshot.ts`は別枠
 - 表示の重複を作らない（事業部名・色・億円表記・エスケープ等は`constants.ts`/`format.ts`に集約済み）
-- What-if設計は`docs/whatif-plan.md`。作業机設計は`docs/workbench-plan.md`。主要関数は`SimParams`を末尾引数で受け取れる（式は不変）
+- What-if設計は`docs/whatif-plan.md`。作業机設計は`docs/workbench-plan.md`、採用判断の作業机は`docs/hiring-workbench-plan.md`。主要関数は`SimParams`を末尾引数で受け取れる（式は不変）
 
 ## 6. ドメイン定数（`constants.ts`に実装済み）
 | 事業部 | 特性 | 重み(営/管/開/育) | 基準売上 | 成長係数 | 適正 | 最低 |

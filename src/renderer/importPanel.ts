@@ -4,15 +4,15 @@
 import type { Employee, ValidationError } from './types.ts'
 import { escapeHtml, pill } from './format.ts'
 import { $, setHtml } from './dom.ts'
-import { MIN_HEADCOUNT, OPTIMAL_HEADCOUNT, PREV_YEAR_REVENUE, UNIT_IDS, UNIT_LABEL } from './constants.ts'
+import { MIN_HEADCOUNT, OPTIMAL_HEADCOUNT, PREV_YEAR_REVENUE, UNIT_IDS } from './constants.ts'
 
 /** 配置比較(#p4)の取込条件カード：全社最低売上・事業部別の適正/最低人数を表示する。パラメータ対応版。 */
 export function renderImportConditions(prevYearRevenue: number = PREV_YEAR_REVENUE, optimalHeadcount: Record<string, number> = OPTIMAL_HEADCOUNT, minHeadcount: Record<string, number> = MIN_HEADCOUNT): void {
   setHtml('cond-min-revenue', `<span class="cond-revenue-value">${prevYearRevenue}</span>`)
-  const rows = UNIT_IDS.map(
-    (u) => `<tr><td>${UNIT_LABEL[u]}</td><td class="num">${optimalHeadcount[u]}名</td><td class="num">${minHeadcount[u]}名</td></tr>`,
-  ).join('')
-  setHtml('cond-headcount-table', '<tr><th></th><th class="num">適正人数</th><th class="num">最低人数</th></tr>' + rows)
+  for (const u of UNIT_IDS) {
+    setHtml(`cond-optimal-${u}`, `${optimalHeadcount[u]}名`)
+    setHtml(`cond-min-${u}`, `${minHeadcount[u]}名`)
+  }
 }
 
 /** #p5 は左（採用前100名）・右（追加採用10名）の2つの独立取込を持つため、対象のDOM ID組を受け取る。 */
@@ -148,8 +148,10 @@ export function renderHiringImportError(
 }
 
 /** 取込成功時：判定ピルを「取込OK」に変え件数を示す。エラー表・エラー理由は空にする（前回の残骸を消す） */
-export function renderHiringImportOk(ids: HiringImportIds, count: number): void {
-  renderHiringImport(ids, 'good', `取込OK（${count}件）`, [], '')
+export function renderHiringImportOk(ids: HiringImportIds, count: number, note = ''): void {
+  // note は「配置案を検出しました」等の追記（機能15b・docs/hiring-workbench-plan.md §5.1）。
+  // 既定が空なので既存の呼び出しは表示が変わらない。
+  renderHiringImport(ids, 'good', `取込OK（${count}件）${note}`, [], '')
 }
 
 /** 入力検証レポート（#p1・機能13/D-2）。プレビュー・サマリー・エラー表・次へボタンの活性を更新する。 */

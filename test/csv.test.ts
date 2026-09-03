@@ -2,7 +2,7 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { importEmployees, mergeEmployees, buildAssignmentCsv } from '../src/renderer/csv.ts'
+import { importEmployees, mergeEmployees, buildAssignmentCsv, parseAssignmentColumn } from '../src/renderer/csv.ts'
 import { computeSimulationResult } from '../src/renderer/calcEngine.ts'
 import type { Employee, UnitId } from '../src/renderer/types.ts'
 
@@ -186,4 +186,67 @@ test('buildAssignmentCsv: ヘッダと配置先を含む', () => {
   assert.ok(lines[0].includes('配置先事業部'))
   assert.ok(lines[1].includes('A事業部'))
   assert.ok(lines[2].includes('C事業部'))
+})
+
+// ---- parseAssignmentColumn（機能15b Phase1・docs/hiring-workbench-plan.md §5.7） ----
+
+const PAIR: Employee[] = [
+  { id: 'E1', sales: 60, mgmt: 55, dev: 50, training: 45, cost: 10 },
+  { id: 'E2', sales: 62, mgmt: 51, dev: 58, training: 44, cost: 11 },
+]
+
+test('parseAssignmentColumn: buildAssignmentCsv の出力を読み戻すと元の配置に一致する（往復）', () => {
+  const assign: Record<string, UnitId> = { E1: 'A', E2: 'C' }
+  const csv = buildAssignmentCsv(PAIR, computeSimulationResult(assign, PAIR))
+  const { assignment, errors } = parseAssignmentColumn(csv, PAIR)
+  assert.deepEqual(errors, [])
+  assert.deepEqual(assignment, assign)
+})
+
+test('parseAssignmentColumn: 配置先事業部列が無ければ null かつエラーなし（＝分岐2）', () => {
+  const csv = [HEADER, 'E1,60,55,50,45,10', 'E2,62,51,58,44,11'].join('\n')
+  const { assignment, errors } = parseAssignmentColumn(csv, PAIR)
+  assert.equal(assignment, null)
+  assert.deepEqual(errors, [])
+})
+
+test('parseAssignmentColumn: 事業部名は A事業部 でも A でも読める', () => {
+  const csv = [`${HEADER},配置先事業部`, 'E1,60,55,50,45,10,A事業部', 'E2,62,51,58,44,11,c'].join('\n')
+  const { assignment, errors } = parseAssignmentColumn(csv, PAIR)
+  assert.deepEqual(errors, [])
+  assert.deepEqual(assignment, { E1: 'A', E2: 'C' })
+})
+
+test('parseAssignmentColumn: 一部の行が空なら補完せず null ＋ 行番号付きエラー', () => {
+  // 部分的な配置案を勝手に埋めると、どう埋めても嘘になる（§5.7）
+  const csv = [`${HEADER},配置先事業部`, 'E1,60,55,50,45,10,A事業部', 'E2,62,51,58,44,11,'].join('\n')
+  const { assignment, errors } = parseAssignmentColumn(csv, PAIR)
+  assert.equal(assignment, null)
+  assert.equal(errors.length, 1)
+  assert.equal(errors[0].row, 2)
+  assert.equal(errors[0].column, '配置先事業部')
+})
+
+test('parseAssignmentColumn: 未知の事業部名は null ＋ エラー', () => {
+  const csv = [`${HEADER},配置先事業部`, 'E1,60,55,50,45,10,D事業部', 'E2,62,51,58,44,11,C事業部'].join('\n')
+  const { assignment, errors } = parseAssignmentColumn(csv, PAIR)
+  assert.equal(assignment, null)
+  assert.equal(errors.length, 1)
+  assert.equal(errors[0].actual, 'D事業部')
+})
+
+test('parseAssignmentColumn: 取り込んだ社員に無いIDが混ざれば null ＋ エラー', () => {
+  const csv = [`${HEADER},配置先事業部`, 'E1,60,55,50,45,10,A事業部', 'E9,62,51,58,44,11,C事業部'].join('\n')
+  const { assignment, errors } = parseAssignmentColumn(csv, PAIR)
+  assert.equal(assignment, null)
+  assert.ok(errors.some((e) => e.actual === 'E9'))
+})
+
+test("parseAssignmentColumn: ' ガード付きのIDでも往復できる", () => {
+  // 出力側の ' 前置と対で扱う（片方だけ直すと往復不可に戻る・CLAUDE.md §8）
+  const emps: Employee[] = [{ id: '=1+1', sales: 60, mgmt: 55, dev: 50, training: 45, cost: 10 }]
+  const csv = buildAssignmentCsv(emps, computeSimulationResult({ '=1+1': 'B' }, emps))
+  const { assignment, errors } = parseAssignmentColumn(csv, emps)
+  assert.deepEqual(errors, [])
+  assert.deepEqual(assignment, { '=1+1': 'B' })
 })

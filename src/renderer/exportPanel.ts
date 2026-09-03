@@ -1,0 +1,202 @@
+// 設計書§4.1/§4.4（docs/export-plan.md）: #p7「保存した配置案」の一覧と出力。
+// HTML生成は純粋関数に寄せ、このファイルは表示とDOM配線だけを持つ（CLAUDE.md §5）。
+//
+// 出力画面が見るのは SavedRun 1件だけで、#p4 の取込状態には一切依存しない（§4.1）。
+// そのおかげで「作業机から保存した直後」と「後日に一覧から開いた」で同じコードが動く。
+
+import type { RunSummary, SavedRun } from './runStore.ts'
+import { listRuns, loadRun } from './runStore.ts'
+import { computeSimulationResult } from './calcEngine.ts'
+import { buildAssignmentCsv, downloadCsv } from './csv.ts'
+import { buildAnnouncementHtml, buildAnnouncementMembers, buildExecSummaryHtml } from './exportDocs.ts'
+import { getProfiles, loadProfiles } from './profileStore.ts'
+import { taskLabel } from './constants.ts'
+import { escapeHtml, oku, pill } from './format.ts'
+import { $, setHtml } from './dom.ts'
+import { withLoading } from './loading.ts'
+
+type Step = 'list' | 'export'
+
+let showStep: (step: Step) => void = () => {}
+/** 出力画面がいま対象にしている1件。null なら出力ステップは空。 */
+let current: SavedRun | null = null
+
+// ---- 純粋関数：HTML生成 ----
+
+function dateTimeText(d: Date | null): string {
+  if (!d) return '保存中…'
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
+/** 一覧の中身（§4.1）。0件のときは説明文を出す。 */
+export function buildRunListHtml(runs: RunSummary[]): string {
+  if (runs.length === 0) {
+    return `<p class="note">保存された配置案はまだありません。「配置比較」→作業机で調整し、「この案を保存」から保存すると、ここに並びます。</p>`
+  }
+  const rows = runs
+    .map(
+      (r) => `
+      <tr>
+        <td><button type="button" class="link-button" data-run="${escapeHtml(r.id)}">${escapeHtml(r.title)}</button></td>
+        <td>${escapeHtml(taskLabel(r.task, r.metric))}</td>
+        <td class="num">${escapeHtml(oku(r.companyRevenue))}</td>
+        <td class="num">${r.movedFromBaseline}名</td>
+        <td>${r.feasible ? pill('good', '● 制約を満たす') : pill('crit', '● 制約違反')}</td>
+        <td>${escapeHtml(dateTimeText(r.savedAt))}</td>
+        <td>${escapeHtml(r.savedBy)}</td>
+      </tr>`,
+    )
+    .join('')
+  return `
+    <table>
+      <thead><tr><th>名前</th><th>課題</th><th class="num">全社売上</th><th class="num">調整</th><th>状態</th><th>保存日時</th><th>保存者</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`
+}
+
+/** 出力ステップの中身。制約違反のときは3つとも押せない（§4.5）。 */
+export function buildExportHtml(run: SavedRun): string {
+  const blocked = !run.feasible
+  const disabled = blocked ? ' disabled title="制約違反があるため出力できません"' : ''
+  return `
+    <h2>${escapeHtml(run.title)}</h2>
+    <p class="subtitle">${escapeHtml(taskLabel(run.task, run.metric))}　保存者 ${escapeHtml(run.savedBy)}　${escapeHtml(dateTimeText(run.savedAt))}</p>
+    ${blocked ? `<div class="wb-alert-banner"><span>この配置案は制約を満たしていません。記録として保存されていますが、出力はできません。</span></div>` : ''}
+    <div class="export-grid">
+      <div class="export-card">
+        <h3>データ（CSV）</h3>
+        <p>全項目を含む明細。取り込み直して再計算できます。</p>
+        <p class="note">社員番号・能力値4項目・人件費・配置先・貢献度・タイプ</p>
+        <button type="button" class="btn" data-export="csv"${disabled}>CSVを保存</button>
+      </div>
+      <div class="export-card">
+        <h3>告知用（PDF）</h3>
+        <p>全社員に配る新体制表。社員番号・氏名・配属先を社員番号順に並べます。</p>
+        <p class="note">顔写真・人件費・能力値・貢献度は含みません</p>
+        <button type="button" class="btn" data-export="announce"${disabled}>印刷してPDFに保存</button>
+      </div>
+      <div class="export-card">
+        <h3>エグゼクティブサマリ（PDF）</h3>
+        <p>経営層向けのA4一枚。数字と配置の根拠だけを載せます。</p>
+        <p class="note">個人名・社員番号は含みません</p>
+        <button type="button" class="btn" data-export="exec"${disabled}>印刷してPDFに保存</button>
+      </div>
+    </div>
+    <div class="actions" style="margin-top:18px;">
+      <button type="button" class="btn secondary" data-export="back-list">← 保存した配置案の一覧へ</button>
+    </div>`
+}
+
+// ---- DOM配線 ----
+
+/**
+ * 文書を1枚だけ印刷する（§4.4）。
+ * 常時DOMに置かず、押された時点で差し込み、印刷が終わったら取り除く。
+ */
+function printDocument(html: string): void {
+  const holder = document.createElement('div')
+  holder.className = 'print-doc'
+  holder.innerHTML = html
+  document.body.appendChild(holder)
+  document.body.classList.add('printing')
+
+  let done = false
+  const cleanup = (): void => {
+    if (done) return
+    done = true
+    document.body.classList.remove('printing')
+    holder.remove()
+    window.removeEventListener('afterprint', cleanup)
+  }
+  window.addEventListener('afterprint', cleanup)
+  // afterprint が発火しないブラウザに当たっても画面が隠れたままにならないための保険。
+  // 通常は上のリスナが先に片付ける。
+  setTimeout(cleanup, 60_000)
+  window.print()
+}
+
+function runResult(run: SavedRun) {
+  return computeSimulationResult(run.assignment, run.roster, run.params)
+}
+
+async function handleExportAction(action: string): Promise<void> {
+  const run = current
+  if (!run) return
+  if (action === 'back-list') {
+    await openRunsList()
+    return
+  }
+  if (!run.feasible) return
+  if (action === 'csv') {
+    const date = run.savedAt ? run.savedAt.toISOString().slice(0, 10) : ''
+    downloadCsv(`配置案_課題${run.task}_${date}.csv`, buildAssignmentCsv(run.roster, runResult(run), run.params))
+    return
+  }
+  if (action === 'announce') {
+    // 一覧から開いた直後はプロフィールが未取得のことがある。未取得なら氏名欄が全員「（氏名未登録）」
+    // になってしまうため、ここでは待つ（作業机と違い主動線を止めない配慮は不要）。
+    await withLoading('氏名を読み込んでいます…', async () => loadProfiles())
+    printDocument(
+      buildAnnouncementHtml({
+        title: run.title,
+        savedAt: run.savedAt,
+        task: run.task,
+        metric: run.metric,
+        members: buildAnnouncementMembers(run.roster, run.assignment, getProfiles()),
+      }),
+    )
+    return
+  }
+  if (action === 'exec') {
+    printDocument(
+      buildExecSummaryHtml({
+        title: run.title,
+        savedAt: run.savedAt,
+        task: run.task,
+        metric: run.metric,
+        result: runResult(run),
+        params: run.params,
+        movedFromBaseline: run.movedFromBaseline,
+      }),
+    )
+  }
+}
+
+/** 一覧を読み込んで描画し、一覧ステップを表示する。 */
+export async function openRunsList(): Promise<void> {
+  showStep('list')
+  setHtml('p7-list', '<p class="note">読み込んでいます…</p>')
+  try {
+    setHtml('p7-list', buildRunListHtml(await listRuns()))
+  } catch (e) {
+    console.warn('保存した配置案の取得に失敗しました。', e)
+    setHtml('p7-list', '<p class="warn-text">保存した配置案を取得できませんでした。通信状態を確認して開き直してください。</p>')
+  }
+}
+
+/** 1件を出力ステップで開く。作業机からの保存直後と、一覧からの選択の両方がここへ来る。 */
+export function openExportFor(run: SavedRun): void {
+  current = run
+  setHtml('p7-export', buildExportHtml(run))
+  showStep('export')
+}
+
+export function initExportPanel(onShowStep: (step: Step) => void): void {
+  showStep = onShowStep
+
+  $('p7-list')?.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement | null)?.closest<HTMLElement>('[data-run]')
+    const runId = btn?.dataset.run
+    if (!runId) return
+    void withLoading('配置案を読み込んでいます…', async () => {
+      const run = await loadRun(runId)
+      if (run) openExportFor(run)
+    })
+  })
+
+  $('p7-export')?.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement | null)?.closest<HTMLElement>('[data-export]')
+    if (btn?.dataset.export) void handleExportAction(btn.dataset.export)
+  })
+}

@@ -7,11 +7,15 @@
 // 各画面は「取込ステップ」→（取込成功で自動的に）「結果ステップ」の一続きのフローで、
 // 画面遷移（go）そのものはタブ切替のみを担う。
 
-import type { Employee, SimParams, ValidationError } from './types.ts'
+import type { Employee, SimParams, UnitId, ValidationError } from './types.ts'
 import type { ProfileRow } from './csv.ts'
-import { importEmployees, importProfiles, matchProfilePhotos, mergeEmployees } from './csv.ts'
+import { importEmployees, importProfiles, matchProfilePhotos, mergeEmployees, parseAssignmentColumn } from './csv.ts'
+import { initHiringWorkbenchPanel, openHiringWorkbench } from './hiringWorkbenchPanel.ts'
+import { computeSimulationResult } from './calcEngine.ts'
+import { runOptimization } from './optimizer.ts'
 import { currentCardResult, initCompareModeToggle, initWorkbenchLaunch, renderCompareTasks } from './compareTasks.ts'
 import { initWorkbenchPanel, openWorkbench } from './workbenchPanel.ts'
+import { initExportPanel, openExportFor, openRunsList } from './exportPanel.ts'
 import { renderCompareHiring } from './compareHiring.ts'
 import type { HiringImportIds } from './importPanel.ts'
 import {
@@ -37,10 +41,16 @@ const state: {
   // 採用判断(#p5)は配置比較(#p4)の取込データを再利用しない独立画面のため、専用の取込状態を持つ
   hiringBase100: Employee[] | null
   hiringAdd10: Employee[] | null
+  /**
+   * 採用前100名CSVに「配置先事業部」列があったときの現行配置（機能15b §5.1）。
+   * null なら配置案なし＝作業机は採用前の最適解を起点にする（分岐2）。
+   */
+  hiringBaseAssignment: Record<string, UnitId> | null
 } = {
   employees100: null,
   hiringBase100: null,
   hiringAdd10: null,
+  hiringBaseAssignment: null,
 }
 
 const p4Params = createParamsOptionsPanel('p4')
@@ -58,6 +68,8 @@ interface SessionSnapshot {
   employees100: Employee[] | null
   hiringBase100: Employee[] | null
   hiringAdd10: Employee[] | null
+  /** 取込データの一部（機能15b §5.1）。復元しないとリロードで分岐1が分岐2に化ける */
+  hiringBaseAssignment: Record<string, UnitId> | null
   p4Params: SimParams
   p5Params: SimParams
 }
@@ -72,6 +84,7 @@ function saveSnapshot(): void {
       employees100: state.employees100,
       hiringBase100: state.hiringBase100,
       hiringAdd10: state.hiringAdd10,
+      hiringBaseAssignment: state.hiringBaseAssignment,
       p4Params: p4Params.getParams(),
       p5Params: p5Params.getParams(),
     }
@@ -82,20 +95,26 @@ function saveSnapshot(): void {
 }
 
 // ---- 取込／結果／作業机ステップの切替（機能15・docs/workbench-plan.md §4.1） ----
-// `#p4-bench-step` は #p4 にのみ存在する。#p5 では該当要素が無いため toggleAttribute は何もしない。
-type Step = 'import' | 'result' | 'bench'
+// bench は #p4（配置比較）と #p5（採用判断・機能15b）の両方が持つ。
+// list/export は #p7（保存した配置案・docs/export-plan.md §4.1）だけが持つ。
+// 該当要素が無いパネルでは toggleAttribute が何もしないので、パネルごとの分岐は要らない。
+type Step = 'import' | 'result' | 'bench' | 'list' | 'export'
+const STEPS = ['import', 'result', 'bench', 'list', 'export'] as const
+
 function showStep(panelId: string, step: Step): void {
-  for (const s of ['import', 'result', 'bench'] as const) {
+  for (const s of STEPS) {
     $(`${panelId}-${s}-step`)?.toggleAttribute('hidden', s !== step)
   }
   renderBreadcrumb(panelId)
   saveSnapshot()
 }
 
-/** panelId の現在表示中のステップ。#p5 のように bench-step が無いパネルは 'bench' を返さない。 */
+/** panelId の現在表示中のステップ。該当要素が無いパネルはそのステップを返さない。 */
 function currentStep(panelId: string): Step {
-  const benchEl = $(`${panelId}-bench-step`)
-  if (benchEl && !benchEl.hasAttribute('hidden')) return 'bench'
+  for (const s of ['export', 'list', 'bench'] as const) {
+    const el = $(`${panelId}-${s}-step`)
+    if (el && !el.hasAttribute('hidden')) return s
+  }
   const resultVisible = !$(`${panelId}-result-step`)?.hasAttribute('hidden')
   return resultVisible ? 'result' : 'import'
 }
@@ -119,6 +138,18 @@ function renderBreadcrumb(panelId: string): void {
   type Crumb = { label: string; onClick?: () => void }
   const crumbs: Crumb[] = [{ label: 'トップ', onClick: panelId !== 'p0' ? () => void go('p0') : undefined }]
 
+  // #p7 は2ステップしか無いので FLOW_LABEL の3段構造に乗せず個別に組む（export-plan.md §4.1）。
+  if (panelId === 'p7') {
+    const step = currentStep(panelId)
+    if (step === 'export') {
+      // 作業机から直行してきた場合は一覧をまだ読んでいないので、戻るときに読み込む
+      crumbs.push({ label: '保存した配置案', onClick: () => void openRunsList() })
+      crumbs.push({ label: '出力' })
+    } else {
+      crumbs.push({ label: '保存した配置案' })
+    }
+  }
+
   const flowLabel = FLOW_LABEL[panelId]
   if (flowLabel) {
     const step = currentStep(panelId)
@@ -137,7 +168,7 @@ function renderBreadcrumb(panelId: string): void {
 
   el.innerHTML = crumbs
     .map((c, i) => {
-      const sep = i > 0 ? '<span class="crumb-sep">▸</span>' : ''
+      const sep = i > 0 ? '<span class="crumb-sep">›</span>' : ''
       const tag = c.onClick ? 'button type="button" class="crumb-link"' : 'span class="crumb-current"'
       const closeTag = c.onClick ? 'button' : 'span'
       return `${sep}<${tag} data-crumb="${i}">${escapeHtml(c.label)}</${closeTag}>`
@@ -241,8 +272,8 @@ function initImports(): void {
   // 取込を受け入れる／保留する。どちらも「状態を書き換え → 結果を表示 → 次へボタンを引き直す」で終わり、
   // このうち最後の1手を忘れると次へボタンが古い判定のまま残る。3手を必ず揃えるためにここへ寄せてある。
   type HiringSlot = 'hiringBase100' | 'hiringAdd10'
-  const acceptHiring = (slot: HiringSlot, ids: HiringImportIds, employees: Employee[]): void => {
-    renderHiringImportOk(ids, employees.length)
+  const acceptHiring = (slot: HiringSlot, ids: HiringImportIds, employees: Employee[], note = ''): void => {
+    renderHiringImportOk(ids, employees.length, note)
     state[slot] = employees
     updateHiringProceedBtn()
   }
@@ -261,8 +292,20 @@ function initImports(): void {
   p5Params.init(updateHiringProceedBtn)
   setupDropzone('dropzone-hiring-100', 'file-hiring-100', (text) => {
     const { employees: base100, errors } = importEmployees(text, 100)
-    if (!base100) return rejectHiring('hiringBase100', hiringErr100, errors, errorMessage(errors))
-    acceptHiring('hiringBase100', hiringErr100, base100)
+    if (!base100) {
+      state.hiringBaseAssignment = null
+      return rejectHiring('hiringBase100', hiringErr100, errors, errorMessage(errors))
+    }
+    // 機能15b §5.1: 「配置先事業部」列があれば現行配置を起点にする（分岐1）。
+    // 列が無ければ null＝分岐2。列はあるが欠け・不正があれば補完せず分岐2へ落とし、理由を出す。
+    const { assignment, errors: assignErrors } = parseAssignmentColumn(text, base100)
+    state.hiringBaseAssignment = assignment
+    const note = assignment
+      ? '／配置案を検出（現行配置を起点にします）'
+      : assignErrors.length > 0
+        ? `／配置先事業部列に不備${assignErrors.length}件のため、最適解を起点にします`
+        : ''
+    acceptHiring('hiringBase100', hiringErr100, base100, note)
   })
 
   setupDropzone('dropzone-10', 'file-10', (text) => {
@@ -289,6 +332,54 @@ function initImports(): void {
   })
   $('p5-back')?.addEventListener('click', () => void go('p0'))
   $('p5-result-back')?.addEventListener('click', () => showStep('p5', 'import'))
+
+  // 機能15b 採用判断の作業机（docs/hiring-workbench-plan.md §5.1・§5.4）
+  $('p5-open-bench')?.addEventListener('click', () => {
+    const { hiringBase100, hiringAdd10, hiringBaseAssignment } = state
+    if (!hiringBase100 || !hiringAdd10 || !p5Params.isValid()) return
+    const params = p5Params.getParams()
+    const task = 1
+    const metric = 'revenue' as const
+    const roster = [...hiringBase100, ...hiringAdd10]
+    void withLoading('作業机の基準を計算しています…', () => {
+      // 上段Δの相手。分岐1は取り込んだ現行配置そのもの（最適解ではない）、分岐2は採用前の最適解。
+      const beforeOpt = hiringBaseAssignment ? null : runOptimization(hiringBase100, task, params, metric)
+      const beforeBaseline =
+        hiringBaseAssignment !== null
+          ? computeSimulationResult(hiringBaseAssignment, hiringBase100, params)
+          : beforeOpt && !('infeasible' in beforeOpt)
+            ? beforeOpt
+            : null
+      // 下段Δの相手。採用後110名の最適解。実行可能解が無ければ null にして「—」と出す（§5.4）
+      const afterOpt = runOptimization(roster, task, params, metric)
+      const afterBaseline = 'infeasible' in afterOpt ? null : afterOpt
+      return { beforeBaseline, afterBaseline }
+    }).then(({ beforeBaseline, afterBaseline }) => {
+      if (!beforeBaseline) {
+        window.alert('採用前100名で制約を満たす配置が見つからないため、作業机を開けません。')
+        return
+      }
+      openHiringWorkbench({
+        task,
+        metric,
+        base: hiringBase100,
+        candidates: hiringAdd10,
+        roster,
+        params,
+        // 候補は全員プールから始まる。beforeBaseline は100名ぶんしか持たないのでキーが無い＝未採用（§5.4）
+        assignment: { ...beforeBaseline.assignment },
+        beforeBaseline,
+        afterBaseline,
+        lockBase: true,
+        branch: hiringBaseAssignment !== null ? 'existing' : 'optimal',
+        history: [],
+        // docs/profile-plan.md §4.2: 未取得なら空。カードは番号のみで描画され作業机は正常に動く。
+        profiles: getProfiles(),
+      })
+      showStep('p5', 'bench')
+    })
+  })
+  $('p5-bench-back')?.addEventListener('click', () => showStep('p5', 'result'))
 
   restoreSession()
 
@@ -321,7 +412,12 @@ function initImports(): void {
 
     if (snap.hiringBase100) {
       state.hiringBase100 = snap.hiringBase100
-      renderHiringImportOk(hiringErr100, snap.hiringBase100.length)
+      state.hiringBaseAssignment = snap.hiringBaseAssignment ?? null
+      renderHiringImportOk(
+        hiringErr100,
+        snap.hiringBase100.length,
+        state.hiringBaseAssignment ? '／配置案を検出（現行配置を起点にします）' : '',
+      )
     }
     if (snap.hiringAdd10) {
       state.hiringAdd10 = snap.hiringAdd10
@@ -356,6 +452,14 @@ function initImports(): void {
         showStep('p5', 'result')
         void go('p5')
       })
+      return
+    }
+
+    // #p7 は出力対象の SavedRun をメモリにしか持たないため出力ステップは復元できない。
+    // 一覧まで戻して読み直す（bench を result へ読み替えるのと同じ考え方）。
+    if (snap.panelId === 'p7') {
+      void go('p7')
+      void openRunsList()
       return
     }
 
@@ -484,12 +588,32 @@ function initProfileAdmin(): void {
   })
 }
 
+// ---- 保存した配置案(#p7)の配線（docs/export-plan.md §4.1） ----
+function initExportFlow(): void {
+  initExportPanel((step) => showStep('p7', step))
+  // #p6 と同じく、入るたびに読み直す（他の人が保存した案を拾う）
+  document.querySelectorAll<HTMLElement>('[data-go="p7"]').forEach((el) => {
+    el.addEventListener('click', () => void openRunsList())
+  })
+}
+
 // ---- 初期化 ----
 function main(): void {
   initNavigation()
   initCompareModeToggle()
-  initWorkbenchPanel()
+  // 保存に成功したら #p7 の出力画面へ直行する（export-plan.md §4.1）。
+  // 作業机は保存の成否だけを知り、遷移は renderer 側の責務にしてある。
+  initWorkbenchPanel((run) => {
+    void go('p7')
+    openExportFor(run)
+  })
+  // 採用判断の作業机も同じ経路で #p7 へ渡す（機能15b §5.11）
+  initHiringWorkbenchPanel((run) => {
+    void go('p7')
+    openExportFor(run)
+  })
   initProfileAdmin()
+  initExportFlow()
   initImports() // 内部でrestoreSession()を呼び、必要なら復元した画面のbreadcrumbまで描画する
 }
 

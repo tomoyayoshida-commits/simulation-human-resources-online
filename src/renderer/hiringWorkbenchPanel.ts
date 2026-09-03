@@ -1,0 +1,647 @@
+// 機能15b 採用判断の作業机（docs/hiring-workbench-plan.md §5.3〜§5.11 Phase3/4）。
+// 表示専用（計算持たない・CLAUDE.md §5）。
+//
+// workbenchPanel.ts と同じ構成：HTML生成（buildHiringWorkbenchHtml以下）は純粋関数でテストでき、
+// DOM配線（openHiringWorkbench以下）は `#hwb-root` への委譲リスナ1組だけを1回張る。
+//
+// #p4 の作業机との違いは4列目「採用候補プール」とロックの2点。列の `data-hslot` は
+// UnitId ではなく HiringSlot（'A'|'B'|'C'|'pool'）を持つ。`data-unit` を使わないのは、
+// #p4 と同じ属性名にすると「事業部の列」という前提のコードを共有したときに pool が紛れ込むため。
+
+import type { UnitId } from './types.ts'
+import type { WhatIfEvaluation } from './whatif.ts'
+import {
+  addedCost,
+  buildHiringCards,
+  canMove,
+  declinedCandidates,
+  diffWithPool,
+  evaluateHiring,
+  hiredCandidates,
+  previewMoveTo,
+  resetToStart,
+  serializeHiringWorkbenchState,
+  undo,
+  withAssignment,
+  withMoveTo,
+  type HiringCard,
+  type HiringSlot,
+  type HiringWorkbenchState,
+} from './hiringWorkbench.ts'
+import { headcountOf } from './whatif.ts'
+import { solveForHeadcount } from './optimizer.ts'
+import { saveRun, type SavedRun } from './runStore.ts'
+import { withLoading } from './loading.ts'
+import { round2, taskLabel, UNIT_IDS, UNIT_LABEL, UNIT_VAR } from './constants.ts'
+import { clampPct, deltaText, escapeAttr, escapeHtml, oku, oku1, pct, pill, signed } from './format.ts'
+import { $, setHtml } from './dom.ts'
+import { sortCards, type WorkbenchCard, type WorkbenchSortKey } from './workbench.ts'
+
+// ---- 純粋関数：HTML生成（テスト対象） ----
+
+const SORT_OPTIONS: { key: WorkbenchSortKey; label: string }[] = [
+  { key: 'id', label: '社員番号順' },
+  { key: 'contribution', label: '貢献度順（現在の所属）' },
+  { key: 'type', label: '型別' },
+  { key: 'cost', label: '人件費順' },
+]
+
+/** 盤面の列の並び。3事業部のあとにプールを置く（§5.3）。 */
+const SLOTS: HiringSlot[] = [...UNIT_IDS, 'pool']
+
+export interface HiringWorkbenchViewData {
+  state: HiringWorkbenchState
+  sortKey: WorkbenchSortKey
+  selectedEmployeeId: string | null
+  /** 直近の操作で feasible→infeasible に変わったときの一過性の警告（§5.9）。null なら非表示。 */
+  alertText: string | null
+  showPhotos?: boolean
+  /** 保存時の命名フォームの状態。null なら閉じている（機能16 §4.8 と同じ作法）。 */
+  savingTitle?: string | null
+}
+
+function buildAlertHtml(alertText: string | null): string {
+  if (!alertText) return ''
+  return (
+    `<div class="wb-alert-banner"><span>${escapeHtml(alertText)}</span>` +
+    `<button type="button" class="wb-alert-close" data-hwb-alert-dismiss aria-label="閉じる">✕</button></div>`
+  )
+}
+
+/**
+ * 2段Δの1行（§5.4）。上段＝採用の効果（採用前比）、下段＝手で譲った分（最適解比）。
+ * afterBaseline が無い（採用後に実行可能解が無い）ときは下段を「—」にする。
+ */
+function buildStatHtml(label: string, value: string, beforeDelta: string, afterDelta: string | null): string {
+  return `
+    <div class="hwb-stat">
+      <span class="k">${label}</span>
+      <span class="v">${value}</span>
+      <span class="d">採用前比 ${beforeDelta}</span>
+      <span class="d2">最適解比 ${afterDelta ?? '—（採用後の実行可能解なし）'}</span>
+    </div>`
+}
+
+function buildHeaderHtml(state: HiringWorkbenchState, evaluation: WhatIfEvaluation): string {
+  const { result } = evaluation
+  const { beforeBaseline, afterBaseline } = state
+  const statusPill = !result.feasible
+    ? pill('crit', `● 全社売上${state.params.prevYearRevenue}億円を下回る（現在${oku(result.companyRevenue)}）`)
+    : pill('good', '● 制約を満たす')
+  const minHcPill =
+    evaluation.minHeadcountViolations.length > 0
+      ? pill('warn', `● 最低人数割れ：${evaluation.minHeadcountViolations.join('・')}`)
+      : ''
+  const hired = hiredCandidates(state).length
+  // 分岐1は「現行配置を起点」、分岐2は「採用前の最適解を起点」。どちらの検討なのかを常に出す（§5.1）
+  const originText = state.branch === 'existing' ? '現行配置を起点' : '採用前の最適解を起点'
+  const lockHtml = state.branch === 'existing'
+    ? `<label class="hwb-lock"><input type="checkbox" id="hwb-lock"${state.lockBase ? ' checked' : ''}>既存${state.base.length}名を固定する</label>`
+    : ''
+  return `
+    <h2>採用判断の作業机：${escapeHtml(originText)}（${taskLabel(state.task, state.metric)}）</h2>
+    <p class="subtitle">誰を採り、どこに置くかを1つの盤面で決める。プールに残した候補は採用しない</p>
+    <div class="hwb-totals">
+      ${buildStatHtml('全社売上', oku(result.companyRevenue), deltaText(result.companyRevenue, beforeBaseline.companyRevenue), afterBaseline ? deltaText(result.companyRevenue, afterBaseline.companyRevenue) : null)}
+      ${buildStatHtml('全社利益', oku(result.companyProfit), deltaText(result.companyProfit, beforeBaseline.companyProfit), afterBaseline ? deltaText(result.companyProfit, afterBaseline.companyProfit) : null)}
+    </div>
+    <div class="hwb-hire-line">
+      <span class="hwb-hire"><b>採用 ${hired}/${state.candidates.length}名</b></span>
+      <span class="hwb-cost">追加人件費 ${oku(addedCost(state))}</span>
+      <span class="hwb-moved">異動 ${evaluation.movedFromBaseline}名</span>
+      ${lockHtml}
+    </div>
+    <div class="wb-status">${statusPill}${minHcPill}</div>`
+}
+
+/**
+ * 顔写真の枠。プール（unit が null）の候補は所属色を持たないので中立色にする。
+ * photo は Firestore 由来の外部入力なので escapeAttr を通す（CLAUDE.md §8）。
+ */
+function buildCardFaceHtml(c: HiringCard): string {
+  if (c.profile?.photo) {
+    return `<img class="wb-card-photo" src="${escapeAttr(c.profile.photo)}" alt="" draggable="false">`
+  }
+  const bg = c.unit ? UNIT_VAR[c.unit] : 'var(--text-muted)'
+  return `<span class="wb-card-photo wb-card-photo-none" style="background:${bg};">${escapeHtml(c.employee.id.slice(-2))}</span>`
+}
+
+/**
+ * カード1枚。プールにいる候補は所属が無いので3事業部ぶんの貢献度を並べる（§5.3）。
+ * ロックされた社員は draggable を外し、クリック選択もさせない。
+ */
+function buildCardHtml(c: HiringCard, selectedEmployeeId: string | null, showPhotos: boolean): string {
+  const selected = c.employee.id === selectedEmployeeId
+  const nameHtml = c.profile?.name ? ` <span class="wb-card-name">${escapeHtml(c.profile.name)}</span>` : ''
+  const mainHtml = c.unit
+    ? `<div class="wb-card-main">${c.contributions[c.unit].toFixed(2)}</div>
+       <div class="wb-card-others">${UNIT_IDS.filter((u) => u !== c.unit).map((u) => `${u} ${c.contributions[u].toFixed(2)}`).join(' ／ ')}</div>`
+    : `<div class="wb-card-others hwb-card-pool">${UNIT_IDS.map((u) => `${u} ${c.contributions[u].toFixed(2)}`).join(' ／ ')}</div>`
+  const cls = ['wb-card', selected ? 'selected' : '', showPhotos ? 'with-photo' : '', c.locked ? 'hwb-locked' : '', c.isCandidate ? 'hwb-candidate' : '']
+    .filter(Boolean)
+    .join(' ')
+  return `
+    <div class="${cls}" draggable="${c.locked ? 'false' : 'true'}" data-emp="${escapeAttr(c.employee.id)}" tabindex="0">
+      ${showPhotos ? buildCardFaceHtml(c) : ''}
+      <div class="wb-card-body">
+        <div class="wb-card-id">${c.locked ? '<span class="hwb-lock-mark" title="既存社員は固定中">🔒</span>' : ''}${escapeHtml(c.employee.id)}${nameHtml}</div>
+        <span class="wb-card-type">${c.type}</span>
+        ${mainHtml}
+      </div>
+    </div>`
+}
+
+interface ColumnContext {
+  state: HiringWorkbenchState
+  evaluation: WhatIfEvaluation
+  sortedCards: HiringCard[]
+  selectedEmployeeId: string | null
+  showPhotos: boolean
+}
+
+/**
+ * プール列（§5.3）。充足率メーターも売上も出さない——未採用者は事業部に属さないので
+ * どちらも意味を持たないため。人数と「採用しない」ことだけを示す。
+ */
+function buildPoolColumnHtml(ctx: ColumnContext): string {
+  const { state, sortedCards, selectedEmployeeId, showPhotos } = ctx
+  const cards = sortedCards.filter((c) => c.unit === null)
+  const cardsHtml = cards.map((c) => buildCardHtml(c, selectedEmployeeId, showPhotos)).join('')
+  const declined = declinedCandidates(state).length
+  return `
+    <div class="wb-column hwb-pool" data-hslot="pool">
+      <div class="wb-unit-head">
+        <div class="wb-unit-title"><b>採用候補</b> ${cards.length}名</div>
+        <div class="hwb-pool-note">ここに残した${declined}名は採用しない</div>
+      </div>
+      <div class="wb-cards">${cardsHtml}</div>
+    </div>`
+}
+
+function buildUnitColumnHtml(u: UnitId, ctx: ColumnContext): string {
+  const { state, evaluation, sortedCards, selectedEmployeeId, showPhotos } = ctx
+  const unitResult = evaluation.result.units[u]
+  const baseUnitResult = state.beforeBaseline.units[u]
+  const violation = evaluation.minHeadcountViolations.includes(u)
+  const meterPct = clampPct(unitResult.fulfillmentRate * 100)
+  const cardsHtml = sortedCards
+    .filter((c) => c.unit === u)
+    .map((c) => buildCardHtml(c, selectedEmployeeId, showPhotos))
+    .join('')
+  return `
+    <div class="wb-column${violation ? ' violation' : ''}" data-hslot="${u}">
+      <div class="wb-unit-head">
+        <div class="wb-unit-title"><b>${UNIT_LABEL[u]}</b> ${unitResult.count}名 <span class="wb-unit-pct">${pct(unitResult.fulfillmentRate)}</span>${violation ? ` <span class="wb-unit-warn">⚠ 最低${state.params.minHeadcount[u]}名</span>` : ''}</div>
+        <div class="meter-mini"><div class="meter-mini-fill" style="width:${meterPct.toFixed(1)}%;background:${UNIT_VAR[u]};"></div></div>
+        <div class="wb-unit-sub">売上${oku1(unitResult.finalRevenue)}（${deltaText(unitResult.finalRevenue, baseUnitResult.finalRevenue)}）</div>
+      </div>
+      <div class="wb-cards">${cardsHtml}</div>
+    </div>`
+}
+
+/** 保存時の命名フォーム。制約違反があっても保存自体は止めない（§5.9・機能16 §4.5）。 */
+function buildSaveFormHtml(savingTitle: string | null, violation: boolean): string {
+  if (savingTitle === null) return ''
+  return `
+    <div class="wb-save-form">
+      <label class="wb-save-label">この採用案の名前
+        <input type="text" id="hwb-save-title" class="wb-save-input" maxlength="80" value="${escapeAttr(savingTitle)}">
+      </label>
+      <button type="button" class="btn" data-hwb-action="save-confirm">保存する</button>
+      <button type="button" class="btn secondary" data-hwb-action="save-cancel">やめる</button>
+      ${violation ? '<p class="warn-text">制約違反があります。記録としては保存できますが、CSV・PDFの出力はできません。</p>' : ''}
+    </div>`
+}
+
+/** 異動の内訳を人が読む1行にする（§5.8）。採用・見送り・異動を区別して並べる。 */
+function diffLine(state: HiringWorkbenchState): string {
+  const diffs = diffWithPool(state.beforeBaseline.assignment, state.assignment, state.roster)
+  if (diffs.length === 0) return '変更なし'
+  return diffs
+    .map((d) =>
+      d.kind === 'hire'
+        ? `採用→${d.to} ${d.count}名`
+        : d.kind === 'decline'
+          ? `${d.from}→見送り ${d.count}名`
+          : `${d.from}→${d.to} ${d.count}名`,
+    )
+    .join(' ／ ')
+}
+
+function buildActionsHtml(
+  state: HiringWorkbenchState,
+  evaluation: WhatIfEvaluation,
+  sortKey: WorkbenchSortKey,
+  showPhotos: boolean,
+  savingTitle: string | null,
+): string {
+  const violation = !evaluation.result.feasible || evaluation.minHeadcountViolations.length > 0
+  const sortOptionsHtml = SORT_OPTIONS.map(
+    (o) => `<option value="${o.key}"${o.key === sortKey ? ' selected' : ''}>${o.label}</option>`,
+  ).join('')
+  // §5.6: ロック中の「組み直す」は既存社員を動かしてしまうので押させない。
+  // optimizer.ts の内部関数（buildValues 等）が未exportで、既存固定のまま追加分だけ厳密に
+  // 解く手段が無いため。export を足しにいくのではなく、ここで止める判断にしてある。
+  const resolveAttr = state.lockBase
+    ? ' disabled title="既存社員の固定を外すと実行できます"'
+    : ''
+  return `
+    <div class="wb-actions">
+      <div class="wb-actions-left">
+        <label class="wb-sort-label">並び順：<select id="hwb-sort" class="wb-sort">${sortOptionsHtml}</select></label>
+        <label class="wb-photo-label"><input type="checkbox" id="hwb-show-photos"${showPhotos ? ' checked' : ''}>顔写真</label>
+      </div>
+      <div class="wb-actions-right">
+        <button type="button" class="btn secondary" data-hwb-action="undo"${state.history.length === 0 ? ' disabled' : ''}>元に戻す</button>
+        <button type="button" class="btn secondary" data-hwb-action="reset">起点に戻す</button>
+        <button type="button" class="btn secondary" data-hwb-action="resolve"${resolveAttr}>この人数配分のまま最適に組み直す</button>
+        <button type="button" class="btn" data-hwb-action="save"${savingTitle === null ? '' : ' disabled'}>この案を保存</button>
+      </div>
+    </div>
+    ${buildSaveFormHtml(savingTitle, violation)}
+    <p class="wb-diff">内訳：${escapeHtml(diffLine(state))}</p>`
+}
+
+/** 採用判断の作業机パネル全体のHTMLを組み立てる（純粋関数・DOM非依存）。 */
+export function buildHiringWorkbenchHtml(data: HiringWorkbenchViewData): string {
+  const { state, sortKey, selectedEmployeeId, alertText } = data
+  const showPhotos = data.showPhotos ?? true
+  const savingTitle = data.savingTitle ?? null
+  const evaluation = evaluateHiring(state)
+  // カードの組み立てと並び替えは列に依存しないので1回で済ませる。
+  // sortCards は WorkbenchCard 用だが、比較に使うのは employee.id / type / cost / contributions[unit] だけ。
+  // HiringCard は unit が null を取りうるので、プールのカードは 'contribution' 指定でも
+  // 貢献度で並べられない——そこは id 順に落とす（下の poolSafeSort）。
+  const cards = poolSafeSort(buildHiringCards(state), sortKey)
+  const ctx: ColumnContext = { state, evaluation, sortedCards: cards, selectedEmployeeId, showPhotos }
+  const columnsHtml = SLOTS.map((s) => (s === 'pool' ? buildPoolColumnHtml(ctx) : buildUnitColumnHtml(s, ctx))).join('')
+  return (
+    buildAlertHtml(alertText) +
+    buildHeaderHtml(state, evaluation) +
+    `<div class="hwb-board">${columnsHtml}</div>` +
+    buildActionsHtml(state, evaluation, sortKey, showPhotos, savingTitle) +
+    `<div class="wb-drag-badge" hidden></div>`
+  )
+}
+
+/**
+ * 並び替え。'contribution' は「現在の所属での貢献度」降順なので、所属の無いプールのカードでは
+ * 定義できない。プールぶんは常に社員番号順にして、事業部のカードだけ指定のキーで並べる。
+ */
+function poolSafeSort(cards: HiringCard[], key: WorkbenchSortKey): HiringCard[] {
+  const byId = new Map(cards.map((c) => [c.employee.id, c]))
+  // sortCards は WorkbenchCard（unit: UnitId）を要求する。プールのカードは unit が null なので
+  // 'A' で埋めて渡すが、プール側は 'contribution' を 'id' に落とすため この値は比較に使われない。
+  const asWorkbenchCard = (c: HiringCard): WorkbenchCard => ({
+    employee: c.employee,
+    unit: c.unit ?? 'A',
+    type: c.type,
+    contributions: c.contributions,
+    profile: c.profile,
+  })
+  const pick = (sorted: WorkbenchCard[]): HiringCard[] => sorted.map((c) => byId.get(c.employee.id)!)
+  return [
+    ...pick(sortCards(cards.filter((c) => c.unit !== null).map(asWorkbenchCard), key)),
+    ...pick(sortCards(cards.filter((c) => c.unit === null).map(asWorkbenchCard), key === 'contribution' ? 'id' : key)),
+  ]
+}
+
+// ---- DOM配線（未テスト・workbenchPanel.ts と同じ方針） ----
+
+const view: {
+  state: HiringWorkbenchState | null
+  sortKey: WorkbenchSortKey
+  selectedEmployeeId: string | null
+  dragEmployeeId: string | null
+  dragBaseRevenue: number
+  dragHoverSlot: HiringSlot | null
+  alertText: string | null
+  alertKind: 'revenue' | 'headcount' | null
+  showPhotos: boolean
+  savingTitle: string | null
+} = {
+  state: null,
+  sortKey: 'id',
+  selectedEmployeeId: null,
+  dragEmployeeId: null,
+  dragBaseRevenue: 0,
+  dragHoverSlot: null,
+  alertText: null,
+  alertKind: null,
+  showPhotos: true,
+  savingTitle: null,
+}
+
+/** 保存された配置案を受け取る側（#p7 の出力画面へ渡す）。renderer.ts が配線する。 */
+let onSaved: (run: SavedRun) => void = () => {}
+
+function hasViolation(evaluation: WhatIfEvaluation): boolean {
+  return !evaluation.result.feasible || evaluation.minHeadcountViolations.length > 0
+}
+
+function clearAlertIfResolved(evaluation: WhatIfEvaluation): void {
+  if (!view.alertKind) return
+  const resolved = view.alertKind === 'revenue' ? evaluation.result.feasible : evaluation.minHeadcountViolations.length === 0
+  if (resolved) {
+    view.alertText = null
+    view.alertKind = null
+  }
+}
+
+function render(): void {
+  if (!view.state) return
+  setHtml(
+    'hwb-root',
+    buildHiringWorkbenchHtml({
+      state: view.state,
+      sortKey: view.sortKey,
+      selectedEmployeeId: view.selectedEmployeeId,
+      alertText: view.alertText,
+      showPhotos: view.showPhotos,
+      savingTitle: view.savingTitle,
+    }),
+  )
+}
+
+/** #p5 の結果ステップから遷移してきた初期状態で作業机を開く（§5.1）。 */
+export function openHiringWorkbench(initial: HiringWorkbenchState): void {
+  view.state = initial
+  view.sortKey = 'id'
+  view.selectedEmployeeId = null
+  view.alertText = null
+  view.alertKind = null
+  view.dragEmployeeId = null
+  view.dragHoverSlot = null
+  view.savingTitle = null
+  render()
+}
+
+function commitMove(id: string, slot: HiringSlot): void {
+  const state = view.state
+  if (!state) return
+  const before = evaluateHiring(state)
+  const next = withMoveTo(state, id, slot)
+  view.selectedEmployeeId = null
+  if (next === state) {
+    render()
+    return
+  }
+  const after = evaluateHiring(next)
+  view.state = next
+  // §5.9: feasible→infeasible に変わった操作の直後だけ警告を出す（ドロップ自体は拒否しない）
+  if (!hasViolation(before) && hasViolation(after)) {
+    view.alertKind = !after.result.feasible ? 'revenue' : 'headcount'
+    view.alertText = !after.result.feasible
+      ? `全社売上が${state.params.prevYearRevenue}億円を下回りました（現在${oku(after.result.companyRevenue)}）`
+      : `最低人数を割りました（${after.minHeadcountViolations.join('・')}）`
+  } else {
+    clearAlertIfResolved(after)
+  }
+  render()
+}
+
+function defaultRunTitle(state: HiringWorkbenchState): string {
+  const hired = hiredCandidates(state).length
+  return `採用案 ${hired}名採用 ${new Date().toISOString().slice(0, 10)}`
+}
+
+/**
+ * いまの採用案を1件追記し、出力画面へ渡す（§5.11）。
+ * 制約違反があっても保存は止めない。出力側で止める（機能16 §4.5）。
+ * roster には**採用した社員だけ**を渡す——未採用の候補は組織図に載らないため、
+ * 出力される名簿に混ざると告知用の文書が誤りになる。
+ */
+async function commitSave(): Promise<void> {
+  const state = view.state
+  if (!state) return
+  const title = ($('hwb-save-title') as HTMLInputElement | null)?.value.trim() || defaultRunTitle(state)
+  const evaluation = evaluateHiring(state)
+  const ex = serializeHiringWorkbenchState(state)
+  const hiredRoster = state.roster.filter((e) => state.assignment[e.id] !== undefined)
+  try {
+    const run = await withLoading('採用案を保存しています…', async () =>
+      saveRun({
+        title,
+        task: state.task,
+        metric: state.metric,
+        assignment: { ...state.assignment },
+        params: state.params,
+        roster: hiredRoster,
+        feasible: evaluation.result.feasible,
+        companyRevenue: evaluation.result.companyRevenue,
+        companyProfit: evaluation.result.companyProfit,
+        movedFromBaseline: evaluation.movedFromBaseline,
+        kind: 'hiring',
+        hiredIds: ex.hiredIds,
+        declinedIds: ex.declinedIds,
+        branch: ex.branch,
+        lockBase: ex.lockBase,
+      }),
+    )
+    view.savingTitle = null
+    render()
+    onSaved(run)
+  } catch (e) {
+    console.warn('採用案の保存に失敗しました。', e)
+    view.alertText = '保存できませんでした。通信状態を確認してもう一度お試しください。'
+    view.alertKind = null
+    render()
+  }
+}
+
+function handleAction(action: string): void {
+  const state = view.state
+  if (!state) return
+  if (action === 'undo') {
+    view.state = undo(state)
+    clearAlertIfResolved(evaluateHiring(view.state))
+    render()
+  } else if (action === 'reset') {
+    view.state = resetToStart(state)
+    view.alertText = null
+    view.alertKind = null
+    render()
+  } else if (action === 'resolve') {
+    // §5.6: 未採用者は渡さない。渡すとソルバが採否まで決め直し、利用者の判断を上書きしてしまう
+    if (state.lockBase) return
+    const hired = state.roster.filter((e) => state.assignment[e.id] !== undefined)
+    const counts = headcountOf(state.assignment, state.roster)
+    const assignment = solveForHeadcount(hired, state.task, counts, state.params, state.metric)
+    view.state = withAssignment(state, assignment)
+    clearAlertIfResolved(evaluateHiring(view.state))
+    render()
+  } else if (action === 'save') {
+    view.savingTitle = defaultRunTitle(state)
+    render()
+  } else if (action === 'save-cancel') {
+    view.savingTitle = null
+    render()
+  } else if (action === 'save-confirm') {
+    void commitSave()
+  }
+}
+
+function handleClick(e: Event): void {
+  const target = e.target as HTMLElement | null
+  if (!target || !view.state) return
+
+  if (target.closest('[data-hwb-alert-dismiss]')) {
+    view.alertText = null
+    render()
+    return
+  }
+
+  const actionBtn = target.closest<HTMLElement>('[data-hwb-action]')
+  if (actionBtn) {
+    handleAction(actionBtn.dataset.hwbAction ?? '')
+    return
+  }
+
+  const cardEl = target.closest<HTMLElement>('[data-emp]')
+  if (cardEl) {
+    const id = cardEl.dataset.emp ?? ''
+    // ロック中の既存社員は選択もさせない（選べてしまうと列クリックで動く錯覚を与える）
+    if (!canMove(view.state, id)) return
+    view.selectedEmployeeId = view.selectedEmployeeId === id ? null : id
+    render()
+    return
+  }
+
+  // クリック操作のフォールバック（§5.3）：選択中の1名を、クリックした列へ移動する
+  const colEl = target.closest<HTMLElement>('[data-hslot]')
+  if (colEl && view.selectedEmployeeId) {
+    commitMove(view.selectedEmployeeId, colEl.dataset.hslot as HiringSlot)
+  }
+}
+
+function handleChange(e: Event): void {
+  const target = e.target
+  if (target instanceof HTMLInputElement && target.id === 'hwb-show-photos') {
+    view.showPhotos = target.checked
+    render()
+    return
+  }
+  if (target instanceof HTMLInputElement && target.id === 'hwb-lock') {
+    if (!view.state) return
+    view.state = { ...view.state, lockBase: target.checked }
+    view.selectedEmployeeId = null
+    render()
+    return
+  }
+  if (!(target instanceof HTMLSelectElement) || target.id !== 'hwb-sort') return
+  view.sortKey = target.value as WorkbenchSortKey
+  render()
+}
+
+function columnAt(e: Event): HTMLElement | null {
+  return (e.target as HTMLElement | null)?.closest<HTMLElement>('[data-hslot]') ?? null
+}
+
+let badgeSize = { w: 0, h: 0 }
+
+function dragBadgeEl(): HTMLElement | null {
+  return $('hwb-root')?.querySelector<HTMLElement>('.wb-drag-badge') ?? null
+}
+
+function moveDragBadge(x: number, y: number): void {
+  const el = dragBadgeEl()
+  if (!el || el.hidden) return
+  const gap = 14
+  const edge = 8
+  el.style.left = `${Math.max(edge, Math.min(x + gap, window.innerWidth - badgeSize.w - edge))}px`
+  el.style.top = `${Math.max(edge, Math.min(y + gap, window.innerHeight - badgeSize.h - edge))}px`
+}
+
+function clearAllDropHints(): void {
+  if (view.dragHoverSlot === null) return
+  $('hwb-root')?.querySelectorAll<HTMLElement>('[data-hslot]').forEach((el) => el.classList.remove('drop-hover'))
+  const el = dragBadgeEl()
+  if (el) el.hidden = true
+  view.dragHoverSlot = null
+}
+
+/** その列へ移した場合の全社売上差をバッジに出し、列を強調する。 */
+function showDropHint(colEl: HTMLElement, slot: HiringSlot): void {
+  const state = view.state
+  if (!state || !view.dragEmployeeId) return
+  const preview = previewMoveTo(state, view.dragEmployeeId, slot)
+  const d = round2(preview.companyRevenue - view.dragBaseRevenue)
+  const el = dragBadgeEl()
+  if (el) {
+    const dest = slot === 'pool' ? '採用しない' : `${UNIT_LABEL[slot]}へ移す`
+    el.textContent = `${dest}と 全社売上 ${signed(d)}億円`
+    el.hidden = false
+    badgeSize = { w: el.offsetWidth, h: el.offsetHeight }
+  }
+  colEl.classList.add('drop-hover')
+  view.dragHoverSlot = slot
+}
+
+function handleDragStart(e: DragEvent): void {
+  const cardEl = (e.target as HTMLElement | null)?.closest<HTMLElement>('[data-emp]')
+  const state = view.state
+  if (!cardEl || !state) return
+  const id = cardEl.dataset.emp ?? ''
+  if (!canMove(state, id)) {
+    e.preventDefault()
+    return
+  }
+  view.dragEmployeeId = id
+  view.dragHoverSlot = null
+  view.dragBaseRevenue = evaluateHiring(state).result.companyRevenue
+  e.dataTransfer?.setData('text/plain', id)
+}
+
+function handleDragOver(e: DragEvent): void {
+  const colEl = columnAt(e)
+  if (!colEl) {
+    clearAllDropHints()
+    return
+  }
+  e.preventDefault()
+  const slot = colEl.dataset.hslot as HiringSlot
+  if (slot !== view.dragHoverSlot) {
+    clearAllDropHints()
+    showDropHint(colEl, slot)
+  }
+  moveDragBadge(e.clientX, e.clientY)
+}
+
+function handleDragEnter(e: DragEvent): void {
+  if (columnAt(e)) e.preventDefault()
+}
+
+function handleDragLeave(e: DragEvent): void {
+  const root = $('hwb-root')
+  const to = e.relatedTarget as Node | null
+  if (root && to && !root.contains(to)) clearAllDropHints()
+}
+
+function handleDrop(e: DragEvent): void {
+  e.preventDefault()
+  const colEl = columnAt(e)
+  clearAllDropHints()
+  const id = e.dataTransfer?.getData('text/plain') || view.dragEmployeeId
+  view.dragEmployeeId = null
+  if (colEl && id) commitMove(id, colEl.dataset.hslot as HiringSlot)
+}
+
+function handleDragEnd(): void {
+  view.dragEmployeeId = null
+  clearAllDropHints()
+}
+
+/** 採用判断の作業机の委譲リスナを1回だけ張る（`#hwb-root` は起動時から存在する空div）。 */
+export function initHiringWorkbenchPanel(onSavedRun: (run: SavedRun) => void): void {
+  onSaved = onSavedRun
+  const root = $('hwb-root')
+  if (!root) return
+  root.addEventListener('click', handleClick)
+  root.addEventListener('change', handleChange)
+  root.addEventListener('dragstart', handleDragStart)
+  root.addEventListener('dragover', handleDragOver)
+  root.addEventListener('dragenter', handleDragEnter)
+  root.addEventListener('dragleave', handleDragLeave)
+  root.addEventListener('drop', handleDrop)
+  root.addEventListener('dragend', handleDragEnd)
+}

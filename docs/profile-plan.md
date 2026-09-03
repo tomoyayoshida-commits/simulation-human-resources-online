@@ -159,7 +159,10 @@ export interface EmployeeProfile {
 export type ProfileMap = Record<string, EmployeeProfile>
 ```
 
-- `WorkbenchState`（`workbench.ts:14`）に `profiles: ProfileMap` を追加。
+- `WorkbenchState`（`workbench.ts:14`）に `profiles?: ProfileMap` を追加。
+  **任意にしたのは実装時の判断**：必須にすると `test/workbench.test.ts` / `test/workbenchPanel.test.ts` の
+  状態生成3箇所を書き換える必要があり、別セッションが編集中のファイルと衝突する（CLAUDE.md §9）。
+  「未登録・取得前でも番号のみのカードで動く」ことが元々の要件（受入基準2）なので、任意で意味も通る。
 - `WorkbenchCard`（`workbench.ts:93`）に `profile?: EmployeeProfile` を追加。
   `buildWorkbenchCards`（`workbench.ts:106`）が `state.profiles[e.id]` を焼き込む。
 - **`undefined` を許すことが重要。** 未登録社員でもカードは番号のみで描画され、作業机は今までどおり動く。
@@ -422,6 +425,14 @@ RFC4180とフォーミュラガードの往復対称性テスト（CLAUDE.md §8
 ---
 
 ## 9. 申し送り
+
+### 実装時に発生した既存ファイルへの影響（2026-09-03）
+
+- `test/workbenchPanel.test.ts:96` のアサーションを1行だけ緩めた。
+  カードのクラス属性を `class="wb-card selected"` と**完全一致**で見ていたため、
+  顔写真ON時に付く `with-photo` で落ちた。`assert.match` の前方一致に変更してある。
+- `dist/` はビルド済み・`firebase deploy`（hosting と firestore:rules）実行済み。
+
 
 - 本計画は `web-firebase-plan.md` Phase (d) の**一部先行実装**にあたる。
   `datasets` / `simulationRuns` の永続化に着手する際、`firebase.ts` の `db` 初期化と

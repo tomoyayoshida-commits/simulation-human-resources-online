@@ -2,6 +2,8 @@
 import { GoogleAuthProvider, getRedirectResult, onAuthStateChanged, signInWithRedirect, signOut, type User } from 'firebase/auth'
 import { auth } from './firebase.ts'
 
+// firestore.rules の isMember() が同じ条件を持つ（docs/profile-plan.md §4.7）。
+// 片方だけ直すと画面は通るのにDBが読めない（またはその逆）状態になるため、必ず対で直す。
 const ALLOWED_DOMAIN = 'pathoslogos.co.jp'
 
 export type AuthUser = { email: string; displayName: string | null }

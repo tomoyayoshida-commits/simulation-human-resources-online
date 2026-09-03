@@ -126,6 +126,20 @@ export const COLUMN_MAP: Record<keyof Employee, string[]> = {
   cost: ['人件費', 'cost'],
 }
 
+/**
+ * 名簿CSVのヘッダ→プロフィール項目の対応（docs/profile-plan.md §4.4）。
+ * 社員番号の別名は COLUMN_MAP.id をそのまま使う（列名の解釈がスキルCSVと食い違わないようにするため）。
+ * photoFile（写真ファイル名）は任意列。氏名だけを登録する運用でも取り込める。
+ */
+export const PROFILE_COLUMN_MAP = {
+  id: COLUMN_MAP.id,
+  name: ['氏名', '名前', 'name'],
+  photoFile: ['写真ファイル名', '写真', 'photo', 'photo_file'],
+} as const
+
+/** 名簿CSVで省略を許す列（存在しなくてもエラーにしない） */
+export const PROFILE_OPTIONAL_COLUMNS = ['photoFile'] as const
+
 /** エクスポート時に使う正規のヘッダ名（COLUMN_MAP の第一候補） */
 export const EXPORT_HEADERS = {
   id: COLUMN_MAP.id[0],
@@ -136,6 +150,14 @@ export const EXPORT_HEADERS = {
   cost: COLUMN_MAP.cost[0],
   assignedUnit: '配置先事業部',
 } as const
+
+/**
+ * 配置先事業部列の取込時に許すヘッダ名（docs/hiring-workbench-plan.md §5.7）。
+ * COLUMN_MAP は Record<keyof Employee, string[]> のため assignedUnit を入れられない
+ * （Employee のフィールドではない）ので別定数にしてある。
+ * 先頭は EXPORT_HEADERS.assignedUnit と同じ値＝出力したCSVをそのまま読み戻せる。
+ */
+export const ASSIGNMENT_COLUMN: string[] = ['配置先事業部', '配置先', '事業部', 'assigned_unit', 'unit']
 
 /**
  * 課題ごとの「何を最大化するか」の定義（設計書§5.1）。

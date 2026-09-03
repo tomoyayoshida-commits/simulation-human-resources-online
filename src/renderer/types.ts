@@ -11,6 +11,21 @@ export interface Employee {
   cost: number // 人件費 1-20
 }
 
+/**
+ * 設計書§4.2(docs/profile-plan.md): 表示専用の人材プロフィール。
+ * 計算には一切入らないため Employee とは別型にし、社員番号(id)だけで紐づける。
+ * Employee に混ぜると calcEngine/optimizer/csv の往復と baseline-snapshot に
+ * 無関係な差分が出るため、この分離は意図的。
+ */
+export interface EmployeeProfile {
+  id: string // 社員番号 = Employee.id と同じ値。唯一の結合キー
+  name: string
+  photo: string // data URI(image/jpeg・128×128)。空文字なら写真なし
+}
+
+/** 社員番号 → プロフィール。Firestore の employees コレクション1回分（docs/profile-plan.md §4.1）。 */
+export type ProfileMap = Record<string, EmployeeProfile>
+
 export interface Weights {
   sales: number
   mgmt: number

@@ -36,6 +36,8 @@
   <img class="brand-icon" src="./assets/samurai-fullmoon.png" alt="">
   <h1>侍の<br>人材配置</h1>
   <nav class="breadcrumb" id="breadcrumb"></nav>
+  <button class="btn secondary" data-go="p6">人材登録</button>
+  <button class="btn secondary" data-go="p7">保存配置</button>
   <span class="login-user" id="login-user"></span>
   <button class="btn secondary login-logout" id="logout-button">ログアウト</button>
 </div>
@@ -95,10 +97,23 @@
       </div>
       <div class="card">
         <div class="section-title" style="margin-top:0;">配置の前提条件</div>
-        <p class="note" style="margin:6px 0 10px;">全社最低売上：<strong id="cond-min-revenue"></strong></p>
-        <table class="errtable" id="cond-headcount-table">
-          <tr><th></th><th class="num">適正人数</th><th class="num">最低人数</th></tr>
-        </table>
+        <div class="stat-row" id="cond-cards">
+          <div class="stat cond-highlight" style="grid-column:1 / -1;">
+            <div class="k">全社最低売上</div>
+            <div class="v" id="cond-min-revenue"></div>
+          </div>
+        </div>
+        <details>
+          <summary class="detail-summary">詳しく見る（事業部別の適正人数・最低人数）</summary>
+          <div class="stat-row" id="cond-headcount-cards" style="margin-top:10px;">
+            <div class="stat"><div class="k">A事業部 適正人数</div><div class="v" id="cond-optimal-A"></div></div>
+            <div class="stat"><div class="k">B事業部 適正人数</div><div class="v" id="cond-optimal-B"></div></div>
+            <div class="stat"><div class="k">C事業部 適正人数</div><div class="v" id="cond-optimal-C"></div></div>
+            <div class="stat"><div class="k">A事業部 最低人数</div><div class="v" id="cond-min-A"></div></div>
+            <div class="stat"><div class="k">B事業部 最低人数</div><div class="v" id="cond-min-B"></div></div>
+            <div class="stat"><div class="k">C事業部 最低人数</div><div class="v" id="cond-min-C"></div></div>
+          </div>
+        </details>
       </div>
       <div class="card" id="validation-errors-card" hidden>
         <table class="errtable" id="validation-errors">
@@ -219,7 +234,78 @@
       </div>
       <div class="actions" style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
         <button class="btn secondary" id="p5-result-back">← 前の画面へ戻る</button>
+        <button class="btn" id="p5-open-bench">この採用を作業机で調整する ▶</button>
       </div>
+    </div>
+
+    <!-- 機能15b 採用判断の作業机：A/B/C＋採用候補プールの4列（docs/hiring-workbench-plan.md §5.3） -->
+    <div id="p5-bench-step" hidden>
+      <div id="hwb-root"></div>
+      <div class="actions" style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
+        <button class="btn secondary" id="p5-bench-back">← 前の画面へ戻る</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 管理：人材プロフィール登録（docs/profile-plan.md §4.4）。
+       #p6 は v0.8.0(705e763)でWhat-ifパネルが撤去され空いていた番号を再利用している。
+       使用頻度は初期登録＋入社・退職時のみ。 -->
+  <section class="panel" id="p6">
+    <h2>人材プロフィール登録</h2>
+    <p class="subtitle">氏名と顔写真をマスタに登録する。登録後は社員データを取り込むだけで作業机のカードに反映される</p>
+
+    <div class="card">
+      <div class="section-title">① 名簿CSV</div>
+      <div class="dropzone" id="dropzone-profile-csv">📄 名簿CSVをドラッグ&ドロップ、または <span class="file-select-link">ファイルを選択</span></div>
+      <input type="file" id="file-profile-csv" accept=".csv" hidden>
+      <p class="note">形式：<code>社員番号,氏名,写真ファイル名</code>（「写真ファイル名」列は省略可＝氏名だけの登録もできます）</p>
+      <div id="profile-csv-status" class="mt-12"></div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">② 顔写真</div>
+      <div class="dropzone" id="dropzone-profile-photos">🖼 顔写真をまとめてドラッグ&ドロップ、または <span class="file-select-link">ファイルを選択</span></div>
+      <input type="file" id="file-profile-photos" accept="image/*" multiple hidden>
+      <p class="note">複数選択できます。取り込み時に128×128へ縮小するため、元の大きさは気にしなくて構いません（1枚10MBまで）</p>
+      <div id="profile-photos-status" class="mt-12"></div>
+    </div>
+
+    <div class="section-title">登録内容の確認</div>
+    <div class="stat-row" id="profile-summary">
+      <div class="stat"><div class="k">登録件数</div><div class="v">0</div></div>
+      <div class="stat"><div class="k">写真あり</div><div class="v">0</div></div>
+      <div class="stat"><div class="k">判定</div><div class="v"><span class="pill warn">未取込</span></div></div>
+    </div>
+    <div id="profile-warnings"></div>
+
+    <details class="card" id="profile-preview-card" hidden>
+      <summary class="detail-summary">プレビュー（保存される内容）</summary>
+      <div id="profile-preview" class="profile-grid"></div>
+    </details>
+
+    <div class="actions" style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
+      <button class="btn secondary" data-go="p0">← トップへ戻る</button>
+      <button class="btn" id="profile-save" disabled>マスタに保存する</button>
+    </div>
+
+    <div class="section-title">登録済み一覧</div>
+    <div id="profile-registered" class="profile-grid"></div>
+  </section>
+
+  <!-- 保存した配置案（docs/export-plan.md §4.1）。一覧と出力の2ステップ。
+       #p4 のステップにしないのは、一覧から後日開く経路では #p4 の取込状態が無いため。 -->
+  <section class="panel" id="p7">
+    <div id="p7-list-step">
+      <h2>保存した配置案</h2>
+      <p class="subtitle">保存された配置案を開き、データCSV・告知用・エグゼクティブサマリの3通りで出力する</p>
+      <div class="card" id="p7-list"></div>
+      <div class="actions" style="margin-top:10px;">
+        <button class="btn secondary" data-go="p0">← トップへ戻る</button>
+      </div>
+    </div>
+
+    <div id="p7-export-step" hidden>
+      <div id="p7-export"></div>
     </div>
   </section>
 

@@ -1,9 +1,38 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Phase (d)で許可リスト方式に置き換えるまでの暫定値。全拒否（docs/web-firebase-plan.md参照）。
+    // 既定は全拒否（docs/web-firebase-plan.md参照）。
+    // Firestoreのルールは許可の論理和で評価されるため、この `if false` は
+    // 下の match /employees の許可を打ち消さない（明示的に許可したものだけが通る）。
     match /{document=**} {
       allow read, write: if false;
+    }
+
+    // 人材プロフィール（docs/profile-plan.md §4.7）。ドキュメントIDは社員番号。
+    // employees は履歴ではなくマスタなので、web-firebase-plan.md の
+    // 「追記のみ・更新削除不可」原則の対象外とし、写真の差し替え・退職者の削除を許可する。
+    match /employees/{employeeId} {
+      allow read: if isMember();
+      allow write: if isMember();
+    }
+
+    // 保存された配置案（docs/export-plan.md §4.7）。
+    // employees と違いこちらは履歴なので、web-firebase-plan.md の
+    // 「追記のみ・更新削除不可」原則をそのまま適用する。配布した文書の元になった配置が
+    // 後から書き換わると、どの版を配ったのかを誰も確認できなくなる。
+    // savedBy の一致を課すのは、他人名義の配置案を作れないようにするため。
+    match /simulationRuns/{runId} {
+      allow read: if isMember();
+      allow create: if isMember() && request.resource.data.savedBy == request.auth.token.email;
+      allow update, delete: if false;
+    }
+
+    // 許可判定。src/renderer/auth.ts の ALLOWED_DOMAIN と同じ条件を持つ。
+    // 片方だけ直すと食い違うため、ドメインを変えるときは必ず両方を直すこと。
+    function isMember() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email.matches('.*@pathoslogos[.]co[.]jp$');
     }
   }
 }

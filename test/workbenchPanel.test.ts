@@ -58,21 +58,55 @@ test('buildWorkbenchHtml: 社員番号の<script>がタグとして解釈され�
   assert.ok(html.includes('&lt;script&gt;'))
 })
 
-test('buildWorkbenchHtml: 制約違反があるときCSV出力ボタンがdisabled（§8-2）', () => {
+// 出力は作業机から切り離した（docs/export-plan.md §4.1）。作業机が持つのは保存だけで、
+// 制約違反の門は出力側（#p7）へ移した（§4.5）。ここでは「違反していても保存はできる」ことを守る。
+test('buildWorkbenchHtml: 作業机に出力ボタンが無い（export-plan.md §4.1・受入基準1）', () => {
+  const state = makeState()
+  const html = buildWorkbenchHtml({ state, sortKey: 'id', selectedEmployeeId: null, alertText: null })
+  assert.ok(!html.includes('data-wb-action="csv"'))
+  assert.ok(!html.includes('CSV出力'))
+  assert.ok(html.includes('data-wb-action="save"'))
+})
+
+test('buildWorkbenchHtml: 制約違反があっても保存ボタンはdisabledでない（export-plan.md §4.5）', () => {
   const state = makeState()
   const lowRoster = state.roster.map((e) => ({ ...e, sales: 1, mgmt: 1, dev: 1, training: 1 }))
   const lowBaseline = computeSimulationResult(state.assignment, lowRoster)
   const violating: WorkbenchState = { ...state, roster: lowRoster, baseline: lowBaseline }
   const html = buildWorkbenchHtml({ state: violating, sortKey: 'id', selectedEmployeeId: null, alertText: null })
-  const csvBtn = /data-wb-action="csv"[^>]*>/.exec(html)
-  assert.ok(csvBtn?.[0].includes('disabled'))
+  const saveBtn = /data-wb-action="save"[^>]*>/.exec(html)
+  assert.ok(saveBtn && !saveBtn[0].includes('disabled'))
 })
 
-test('buildWorkbenchHtml: 制約を満たしていればCSV出力ボタンはdisabledでない', () => {
+test('buildWorkbenchHtml: savingTitle が null なら命名フォームは閉じている（§4.8）', () => {
   const state = makeState()
-  const html = buildWorkbenchHtml({ state, sortKey: 'id', selectedEmployeeId: null, alertText: null })
-  const csvBtn = /data-wb-action="csv"[^>]*>/.exec(html)
-  assert.ok(csvBtn && !csvBtn[0].includes('disabled'))
+  const closed = buildWorkbenchHtml({ state, sortKey: 'id', selectedEmployeeId: null, alertText: null })
+  assert.ok(!closed.includes('wb-save-form'))
+
+  const open = buildWorkbenchHtml({
+    state,
+    sortKey: 'id',
+    selectedEmployeeId: null,
+    alertText: null,
+    savingTitle: '課題1 配置案 2026-09-03',
+  })
+  assert.ok(open.includes('wb-save-form'))
+  assert.ok(open.includes('value="課題1 配置案 2026-09-03"'))
+  // フォームを開いている間は保存ボタン自体を止め、二重に開かせない
+  assert.ok(/data-wb-action="save"[^>]*disabled/.test(open))
+})
+
+test('buildWorkbenchHtml: 命名フォームの既定値がタグとして解釈されない（CLAUDE.md §8）', () => {
+  const state = makeState()
+  const html = buildWorkbenchHtml({
+    state,
+    sortKey: 'id',
+    selectedEmployeeId: null,
+    alertText: null,
+    savingTitle: '"><script>alert(1)</script>',
+  })
+  assert.ok(!html.includes('"><script>'))
+  assert.ok(html.includes('&lt;script&gt;'))
 })
 
 test('buildWorkbenchHtml: alertTextがあれば警告バナーを表示、無ければ表示しない（§8-1）', () => {
@@ -93,7 +127,9 @@ test('buildWorkbenchHtml: selectedEmployeeId に一致するカードに selecte
   const state = makeState()
   const id = state.roster[0].id
   const html = buildWorkbenchHtml({ state, sortKey: 'id', selectedEmployeeId: id, alertText: null })
-  assert.ok(html.includes(`class="wb-card selected" draggable="true" data-emp="${id}"`))
+  // 顔写真ON（既定・docs/profile-plan.md §8-5）のときは後ろに with-photo が付くため、
+  // クラス属性の完全一致ではなく selected が付いていることを見る。
+  assert.match(html, new RegExp(`class="wb-card selected[^"]*" draggable="true" data-emp="${id}"`))
 })
 
 test('buildWorkbenchHtml: 選択中のソートキーの option に selected が付く', () => {
