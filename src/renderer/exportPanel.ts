@@ -55,13 +55,26 @@ export function buildRunListHtml(runs: RunSummary[]): string {
     </table>`
 }
 
+/** 保存直後だけ出す簡単なチュートリアル（3つの出力の違いを説明する）。一覧から開いたときは出さない。 */
+function buildExportTutorialHtml(): string {
+  return `
+    <div class="hint" id="p7-tutorial">
+      保存できました。このあと3つの出力から選べます：
+      <b>CSV</b>は取り込み直して再計算できる全項目の明細、
+      <b>告知用PDF</b>は社員に配る新体制表、
+      <b>エグゼクティブサマリPDF</b>は経営層向けの数字だけの1枚です。
+      <button type="button" class="btn secondary" data-export="dismiss-tutorial" style="margin-left:10px;">閉じる</button>
+    </div>`
+}
+
 /** 出力ステップの中身。制約違反のときは3つとも押せない（§4.5）。 */
-export function buildExportHtml(run: SavedRun): string {
+export function buildExportHtml(run: SavedRun, justSaved = false): string {
   const blocked = !run.feasible
   const disabled = blocked ? ' disabled title="制約違反があるため出力できません"' : ''
   return `
     <h2>${escapeHtml(run.title)}</h2>
     <p class="subtitle">${escapeHtml(taskLabel(run.task, run.metric))}　保存者 ${escapeHtml(run.savedBy)}　${escapeHtml(dateTimeText(run.savedAt))}</p>
+    ${justSaved ? buildExportTutorialHtml() : ''}
     ${blocked ? `<div class="wb-alert-banner"><span>この配置案は制約を満たしていません。記録として保存されていますが、出力はできません。</span></div>` : ''}
     <div class="export-grid">
       <div class="export-card">
@@ -127,6 +140,10 @@ async function handleExportAction(action: string): Promise<void> {
     await openRunsList()
     return
   }
+  if (action === 'dismiss-tutorial') {
+    $('p7-tutorial')?.remove()
+    return
+  }
   if (!run.feasible) return
   if (action === 'csv') {
     const date = run.savedAt ? run.savedAt.toISOString().slice(0, 10) : ''
@@ -175,10 +192,13 @@ export async function openRunsList(): Promise<void> {
   }
 }
 
-/** 1件を出力ステップで開く。作業机からの保存直後と、一覧からの選択の両方がここへ来る。 */
-export function openExportFor(run: SavedRun): void {
+/**
+ * 1件を出力ステップで開く。作業机からの保存直後と、一覧からの選択の両方がここへ来る。
+ * justSaved は保存直後だけ true にする（チュートリアル表示の判定に使う。§4.1）。
+ */
+export function openExportFor(run: SavedRun, justSaved = false): void {
   current = run
-  setHtml('p7-export', buildExportHtml(run))
+  setHtml('p7-export', buildExportHtml(run, justSaved))
   showStep('export')
 }
 

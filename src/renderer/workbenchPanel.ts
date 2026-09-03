@@ -21,7 +21,7 @@ import {
   type WorkbenchState,
 } from './workbench.ts'
 import { solveForHeadcount } from './optimizer.ts'
-import { saveRun, type SavedRun } from './runStore.ts'
+import { saveRun, titleExists, type SavedRun } from './runStore.ts'
 import { withLoading } from './loading.ts'
 import { round2, taskLabel, UNIT_IDS, UNIT_LABEL, UNIT_VAR } from './constants.ts'
 import { clampPct, deltaText, escapeAttr, escapeHtml, oku, oku1, pct, pill, signed } from './format.ts'
@@ -62,6 +62,8 @@ export interface WorkbenchViewData {
    * `null` なら閉じている。文字列ならその値を初期値にして開いている。
    */
   savingTitle?: string | null
+  /** 保存フォーム直下に出す保存失敗の理由（同名衝突・通信失敗）。`null`/未指定なら非表示。 */
+  saveError?: string | null
 }
 
 function buildAlertHtml(alertText: string | null): string {
@@ -162,7 +164,7 @@ function buildColumnHtml(u: UnitId, ctx: ColumnContext): string {
  * 保存時の命名フォーム（docs/export-plan.md §4.8）。`savingTitle` が null なら閉じている。
  * 別ダイアログにせず操作列の直下に開く。制約違反があっても保存自体は止めない（§4.5）。
  */
-function buildSaveFormHtml(savingTitle: string | null, violation: boolean): string {
+function buildSaveFormHtml(savingTitle: string | null, violation: boolean, saveError: string | null): string {
   if (savingTitle === null) return ''
   return `
     <div class="wb-save-form">
@@ -171,6 +173,7 @@ function buildSaveFormHtml(savingTitle: string | null, violation: boolean): stri
       </label>
       <button type="button" class="btn" data-wb-action="save-confirm">保存する</button>
       <button type="button" class="btn secondary" data-wb-action="save-cancel">やめる</button>
+      ${saveError ? `<p class="warn-text">${escapeHtml(saveError)}</p>` : ''}
       ${violation ? '<p class="warn-text">制約違反があります。記録としては保存できますが、CSV・PDFの出力はできません。</p>' : ''}
     </div>`
 }
@@ -181,6 +184,7 @@ function buildActionsHtml(
   sortKey: WorkbenchSortKey,
   showPhotos: boolean,
   savingTitle: string | null,
+  saveError: string | null,
 ): string {
   const violation = hasViolation(evaluation)
   const diffs = diffAssignment(state.baseline.assignment, state.assignment)
@@ -201,7 +205,7 @@ function buildActionsHtml(
         <button type="button" class="btn" data-wb-action="save"${savingTitle === null ? '' : ' disabled'}>この案を保存</button>
       </div>
     </div>
-    ${buildSaveFormHtml(savingTitle, violation)}
+    ${buildSaveFormHtml(savingTitle, violation, saveError)}
     <p class="wb-diff">異動の内訳：${diffText}</p>`
 }
 
@@ -226,7 +230,7 @@ export function buildWorkbenchHtml(data: WorkbenchViewData): string {
     buildAlertHtml(alertText) +
     buildHeaderHtml(state, evaluation) +
     `<div class="wb-board">${columnsHtml}</div>` +
-    buildActionsHtml(state, evaluation, sortKey, showPhotos, data.savingTitle ?? null) +
+    buildActionsHtml(state, evaluation, sortKey, showPhotos, data.savingTitle ?? null, data.saveError ?? null) +
     // ドラッグ中の増減プレビュー。列ヘッダに置くと長い列の下端を掴んでいるとき画面外に出て読めないため、
     // カーソル追従の浮動バッジにしている。ドラッグ中はstateが変わらず再描画も起きないので、
     // このHTMLに含めておけばドラッグ開始から終了まで生き残る。
@@ -252,7 +256,21 @@ const view: {
   showPhotos: boolean
   /** 保存時の命名フォーム（export-plan.md §4.8）。null なら閉じている */
   savingTitle: string | null
-} = { state: null, sortKey: 'id', selectedEmployeeId: null, dragEmployeeId: null, dragBaseRevenue: 0, dragHoverUnit: null, alertText: null, alertKind: null, showPhotos: true, savingTitle: null }
+  /** 保存フォーム直下に出す保存失敗の理由（同名衝突・通信失敗）。null なら非表示 */
+  saveError: string | null
+} = {
+  state: null,
+  sortKey: 'id',
+  selectedEmployeeId: null,
+  dragEmployeeId: null,
+  dragBaseRevenue: 0,
+  dragHoverUnit: null,
+  alertText: null,
+  alertKind: null,
+  showPhotos: true,
+  savingTitle: null,
+  saveError: null,
+}
 
 /** 保存された配置案を受け取る側（#p7 の出力画面へ渡す）。renderer.ts が配線する。 */
 let onSaved: (run: SavedRun) => void = () => {}
@@ -269,7 +287,7 @@ function clearAlertIfResolved(evaluation: WhatIfEvaluation): void {
 
 function render(): void {
   if (!view.state) return
-  setHtml('wb-root', buildWorkbenchHtml({ state: view.state, sortKey: view.sortKey, selectedEmployeeId: view.selectedEmployeeId, alertText: view.alertText, showPhotos: view.showPhotos, savingTitle: view.savingTitle }))
+  setHtml('wb-root', buildWorkbenchHtml({ state: view.state, sortKey: view.sortKey, selectedEmployeeId: view.selectedEmployeeId, alertText: view.alertText, showPhotos: view.showPhotos, savingTitle: view.savingTitle, saveError: view.saveError }))
 }
 
 /** #p4 のカードから遷移してきた初期状態で作業机を開く（機能15・§4.1）。 */
@@ -282,6 +300,7 @@ export function openWorkbench(initial: WorkbenchState): void {
   view.dragEmployeeId = null
   view.dragHoverUnit = null
   view.savingTitle = null
+  view.saveError = null
   render()
 }
 
@@ -300,6 +319,11 @@ async function commitSave(): Promise<void> {
   const title = ($('wb-save-title') as HTMLInputElement | null)?.value.trim() || defaultRunTitle(state)
   const evaluation = evaluate(state)
   try {
+    if (await withLoading('確認しています…', async () => titleExists(title))) {
+      view.saveError = `「${title}」という名前は既に保存されています。別の名前を付けてください。`
+      render()
+      return
+    }
     const run = await withLoading('配置案を保存しています…', async () =>
       saveRun({
         title,
@@ -317,12 +341,12 @@ async function commitSave(): Promise<void> {
       }),
     )
     view.savingTitle = null
+    view.saveError = null
     render()
     onSaved(run)
   } catch (e) {
     console.warn('配置案の保存に失敗しました。', e)
-    view.alertText = '保存できませんでした。通信状態を確認してもう一度お試しください。'
-    view.alertKind = null
+    view.saveError = '保存できませんでした。通信状態を確認してもう一度お試しください。'
     render()
   }
 }
@@ -373,9 +397,11 @@ function handleAction(action: string): void {
     render()
   } else if (action === 'save') {
     view.savingTitle = defaultRunTitle(state)
+    view.saveError = null
     render()
   } else if (action === 'save-cancel') {
     view.savingTitle = null
+    view.saveError = null
     render()
   } else if (action === 'save-confirm') {
     void commitSave()

@@ -108,14 +108,20 @@ test('制約違反があっても保存ボタンは disabled にしない（§5.
   assert.ok(!html.includes('CSV出力'))
 })
 
-test('分岐で見出しと固定チェックボックスが変わる（§5.1・§5.5）', () => {
+test('分岐で見出しが変わる。固定チェックボックスは両方の分岐で出す（§5.1・§5.5）', () => {
   const existing = view(makeState({ branch: 'existing' }))
   assert.ok(existing.includes('現行配置を起点'))
   assert.ok(existing.includes('id="hwb-lock"'))
-  // 分岐2は起点が最適解なので「固定する」の意味が無い
-  const optimal = view(makeState({ branch: 'optimal' }))
+  // 分岐2でも既存社員の異動を検討できるよう、切替手段は残す
+  const optimal = view(makeState({ branch: 'optimal', lockBase: false }))
   assert.ok(optimal.includes('採用前の最適解を起点'))
-  assert.ok(!optimal.includes('id="hwb-lock"'))
+  assert.ok(optimal.includes('id="hwb-lock"'))
+})
+
+test('プール列は候補専用であることを明示する（§5.5.1）', () => {
+  const html = view(makeState())
+  assert.ok(html.includes('候補のみ'))
+  assert.ok(html.includes('既存社員はこの列に入れられません'))
 })
 
 test('内訳に採用・見送りが出る（§5.8）', () => {

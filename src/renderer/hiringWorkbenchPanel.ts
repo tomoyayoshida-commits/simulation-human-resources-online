@@ -14,7 +14,9 @@ import {
   addedCost,
   buildHiringCards,
   canMove,
+  canPlace,
   declinedCandidates,
+  isCandidate,
   diffWithPool,
   evaluateHiring,
   hiredCandidates,
@@ -30,7 +32,7 @@ import {
 } from './hiringWorkbench.ts'
 import { headcountOf } from './whatif.ts'
 import { solveForHeadcount } from './optimizer.ts'
-import { saveRun, type SavedRun } from './runStore.ts'
+import { saveRun, titleExists, type SavedRun } from './runStore.ts'
 import { withLoading } from './loading.ts'
 import { round2, taskLabel, UNIT_IDS, UNIT_LABEL, UNIT_VAR } from './constants.ts'
 import { clampPct, deltaText, escapeAttr, escapeHtml, oku, oku1, pct, pill, signed } from './format.ts'
@@ -58,6 +60,8 @@ export interface HiringWorkbenchViewData {
   showPhotos?: boolean
   /** 保存時の命名フォームの状態。null なら閉じている（機能16 §4.8 と同じ作法）。 */
   savingTitle?: string | null
+  /** 保存フォーム直下に出す保存失敗の理由（同名衝突・通信失敗）。`null`/未指定なら非表示。 */
+  saveError?: string | null
 }
 
 function buildAlertHtml(alertText: string | null): string {
@@ -95,9 +99,10 @@ function buildHeaderHtml(state: HiringWorkbenchState, evaluation: WhatIfEvaluati
   const hired = hiredCandidates(state).length
   // 分岐1は「現行配置を起点」、分岐2は「採用前の最適解を起点」。どちらの検討なのかを常に出す（§5.1）
   const originText = state.branch === 'existing' ? '現行配置を起点' : '採用前の最適解を起点'
-  const lockHtml = state.branch === 'existing'
-    ? `<label class="hwb-lock"><input type="checkbox" id="hwb-lock"${state.lockBase ? ' checked' : ''}>既存${state.base.length}名を固定する</label>`
-    : ''
+  // チェックボックスは両方の分岐で出す。分岐2でも既存社員の異動を検討したい場面はあり、
+  // 出さないと lockBase を切り替える手段が無くなって既存100名が一切動かせなくなる。
+  // 既定値の違い（分岐1はON・分岐2はOFF）は renderer.ts の起動時に決める。
+  const lockHtml = `<label class="hwb-lock"><input type="checkbox" id="hwb-lock"${state.lockBase ? ' checked' : ''}>既存${state.base.length}名を固定する</label>`
   return `
     <h2>採用判断の作業机：${escapeHtml(originText)}（${taskLabel(state.task, state.metric)}）</h2>
     <p class="subtitle">誰を採り、どこに置くかを1つの盤面で決める。プールに残した候補は採用しない</p>
@@ -162,6 +167,9 @@ interface ColumnContext {
 /**
  * プール列（§5.3）。充足率メーターも売上も出さない——未採用者は事業部に属さないので
  * どちらも意味を持たないため。人数と「採用しない」ことだけを示す。
+ *
+ * この列は**追加採用候補の専用列**で、既存社員は入れられない（§5.5.1）。
+ * 見出しに明記するのは、盤面上は他の3列と同じに見えてしまうため。
  */
 function buildPoolColumnHtml(ctx: ColumnContext): string {
   const { state, sortedCards, selectedEmployeeId, showPhotos } = ctx
@@ -171,8 +179,8 @@ function buildPoolColumnHtml(ctx: ColumnContext): string {
   return `
     <div class="wb-column hwb-pool" data-hslot="pool">
       <div class="wb-unit-head">
-        <div class="wb-unit-title"><b>採用候補</b> ${cards.length}名</div>
-        <div class="hwb-pool-note">ここに残した${declined}名は採用しない</div>
+        <div class="wb-unit-title"><b>採用候補</b> ${cards.length}名<span class="hwb-pool-tag">候補のみ</span></div>
+        <div class="hwb-pool-note">ここに残した${declined}名は採用しない（既存社員はこの列に入れられません）</div>
       </div>
       <div class="wb-cards">${cardsHtml}</div>
     </div>`
@@ -200,7 +208,7 @@ function buildUnitColumnHtml(u: UnitId, ctx: ColumnContext): string {
 }
 
 /** 保存時の命名フォーム。制約違反があっても保存自体は止めない（§5.9・機能16 §4.5）。 */
-function buildSaveFormHtml(savingTitle: string | null, violation: boolean): string {
+function buildSaveFormHtml(savingTitle: string | null, violation: boolean, saveError: string | null): string {
   if (savingTitle === null) return ''
   return `
     <div class="wb-save-form">
@@ -209,6 +217,7 @@ function buildSaveFormHtml(savingTitle: string | null, violation: boolean): stri
       </label>
       <button type="button" class="btn" data-hwb-action="save-confirm">保存する</button>
       <button type="button" class="btn secondary" data-hwb-action="save-cancel">やめる</button>
+      ${saveError ? `<p class="warn-text">${escapeHtml(saveError)}</p>` : ''}
       ${violation ? '<p class="warn-text">制約違反があります。記録としては保存できますが、CSV・PDFの出力はできません。</p>' : ''}
     </div>`
 }
@@ -234,6 +243,7 @@ function buildActionsHtml(
   sortKey: WorkbenchSortKey,
   showPhotos: boolean,
   savingTitle: string | null,
+  saveError: string | null,
 ): string {
   const violation = !evaluation.result.feasible || evaluation.minHeadcountViolations.length > 0
   const sortOptionsHtml = SORT_OPTIONS.map(
@@ -258,7 +268,7 @@ function buildActionsHtml(
         <button type="button" class="btn" data-hwb-action="save"${savingTitle === null ? '' : ' disabled'}>この案を保存</button>
       </div>
     </div>
-    ${buildSaveFormHtml(savingTitle, violation)}
+    ${buildSaveFormHtml(savingTitle, violation, saveError)}
     <p class="wb-diff">内訳：${escapeHtml(diffLine(state))}</p>`
 }
 
@@ -267,6 +277,7 @@ export function buildHiringWorkbenchHtml(data: HiringWorkbenchViewData): string 
   const { state, sortKey, selectedEmployeeId, alertText } = data
   const showPhotos = data.showPhotos ?? true
   const savingTitle = data.savingTitle ?? null
+  const saveError = data.saveError ?? null
   const evaluation = evaluateHiring(state)
   // カードの組み立てと並び替えは列に依存しないので1回で済ませる。
   // sortCards は WorkbenchCard 用だが、比較に使うのは employee.id / type / cost / contributions[unit] だけ。
@@ -279,7 +290,7 @@ export function buildHiringWorkbenchHtml(data: HiringWorkbenchViewData): string 
     buildAlertHtml(alertText) +
     buildHeaderHtml(state, evaluation) +
     `<div class="hwb-board">${columnsHtml}</div>` +
-    buildActionsHtml(state, evaluation, sortKey, showPhotos, savingTitle) +
+    buildActionsHtml(state, evaluation, sortKey, showPhotos, savingTitle, saveError) +
     `<div class="wb-drag-badge" hidden></div>`
   )
 }
@@ -319,6 +330,7 @@ const view: {
   alertKind: 'revenue' | 'headcount' | null
   showPhotos: boolean
   savingTitle: string | null
+  saveError: string | null
 } = {
   state: null,
   sortKey: 'id',
@@ -330,6 +342,7 @@ const view: {
   alertKind: null,
   showPhotos: true,
   savingTitle: null,
+  saveError: null,
 }
 
 /** 保存された配置案を受け取る側（#p7 の出力画面へ渡す）。renderer.ts が配線する。 */
@@ -359,6 +372,7 @@ function render(): void {
       alertText: view.alertText,
       showPhotos: view.showPhotos,
       savingTitle: view.savingTitle,
+      saveError: view.saveError,
     }),
   )
 }
@@ -373,12 +387,22 @@ export function openHiringWorkbench(initial: HiringWorkbenchState): void {
   view.dragEmployeeId = null
   view.dragHoverSlot = null
   view.savingTitle = null
+  view.saveError = null
   render()
 }
 
 function commitMove(id: string, slot: HiringSlot): void {
   const state = view.state
   if (!state) return
+  // §5.5.1: 既存社員をプールへ落とす操作は黙って無視せず、なぜできないのかを出す。
+  // 無反応だと「掴み損ねた」と思って何度も試すことになるため。
+  if (slot === 'pool' && !isCandidate(state, id)) {
+    view.selectedEmployeeId = null
+    view.alertKind = null
+    view.alertText = '採用候補の列に入れられるのは追加採用の候補だけです。この画面では既存社員の雇用は扱いません。'
+    render()
+    return
+  }
   const before = evaluateHiring(state)
   const next = withMoveTo(state, id, slot)
   view.selectedEmployeeId = null
@@ -419,6 +443,11 @@ async function commitSave(): Promise<void> {
   const ex = serializeHiringWorkbenchState(state)
   const hiredRoster = state.roster.filter((e) => state.assignment[e.id] !== undefined)
   try {
+    if (await withLoading('確認しています…', async () => titleExists(title))) {
+      view.saveError = `「${title}」という名前は既に保存されています。別の名前を付けてください。`
+      render()
+      return
+    }
     const run = await withLoading('採用案を保存しています…', async () =>
       saveRun({
         title,
@@ -439,12 +468,12 @@ async function commitSave(): Promise<void> {
       }),
     )
     view.savingTitle = null
+    view.saveError = null
     render()
     onSaved(run)
   } catch (e) {
     console.warn('採用案の保存に失敗しました。', e)
-    view.alertText = '保存できませんでした。通信状態を確認してもう一度お試しください。'
-    view.alertKind = null
+    view.saveError = '保存できませんでした。通信状態を確認してもう一度お試しください。'
     render()
   }
 }
@@ -472,9 +501,11 @@ function handleAction(action: string): void {
     render()
   } else if (action === 'save') {
     view.savingTitle = defaultRunTitle(state)
+    view.saveError = null
     render()
   } else if (action === 'save-cancel') {
     view.savingTitle = null
+    view.saveError = null
     render()
   } else if (action === 'save-confirm') {
     void commitSave()
@@ -598,8 +629,14 @@ function handleDragOver(e: DragEvent): void {
     clearAllDropHints()
     return
   }
-  e.preventDefault()
   const slot = colEl.dataset.hslot as HiringSlot
+  // §5.5.1: 置けない列では preventDefault しない＝ブラウザ標準の「ドロップ不可」カーソルになる。
+  // 掴んだまま近づいた時点で入らないと分かるので、落としてから断られるより手前で止まる。
+  if (view.state && view.dragEmployeeId && !canPlace(view.state, view.dragEmployeeId, slot)) {
+    clearAllDropHints()
+    return
+  }
+  e.preventDefault()
   if (slot !== view.dragHoverSlot) {
     clearAllDropHints()
     showDropHint(colEl, slot)
@@ -608,7 +645,11 @@ function handleDragOver(e: DragEvent): void {
 }
 
 function handleDragEnter(e: DragEvent): void {
-  if (columnAt(e)) e.preventDefault()
+  // 受け入れ可否の判定は handleDragOver に一本化してある（§5.5.1）。ここで無条件に
+  // preventDefault すると、禁止列でも一瞬だけ「置ける」表示になる。
+  const colEl = columnAt(e)
+  if (!colEl || !view.state || !view.dragEmployeeId) return
+  if (canPlace(view.state, view.dragEmployeeId, colEl.dataset.hslot as HiringSlot)) e.preventDefault()
 }
 
 function handleDragLeave(e: DragEvent): void {

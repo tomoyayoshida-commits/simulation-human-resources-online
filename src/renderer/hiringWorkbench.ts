@@ -49,26 +49,50 @@ export function currentSlot(state: HiringWorkbenchState, employeeId: string): Hi
   return state.assignment[employeeId] ?? 'pool'
 }
 
+/** 追加採用候補か（既存社員なら false）。 */
+export function isCandidate(state: HiringWorkbenchState, employeeId: string): boolean {
+  return state.candidates.some((e) => e.id === employeeId)
+}
+
 /**
  * その社員を動かせるか（§5.5）。ロック中は base の社員を動かせない。
  * roster にいない社員は常に動かせない。
+ *
+ * これは「動かせるか」だけの判定で、行き先の可否は canPlace が見る。
  */
 export function canMove(state: HiringWorkbenchState, employeeId: string): boolean {
   if (!state.roster.some((e) => e.id === employeeId)) return false
   if (!state.lockBase) return true
-  return !state.base.some((e) => e.id === employeeId)
+  // ロック中に動かせるのは候補だけ（roster = base + candidates なので候補でない＝既存社員）
+  return isCandidate(state, employeeId)
+}
+
+/**
+ * その社員をその列に置けるか（§5.5.1）。
+ *
+ * **プール列は追加採用候補の専用列**であり、既存社員は lockBase の値に関わらず入れられない。
+ * 既存社員をプールへ落とすことは「その人を雇わない」＝解雇を意味するが、このアプリが扱うのは
+ * 配置と採用の判断であって雇用の終了ではない（モデルに退職金も引継ぎコストも無く、
+ * 「1名減らすと売上がいくら減るか」だけが出てしまうため、解雇の是非を論じる道具として誤用されうる）。
+ * ロックはあくまで「既存の異動を伴わない純増採用を検討する」ためのもので、この禁止とは別の話。
+ */
+export function canPlace(state: HiringWorkbenchState, employeeId: string, slot: HiringSlot): boolean {
+  if (!canMove(state, employeeId)) return false
+  if (slot === 'pool' && !isCandidate(state, employeeId)) return false
+  return true
 }
 
 /**
  * assignment 上で1名を動かした新しい assignment を返す（元は破壊しない）。
- * 'pool' へ動かす場合はキーを削除する（§2.2）。動かせない社員のときは元をそのまま返す。
+ * 'pool' へ動かす場合はキーを削除する（§2.2）。
+ * 置けない組み合わせ（ロック中の既存社員／既存社員→プール）のときは元をそのまま返す。
  */
 export function moveEmployeeTo(
   state: HiringWorkbenchState,
   employeeId: string,
   slot: HiringSlot,
 ): Record<string, UnitId> {
-  if (!canMove(state, employeeId)) return state.assignment
+  if (!canPlace(state, employeeId, slot)) return state.assignment
   const next = { ...state.assignment }
   if (slot === 'pool') delete next[employeeId]
   else next[employeeId] = slot
@@ -103,7 +127,7 @@ export function withMoveTo(
   employeeId: string,
   slot: HiringSlot,
 ): HiringWorkbenchState {
-  if (!canMove(state, employeeId)) return state
+  if (!canPlace(state, employeeId, slot)) return state
   if (currentSlot(state, employeeId) === slot) return state
   return pushHistory(state, moveEmployeeTo(state, employeeId, slot))
 }

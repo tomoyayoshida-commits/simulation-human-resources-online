@@ -6,7 +6,9 @@ import {
   addedCost,
   buildHiringCards,
   canMove,
+  canPlace,
   currentSlot,
+  isCandidate,
   declinedCandidates,
   diffWithPool,
   evaluateHiring,
@@ -124,9 +126,52 @@ test('ロックを外すと既存社員が動かせる', () => {
   assert.equal(withMoveTo(s, 'E1', 'C').assignment.E1, 'C')
 })
 
-test('ロック中は既存社員をプールへも落とせない（採用取り消しの誤操作を防ぐ）', () => {
+// ---- 既存社員をプールへ落とせない＝解雇は扱わない（§5.5.1） ----
+
+test('ロック中は既存社員をプールへも落とせない', () => {
   const s = makeState({ lockBase: true })
   assert.equal(withMoveTo(s, 'E1', 'pool'), s)
+})
+
+test('ロックを外しても既存社員はプールへ落とせない（解雇は扱わない）', () => {
+  const s = makeState({ lockBase: false })
+  // 事業部間の異動はできる
+  assert.equal(withMoveTo(s, 'E1', 'C').assignment.E1, 'C')
+  // プールへは落とせない
+  assert.equal(canPlace(s, 'E1', 'pool'), false)
+  assert.equal(withMoveTo(s, 'E1', 'pool'), s)
+  assert.equal(moveEmployeeTo(s, 'E1', 'pool'), s.assignment)
+  assert.equal(s.assignment.E1, 'A')
+})
+
+test('候補はロックを外してもプールへ戻せる（採用の取り消し）', () => {
+  const s = withMoveTo(makeState({ lockBase: false }), 'C1', 'A')
+  assert.equal(canPlace(s, 'C1', 'pool'), true)
+  assert.equal(withMoveTo(s, 'C1', 'pool').assignment.C1, undefined)
+})
+
+test('canPlace: 事業部への移動は canMove と一致する（プール以外は制限しない）', () => {
+  const locked = makeState({ lockBase: true })
+  assert.equal(canPlace(locked, 'E1', 'B'), false)
+  assert.equal(canPlace(locked, 'C1', 'B'), true)
+  const open = makeState({ lockBase: false })
+  assert.equal(canPlace(open, 'E1', 'B'), true)
+})
+
+test('isCandidate: 既存社員と候補を見分ける', () => {
+  const s = makeState()
+  assert.equal(isCandidate(s, 'C1'), true)
+  assert.equal(isCandidate(s, 'E1'), false)
+  assert.equal(isCandidate(s, 'X999'), false)
+})
+
+test('全員をプールへ落とそうとしても既存6名は残る（100名を候補に突っ込めない）', () => {
+  let s = makeState({ lockBase: false })
+  for (const e of s.roster) s = withMoveTo(s, e.id, 'pool')
+  assert.equal(hiredCandidates(s).length, 0)
+  // 既存6名は事業部に残ったまま
+  for (const e of s.base) assert.ok(s.assignment[e.id] !== undefined, `${e.id} が消えた`)
+  assert.equal(evaluateHiring(s).result.headcount.A + evaluateHiring(s).result.headcount.B + evaluateHiring(s).result.headcount.C, 6)
 })
 
 test('roster にいない社員IDでは状態が変わらない', () => {

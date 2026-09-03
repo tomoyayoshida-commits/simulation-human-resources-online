@@ -224,6 +224,8 @@ tr.whatif-moved{background:#fef3dc;}
 .hwb-board{display:grid;grid-template-columns:repeat(3,1fr) 1.05fr;gap:12px;margin-bottom:14px;}
 .hwb-pool{background:var(--grid);border-style:dashed;}
 .hwb-pool-note{font-size:10.5px;color:var(--text-muted);margin-top:2px;}
+/* この列が候補専用であることの明示（§5.5.1）。既存社員は入れられない */
+.hwb-pool-tag{font-size:10px;color:var(--text-muted);border:1px solid var(--border);border-radius:5px;padding:1px 5px;margin-left:6px;vertical-align:middle;}
 .hwb-totals{display:flex;gap:26px;margin:10px 0 8px;}
 .hwb-stat{display:flex;flex-direction:column;}
 .hwb-stat .k{font-size:10.5px;color:var(--text-muted);}

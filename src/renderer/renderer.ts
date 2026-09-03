@@ -370,7 +370,10 @@ function initImports(): void {
         assignment: { ...beforeBaseline.assignment },
         beforeBaseline,
         afterBaseline,
-        lockBase: true,
+        // 分岐1は現実の組織図が起点なので異動は重い＝既定で固定。
+        // 分岐2は最適解が起点で「現実の異動」という概念が無いため既定で解除しておく
+        // （固定したままだと既存100名が一切動かせず、盤面が候補10名だけの画面になる）。
+        lockBase: hiringBaseAssignment !== null,
         branch: hiringBaseAssignment !== null ? 'existing' : 'optimal',
         history: [],
         // docs/profile-plan.md §4.2: 未取得なら空。カードは番号のみで描画され作業机は正常に動く。
@@ -605,12 +608,12 @@ function main(): void {
   // 作業机は保存の成否だけを知り、遷移は renderer 側の責務にしてある。
   initWorkbenchPanel((run) => {
     void go('p7')
-    openExportFor(run)
+    openExportFor(run, true)
   })
   // 採用判断の作業机も同じ経路で #p7 へ渡す（機能15b §5.11）
   initHiringWorkbenchPanel((run) => {
     void go('p7')
-    openExportFor(run)
+    openExportFor(run, true)
   })
   initProfileAdmin()
   initExportFlow()

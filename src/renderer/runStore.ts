@@ -79,6 +79,16 @@ export interface SaveRunInput {
 }
 
 /**
+ * 同じ名前の配置案が既に保存されているか調べる。呼び出し側は保存直前にこれを確認し、
+ * 既に使われていれば別名を促す（同名の配置案が並ぶと一覧・出力で見分けがつかなくなるため）。
+ * 等価一致のみのクエリなので複合インデックスは要らない。
+ */
+export async function titleExists(title: string): Promise<boolean> {
+  const snap = await getDocs(query(collection(db, COLLECTION), where('title', '==', title), limit(1)))
+  return !snap.empty
+}
+
+/**
  * 配置案を1件追記し、runId を返す。
  *
  * profileStore.loadProfiles と違って**失敗を握り潰さない**。あちらは「写真が出ないだけで
