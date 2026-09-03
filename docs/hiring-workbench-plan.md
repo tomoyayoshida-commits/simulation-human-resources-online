@@ -121,7 +121,20 @@ source →(cap 1 ずつ)→ 社員ノード →(cap 1・cost −value)→ 事業
 `docs/workbench-plan.md` §9 申し送りで **`whatif.ts` の4関数は仕様を変えない**と決めている。
 `workbench.ts` 側にプール対応のラッパを新設する（§5.8）。
 
-### 2.6 `optimizer.ts` の内部関数は未 export
+### 2.6 機能16（出力）が作業机からCSV出力を外している（2026-09-03 追記）
+
+別セッションが実装中の `docs/export-plan.md`（機能16）は、作業机の「CSV出力」を
+**「この案を保存」に置き換え**、出力を独立パネル `#p7`（保存した配置案 → 出力）へ移す。
+
+- `export-plan.md:10-11` 作業机の上では一切出力しない。保存すると `/simulationRuns/{runId}` に1件追記
+- `export-plan.md:17` **制約違反時は「保存は可・出力は不可」**。`workbench-plan.md` §8-2 の門は出力側へ移った
+- `export-plan.md:93` **`#p5` からの保存・出力は機能16のスコープ外**（`#p4` 経路のみ）
+
+本書は当初 `[CSV出力]` を前提に書かれていたが、**機能16に合わせて `[この案を保存]` に統一する**
+（2026-09-03 ユーザー判断・§3-7）。採用提案こそ版(runId)を与えて配るべき文書であり、
+`export-plan.md` §1.1 の論理がそのまま当てはまる。
+
+### 2.7 `optimizer.ts` の内部関数は未 export
 
 `buildValues` / `effectiveFactors` / `buildEmployeeBases` は `optimizer.ts` 内の
 モジュール私有関数で、export されていない（`resolveMetric` のみ `constants.ts:186` で公開）。
@@ -141,6 +154,7 @@ source →(cap 1 ずつ)→ 社員ノード →(cap 1・cost −value)→ 事業
 | 3-4 | 配置案の入口 | **CSVの「配置先事業部」列を取込側でも読めるようにする** |
 | 3-5 | 既存100名の可動 | **ロック切替を置く**。既定は固定（追加10名だけ配る） |
 | 3-6 | 分岐の選ばせ方 | **取込列の有無で自動判定**。追加UIは置かない |
+| 3-7 | 出力導線 | **機能16に合わせ「この案を保存」**。CSV/PDFは `#p7` が出す（§2.6） |
 
 「何名採るのが最適か」の自動探索（k=0..10）は v1 では**作らない**（§2.3 に道筋のみ記録）。
 
@@ -157,10 +171,12 @@ source →(cap 1 ずつ)→ 社員ノード →(cap 1・cost −value)→ 事業
 | やる | CSVの「配置先事業部」列の取込と分岐の自動判定（§5.7・§5.1） |
 | やる | プール対応の異動内訳ラッパ（§5.8） |
 | やる | 採用人数・追加人件費・利益増分の live 表示（§5.9） |
+| やる | 操作列に [この案を保存]（機能16 の `#p7` へ合流。§2.6・§5.11） |
 | やらない | **数式・定数・アルゴリズムの変更**（`calcEngine`/`optimizer`/`assignment`/`whatif` は無変更） |
 | やらない | 「何名採るのが最適か」の自動探索（§2.3） |
 | やらない | `compareHiring.ts` の結果ステップの作り替え（10名全員前提のまま維持。作業机は別ステップ） |
-| やらない | Firestore への配置案の保存（`docs/workbench-plan.md` §8-4 と同じ扱い） |
+| やらない | 出力そのもの（CSV/PDFの生成）。機能16 の `#p7` に任せる |
+| やらない | `#p7` 一覧・出力画面の改修。採用判断の文脈を出す拡張は機能16 完了後に別途（§5.11） |
 | やらない | 製品カタログ・設計書（Desktop配下）の改訂（機能14/15と同じ扱い） |
 
 ---
@@ -237,7 +253,7 @@ export interface HiringWorkbenchState {
 │ [E101]           [E105]              [E110]          [E107]            │
 └──────────────────────────────────────────────────────────┘
 ┌ ④ 操作列 ────────────────────────────────────────────────┐
-│ [元に戻す][最適解に戻す][この人数配分のまま最適に組み直す][CSV出力]    │
+│ [元に戻す][最適解に戻す][この人数配分のまま最適に組み直す][この案を保存]│
 │ 採用：A 1名／B 1名／C 2名 ／ 見送り 2名                                │
 └──────────────────────────────────────────────────────────┘
 ```
@@ -279,7 +295,7 @@ afterBaseline  // 手で譲った分を測る相手 ＝ runOptimization(110名, 
 
 ### 5.6 「この人数配分のまま最適に組み直す」のロック時の扱い
 
-§2.6 のとおり、既存を固定したまま追加分だけを厳密に解くには `optimizer.ts` の
+§2.7 のとおり、既存を固定したまま追加分だけを厳密に解くには `optimizer.ts` の
 内部関数（`buildValues`/`effectiveFactors`/`buildEmployeeBases`）が要る。
 `optimizer.ts` は無変更が原則なので、**関数を export させにいかない**。
 
@@ -354,9 +370,11 @@ export function diffWithPool(
 | 全社売上・利益とΔ×2段 | `evaluateAssignment` の結果と2つの baseline |
 | 充足率 | `headcount[u] / params.optimalHeadcount[u]`。**110名でも適正人数は100名基準**（`CLAUDE.md` §7-4） |
 
-制約違反の扱いは `docs/workbench-plan.md` §4.6／§8-1／§8-2 をそのまま踏襲する
-（警告のみでドロップは拒否しない・feasible→infeasible の瞬間に一過性の警告・
-違反中はCSV出力を `disabled`）。
+制約違反の扱いは `docs/workbench-plan.md` §4.6／§8-1 を踏襲する
+（警告のみでドロップは拒否しない・feasible→infeasible の瞬間に一過性の警告）。
+**§8-2 の「違反中は出力を `disabled`」は踏襲しない。** 機能16 が門を出力側へ移し
+「保存は可・出力は不可」としたため（§2.6・`export-plan.md:17`）、作業机の
+[この案を保存] は違反中も押せる。
 
 ### 5.10 新規ファイルと責務
 
@@ -374,6 +392,34 @@ export function diffWithPool(
 `#p4` の `workbench.ts` / `workbenchPanel.ts` は**変更しない**。共通化は
 2つが動いてから検討する（先に共通化すると、プール・ロックという `#p4` に無い概念が
 `#p4` 側の型に漏れる）。
+
+### 5.11 「この案を保存」と機能16 への合流（確定事項 3-7）
+
+作業机は保存までを担い、CSV/PDF の生成には一切関与しない（§2.6）。
+
+```ts
+// hiringWorkbench.ts — workbench.ts の WorkbenchExport を拡張した採用判断版
+export interface HiringWorkbenchExport {
+  kind: 'hiring'                    // #p4 由来の案と区別する識別子
+  task: TaskId
+  metric: TaskMetric
+  assignment: Record<string, UnitId>  // 未採用者はキーが無い
+  hiredIds: string[]                  // 採用した候補の社員番号（assignment から導出できるが明示する）
+  declinedIds: string[]               // 見送った候補
+  lockBase: boolean                   // どちらの検討をしたのかが後から分かる
+  branch: 'existing' | 'optimal'      // 分岐1／分岐2（§5.1）
+}
+```
+
+- `workbench.ts` の `WorkbenchExport` / `serializeWorkbenchState`（`workbench.ts:155,166`）は**変更しない**。
+  採用判断版を `hiringWorkbench.ts` に新設する
+- `hiredIds` は `assignment` から導出できるが**保存ドキュメントには明示的に持たせる**。
+  出力画面が「10名中8名を採用」と書くために roster と突き合わせる必要をなくすため
+- **Firestore への書き込み（`runStore.ts`）と `#p7` への遷移は Phase 3 以降**。
+  機能16 の `SavedRun` は採用判断の文脈（候補・採否）を想定していないため、
+  `kind: 'hiring'` を受けられるようにする拡張は**機能16 の完了後に別途合意する**
+- Phase 2 では `HiringWorkbenchExport` を組み立てる純粋関数までを実装し、
+  呼び出し側（保存ボタン）は Phase 3 以降に置く
 
 ---
 
@@ -403,6 +449,7 @@ export function diffWithPool(
 - `diffWithPool` が `hire` / `decline` / `move` を正しく分類すること
 - `lockBase: true` のとき base の社員を動かそうとしても状態が変わらないこと
 - 採用人数・追加人件費の集計が `compareHiring.ts` と同じ換算になること
+- `HiringWorkbenchExport` の `hiredIds` / `declinedIds` が `assignment` と整合すること（§5.11）
 
 ### Phase 3：遷移とステップ骨格（ゲート：`npm run dev` で往復できる）
 
@@ -443,9 +490,10 @@ export function diffWithPool(
 13. 10名全員を採用した状態の全社売上が、`#p5` 結果ステップの「採用後」カードの値と一致する
      （分岐2・同じ課題×指標のとき）
 14. C事業部を9名まで減らすと最低人数の警告が列ヘッダに出る（操作はブロックされない）
-15. 全社売上が58億を下回るとヘッダに赤ピルが出て、CSV出力が `disabled` になる
+15. 全社売上が58億を下回るとヘッダに赤ピルが出る。**[この案を保存] は押せるまま**（§5.9・機能16 §4.5）
 16. 社員番号に `<script>` を含むCSVを取り込んでも、カードに生のHTMLが混入しない（`escapeHtml`）
-17. 作業机のCSV出力を `#p5` の左欄に戻すと、分岐1として配置ごと復元できる（往復）
+17. `#p7` が出力したデータCSV（`buildAssignmentCsv` 由来）を `#p5` の左欄に戻すと、
+    分岐1として配置ごと復元できる（往復。Phase 1 の `parseAssignmentColumn` はこれを単体で守る）
 
 ---
 
@@ -460,6 +508,9 @@ export function diffWithPool(
 - **作業机から `runOptimization` を呼ぶこと。** 最悪1.2秒UIが固まる
 - **`#p4` の `workbench.ts` / `workbenchPanel.ts` にプール・ロックを持ち込むこと。**
   共通化は2つが動いてから（§5.10）
+- **作業机から直接 CSV / PDF を出すこと。** 出力は機能16 の `#p7` に任せる（§2.6・§5.11）
+- **`workbench.ts` の `WorkbenchExport` / `serializeWorkbenchState` を書き換えること。**
+  採用判断版を新設する（§5.11）
 - **部分的な配置案を補完すること。** 一部の行が空なら分岐2に落とす（§5.7）
 - **右欄（追加10名）の配置先列を読むこと。** 候補は必ずプールから始まる（§5.1）
 - **人数配分を独立した状態として持つこと。** `assignment` から毎回導出する
@@ -478,4 +529,11 @@ export function diffWithPool(
   k=0..10 で `enumerateHeadcounts(100+k, params)` を回す形になり、数秒かかるため
   ローディング演出が要る
 - 別セッションが同じツリーを触っている。`Edit` が「ファイルが変更されている」で
-  失敗したら読み直すこと（`profilePanel.ts` 系が未コミット）
+  失敗したら読み直すこと（2026-09-03 時点で `profilePanel.ts` 系と、機能16 の
+  `exportDocs.ts` / `exportPanel.ts` / `runStore.ts` が未コミット）
+- **Phase 3 以降は機能16 の完了待ち。** `renderer.ts` の `Step` 型に機能16 が
+  `'list' | 'export'` を追加中（`export-plan.md:127`）で、本書は `#p5-bench-step` の
+  ために同じ箇所を触る。`index.html` / `styles.css` も同様。
+  Phase 1・2 は追加のみ・新規ファイルのみで衝突しないため先行してよい
+- **2026-09-03 の Phase 0 実測**：`npm test` 115件全通過・`npm run snapshot` 一致。
+  これが受入基準1・2 の照合相手
