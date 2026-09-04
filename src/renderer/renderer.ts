@@ -105,8 +105,22 @@ function showStep(panelId: string, step: Step): void {
   for (const s of STEPS) {
     $(`${panelId}-${s}-step`)?.toggleAttribute('hidden', s !== step)
   }
+  window.scrollTo({ top: 0, behavior: 'instant' })
+  updateResumeButtons()
   renderBreadcrumb(panelId)
   saveSnapshot()
+}
+
+/**
+ * トップの「前回の続き」導線を出し入れする。取込済みで、かつ比較結果まで進んだ実績がある時だけ出す。
+ * 入口ボタン（「始める」）は常に取込ステップへ着地させ、続きから見る操作はこちらに分けてある。
+ * 前回位置へ勝手に飛ばさず、どこへ入るかを毎回利用者が選べるようにするための一対。
+ */
+function updateResumeButtons(): void {
+  const p4Ready = state.employees100 !== null && currentStep('p4') !== 'import'
+  const p5Ready = state.hiringBase100 !== null && state.hiringAdd10 !== null && currentStep('p5') !== 'import'
+  $('p4-resume')?.toggleAttribute('hidden', !p4Ready)
+  $('p5-resume')?.toggleAttribute('hidden', !p5Ready)
 }
 
 /** panelId の現在表示中のステップ。該当要素が無いパネルはそのステップを返さない。 */
@@ -183,7 +197,12 @@ function renderBreadcrumb(panelId: string): void {
 function initNavigation(): void {
   document.querySelectorAll<HTMLElement>('[data-go]').forEach((el) => {
     el.addEventListener('click', () => {
-      if (el.dataset.go) void go(el.dataset.go)
+      const id = el.dataset.go
+      if (!id) return
+      // data-fresh（トップの入口ボタン）は「始める」と書いてある以上、前回どこまで進んでいても
+      // 必ず取込ステップから始める。続きから見たい場合はカード下の「前回の続き」を使う。
+      if (el.hasAttribute('data-fresh')) showStep(id, 'import')
+      void go(id)
     })
   })
 }
@@ -200,6 +219,7 @@ function initImports(): void {
     const proceedBtn = $('p4-proceed') as HTMLButtonElement | null
     if (proceedBtn) proceedBtn.disabled = !(state.employees100 && p4Params.isValid())
     $('p4-file-actions')?.toggleAttribute('hidden', !state.employees100)
+    updateResumeButtons()
     saveSnapshot()
   }
   p4Params.init(updateP4ProceedBtn)
@@ -217,12 +237,23 @@ function initImports(): void {
       showStep('p4', 'result')
     })
   })
+  // トップの「前回の続き」：前回の到達点から入り直す。作業机の手動編集は復元対象外のため結果ステップまで。
+  // 表示中の結果DOMはリロードで空になるので、ここでも取込済みデータから計算し直してから見せる。
+  $('p4-resume')?.addEventListener('click', () => {
+    const employees100 = state.employees100
+    if (!employees100 || !p4Params.isValid()) return
+    void withLoading('前回の比較結果を復元しています…', () => renderCompareTasks(employees100, p4Params.getParams())).then(() => {
+      showStep('p4', 'result')
+      void go('p4')
+    })
+  })
   // 「ファイルを変更」：取込済みデータはそのままにファイル選択ダイアログだけ開き直す
   $('p4-file-change')?.addEventListener('click', () => ($('file-100') as HTMLInputElement | null)?.click())
-  // 「取り込みを解除」：取込結果をクリアして未取込状態に戻す
+  // 「取り込みを解除」：取込結果をクリアして未取込状態に戻す（前回の到達点も一緒に捨てる）
   $('p4-file-clear')?.addEventListener('click', () => {
     state.employees100 = null
     renderImportReport(null, [])
+    showStep('p4', 'import')
     updateP4ProceedBtn()
   })
   $('p4-back')?.addEventListener('click', () => void go('p0'))
@@ -266,6 +297,7 @@ function initImports(): void {
   const updateHiringProceedBtn = (): void => {
     const proceedBtn = $('p5-proceed') as HTMLButtonElement | null
     if (proceedBtn) proceedBtn.disabled = !(state.hiringBase100 && state.hiringAdd10 && p5Params.isValid())
+    updateResumeButtons()
     saveSnapshot()
   }
 
@@ -328,6 +360,15 @@ function initImports(): void {
     const params = p5Params.getParams()
     void withLoading('採用前後の効果を計算しています…', () => renderCompareHiring(hiringBase100, hiringAdd10, 1, params)).then(() => {
       showStep('p5', 'result')
+    })
+  })
+  // トップの「前回の続き」（#p4と同じ扱い。作業机は復元対象外なので結果ステップまで戻す）
+  $('p5-resume')?.addEventListener('click', () => {
+    const { hiringBase100, hiringAdd10 } = state
+    if (!hiringBase100 || !hiringAdd10 || !p5Params.isValid()) return
+    void withLoading('前回の比較結果を復元しています…', () => renderCompareHiring(hiringBase100, hiringAdd10, 1, p5Params.getParams())).then(() => {
+      showStep('p5', 'result')
+      void go('p5')
     })
   })
   $('p5-back')?.addEventListener('click', () => void go('p0'))
@@ -432,31 +473,12 @@ function initImports(): void {
     const hiringBase100 = state.hiringBase100
     const hiringAdd10 = state.hiringAdd10
 
-    if (snap.panelId === 'p4' && employees100) {
-      if (snap.p4Step === 'import') {
-        showStep('p4', 'import')
-        void go('p4')
-        return
-      }
-      void withLoading('前回の比較結果を復元しています…', () => renderCompareTasks(employees100, p4Params.getParams())).then(() => {
-        showStep('p4', 'result')
-        void go('p4')
-      })
-      return
-    }
-
-    if (snap.panelId === 'p5' && hiringBase100 && hiringAdd10) {
-      if (snap.p5Step === 'import') {
-        showStep('p5', 'import')
-        void go('p5')
-        return
-      }
-      void withLoading('前回の比較結果を復元しています…', () => renderCompareHiring(hiringBase100, hiringAdd10, 1, p5Params.getParams())).then(() => {
-        showStep('p5', 'result')
-        void go('p5')
-      })
-      return
-    }
+    // #p4/#p5 は前回の到達点を各パネルのステップに戻すだけで、画面はトップに留める。
+    // 勝手に前回位置へ飛ばすと「取込をやり直すつもりが作業机に着く」ため、入口は必ず利用者に選ばせる
+    // （トップの「始める」＝取込から／「前回の続き」＝ここで戻した到達点から）。
+    if (employees100 && snap.p4Step !== 'import') showStep('p4', 'result')
+    if (hiringBase100 && hiringAdd10 && snap.p5Step !== 'import') showStep('p5', 'result')
+    updateResumeButtons()
 
     // #p7 は出力対象の SavedRun をメモリにしか持たないため出力ステップは復元できない。
     // 一覧まで戻して読み直す（bench を result へ読み替えるのと同じ考え方）。

@@ -32,7 +32,7 @@ table{width:100%;border-collapse:collapse;font-size:12.5px;}
 th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--grid);}
 th{color:var(--text-muted);font-weight:600;font-size:11.5px;}
 td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
-.dropzone{border:2px dashed var(--baseline);border-radius:10px;padding:26px;text-align:center;color:var(--text-secondary);font-size:13px;background:#fbfbfa;cursor:pointer;}
+.dropzone{border:2px dashed var(--baseline);border-radius:10px;padding:26px;text-align:center;color:var(--text-secondary);font-size:16px;background:#fbfbfa;cursor:pointer;}
 .dropzone.dragover{border-color:var(--a);background:#eef4fc;}
 .dropzone:hover .file-select-link{text-decoration:underline;}
 .btn{display:inline-block;border:1px solid var(--a);background:var(--a);color:#fff;font-size:13px;padding:9px 18px;border-radius:7px;cursor:pointer;}
@@ -120,6 +120,9 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
 .home-card h3{font-size:15px;margin:0;}
 .home-card p{font-size:12.5px;color:var(--text-secondary);line-height:1.6;margin:0;flex:1;}
 .home-card .btn{align-self:flex-start;margin-top:4px;}
+/* .btn の display:inline-block が UA の [hidden]{display:none} に勝ってしまうので明示的に消す */
+.home-card .btn[hidden]{display:none;}
+.home-card .home-resume{font-size:12px;padding:6px 12px;margin-top:0;}
 .whatif-sticky{position:sticky;top:0;z-index:5;background:var(--page);padding:10px 0;}
 input.whatif-changed{border-color:var(--a);background:#eef4fc;}
 tr.whatif-moved{background:#fef3dc;}
