@@ -22,7 +22,7 @@ import { initWorkbenchPanel } from './workbenchPanel.ts'
 import { initHiringWorkbenchPanel } from './hiringWorkbenchPanel.ts'
 import { initExportPanel, openExportFor, openRunsList } from './exportPanel.ts'
 import { setupDropzone, setupFilesDropzone } from './importPanel.ts'
-import { renderProfileCsvStatus, renderProfileDraft, renderProfilePhotosStatus, renderRegisteredProfiles } from './profilePanel.ts'
+import { renderProfileCsvStatus, renderProfileDraft, renderProfilePhotosStatus, renderRegisteredProfiles, type ProfileEditing } from './profilePanel.ts'
 import { normalizePhoto } from './photo.ts'
 import { $ } from './dom.ts'
 import { escapeHtml } from './format.ts'
@@ -67,6 +67,16 @@ interface LoadedPhoto {
 }
 
 const profileState: { rows: ProfileRow[] | null; photos: LoadedPhoto[] } = { rows: null, photos: [] }
+
+/**
+ * 登録済み一覧で編集中の1名（①37注記/②45）。null なら誰も編集していない。
+ * 専用ページを作らず、この状態を持つだけで一覧のカードをフォームに切り替える。
+ */
+let profileEditing: ProfileEditing | null = null
+
+function renderRegistered(): void {
+  renderRegisteredProfiles(getProfiles(), profileEditing)
+}
 
 /** 警告文で列挙する名前の上限。全件出すと100件のリストで画面が埋まる。 */
 const WARN_SAMPLE = 5
@@ -150,7 +160,8 @@ function initProfileAdmin(): void {
     saveBtn.textContent = '保存しています…'
     void saveProfiles(profiles)
       .then(() => {
-        renderRegisteredProfiles(getProfiles())
+        profileEditing = null
+        renderRegistered()
         saveBtn.textContent = `保存しました（${profiles.length}件）`
       })
       .catch((e: unknown) => {
@@ -160,21 +171,69 @@ function initProfileAdmin(): void {
       })
   })
 
-  // 登録済み一覧の削除（§8-8で物理削除と決定）
+  // 登録済み一覧の削除（§8-8で物理削除と決定）と、1名ずつの編集（①37注記/②45）
   $('profile-registered')?.addEventListener('click', (e) => {
-    const btn = (e.target as HTMLElement | null)?.closest<HTMLElement>('[data-profile-del]')
+    const target = e.target as HTMLElement | null
+    if (!target) return
+
+    const editBtn = target.closest<HTMLElement>('[data-profile-edit]')
+    if (editBtn?.dataset.profileEdit) {
+      profileEditing = { id: editBtn.dataset.profileEdit, photo: null }
+      renderRegistered()
+      return
+    }
+    if (target.closest('[data-profile-edit-cancel]')) {
+      profileEditing = null
+      renderRegistered()
+      return
+    }
+    const saveEditBtn = target.closest<HTMLElement>('[data-profile-edit-save]')
+    const editId = saveEditBtn?.dataset.profileEditSave
+    if (editId) {
+      const name = ($('profile-edit-name') as HTMLInputElement | null)?.value.trim() ?? ''
+      // 写真を差し替えていなければ現在の写真をそのまま書き戻す（saveProfiles は上書きのため）
+      const photo = profileEditing?.photo ?? getProfiles()[editId]?.photo ?? ''
+      void saveProfiles([{ id: editId, name, photo }])
+        .then(() => {
+          profileEditing = null
+          renderRegistered()
+        })
+        .catch((err: unknown) => window.alert(`更新に失敗しました。${err instanceof Error ? err.message : String(err)}`))
+      return
+    }
+
+    const btn = target.closest<HTMLElement>('[data-profile-del]')
     const id = btn?.dataset.profileDel
     if (!id) return
     if (!window.confirm(`${id} のプロフィールを削除します。よろしいですか？`)) return
     void deleteProfile(id)
-      .then(() => renderRegisteredProfiles(getProfiles()))
+      .then(() => {
+        if (profileEditing?.id === id) profileEditing = null
+        renderRegistered()
+      })
       .catch((err: unknown) => window.alert(`削除に失敗しました。${err instanceof Error ? err.message : String(err)}`))
+  })
+
+  // 編集フォームの写真差し替え。登録時と同じく選んだ時点で128pxへ縮小する（§4.5）
+  $('profile-registered')?.addEventListener('change', (e) => {
+    const input = e.target
+    if (!(input instanceof HTMLInputElement) || input.id !== 'profile-edit-photo') return
+    const file = input.files?.[0]
+    if (!file || !profileEditing) return
+    const id = profileEditing.id
+    void normalizePhoto(file)
+      .then((dataUrl) => {
+        profileEditing = { id, photo: dataUrl }
+        renderRegistered()
+      })
+      .catch((err: unknown) => window.alert(`写真を読み込めませんでした。${err instanceof Error ? err.message : String(err)}`))
   })
 
   // #p6 に入るたびに最新のマスタを出す（他の人が別ブラウザで登録した分を拾う）
   document.querySelectorAll<HTMLElement>('[data-go="p6"]').forEach((el) => {
     el.addEventListener('click', () => {
-      void loadProfiles(true).then(renderRegisteredProfiles)
+      profileEditing = null
+      void loadProfiles(true).then(() => renderRegistered())
     })
   })
 }

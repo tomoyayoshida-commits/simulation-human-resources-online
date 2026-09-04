@@ -7,6 +7,8 @@
 import type { RunSummary, SavedRun } from './runStore.ts'
 import { listRuns, loadRun } from './runStore.ts'
 import { computeSimulationResult } from './calcEngine.ts'
+import { evaluateAssignment } from './whatif.ts'
+import { round2 } from './constants.ts'
 import { buildAssignmentCsv, downloadCsv } from './csv.ts'
 import { buildAnnouncementHtml, buildAnnouncementMembers, buildExecSummaryHtml } from './exportDocs.ts'
 import { getProfiles, loadProfiles } from './profileStore.ts'
@@ -39,8 +41,10 @@ export function buildRunListHtml(runs: RunSummary[]): string {
       (r) => `
       <tr>
         <td><button type="button" class="link-button" data-run="${escapeHtml(r.id)}">${escapeHtml(r.title)}</button></td>
+        <td>${escapeHtml(runKindText(r))}</td>
         <td>${escapeHtml(taskLabel(r.task, r.metric))}</td>
         <td class="num">${escapeHtml(oku(r.companyRevenue))}</td>
+        <td class="num">${escapeHtml(oku(r.companyProfit))}</td>
         <td class="num">${r.movedFromBaseline}名</td>
         <td>${r.feasible ? pill('good', '● 制約を満たす') : pill('crit', '● 制約違反')}</td>
         <td>${escapeHtml(dateTimeText(r.savedAt))}</td>
@@ -50,9 +54,21 @@ export function buildRunListHtml(runs: RunSummary[]): string {
     .join('')
   return `
     <table>
-      <thead><tr><th>名前</th><th>課題</th><th class="num">全社売上</th><th class="num">調整</th><th>状態</th><th>保存日時</th><th>保存者</th></tr></thead>
+      <thead><tr><th>名前</th><th>種別</th><th>課題</th><th class="num">全社売上</th><th class="num">全社利益</th><th class="num">調整</th><th>状態</th><th>保存日時</th><th>保存者</th></tr></thead>
       <tbody>${rows}</tbody>
-    </table>`
+    </table>
+    <p class="note">「種別」は保存元の画面です。配置比較は100名、採用判断は既存100名＋採用した候補の人数で計算されているため、全社売上をそのまま見比べることはできません。</p>`
+}
+
+/**
+ * 一覧の「種別」列（①34/②42）。100名の配置案と110名の採用案が同じ表に並ぶと、
+ * 人数の前提が違うことに気づかないまま全社売上を見比べてしまうため列で示す。
+ * 採用人数は RunSummary.hiredIds から出せる（保存形式は変えない・手順書 §2.2）。
+ */
+function runKindText(r: RunSummary): string {
+  if (r.kind !== 'hiring') return '配置（100名）'
+  const hired = r.hiredIds?.length
+  return hired === undefined ? '採用判断' : `採用判断（100＋${hired}名）`
 }
 
 /** 保存直後だけ出す簡単なチュートリアル（3つの出力の違いを説明する）。一覧から開いたときは出さない。 */
@@ -67,6 +83,40 @@ function buildExportTutorialHtml(): string {
     </div>`
 }
 
+/**
+ * 出力できない理由の内訳（①35/②43）。
+ *
+ * 保存時に持っているのは `feasible: boolean` だけだが、SavedRun は roster/assignment/params を
+ * 持つので、開いた時点で評価し直せば「どの制約をどれだけ割っているか」まで出せる
+ * （保存形式の変更は不要・手順書 §2.2）。値は保存済みの配置に対する固定値なので、
+ * 作業机のバナー（Phase 4-4）と違って具体値を書いてよい。
+ */
+export function buildBlockedDetailHtml(run: SavedRun): string {
+  const { result, minHeadcountViolations } = evaluateAssignment(
+    { task: run.task, roster: run.roster, params: run.params, assignment: run.assignment },
+    run.assignment,
+  )
+  const items: string[] = []
+  if (!result.feasible) {
+    const short = round2(run.params.prevYearRevenue - result.companyRevenue)
+    items.push(
+      `全社売上が下限（${run.params.prevYearRevenue}億円）に <b>${short.toFixed(2)}億円</b> 足りません（この案は ${oku(result.companyRevenue)}）。`,
+    )
+  }
+  for (const u of minHeadcountViolations) {
+    const now = result.headcount[u]
+    const min = run.params.minHeadcount[u]
+    items.push(`${u}事業部が最低人数 ${min}名に <b>${min - now}名</b> 足りません（この案は ${now}名）。`)
+  }
+  if (items.length === 0) return ''
+  return `
+    <div class="export-blocked">
+      <p class="export-blocked-head">この配置案は制約を満たしていないため、記録としては保存されていますが出力はできません。</p>
+      <ul>${items.map((t) => `<li>${t}</li>`).join('')}</ul>
+      <p class="note">作業机で上の不足を解消して保存し直すと出力できます。保存済みの案は書き換えられません（追記のみ）。</p>
+    </div>`
+}
+
 /** 出力ステップの中身。制約違反のときは3つとも押せない（§4.5）。 */
 export function buildExportHtml(run: SavedRun, justSaved = false): string {
   const blocked = !run.feasible
@@ -75,7 +125,7 @@ export function buildExportHtml(run: SavedRun, justSaved = false): string {
     <h2>${escapeHtml(run.title)}</h2>
     <p class="subtitle">${escapeHtml(taskLabel(run.task, run.metric))}　保存者 ${escapeHtml(run.savedBy)}　${escapeHtml(dateTimeText(run.savedAt))}</p>
     ${justSaved ? buildExportTutorialHtml() : ''}
-    ${blocked ? `<div class="wb-alert-banner"><span>この配置案は制約を満たしていません。記録として保存されていますが、出力はできません。</span></div>` : ''}
+    ${blocked ? buildBlockedDetailHtml(run) : ''}
     <div class="export-grid">
       <div class="export-card">
         <h3>データ（CSV）</h3>
@@ -95,6 +145,18 @@ export function buildExportHtml(run: SavedRun, justSaved = false): string {
         <p class="note">個人名・社員番号は含みません</p>
         <button type="button" class="btn" data-export="exec"${disabled}>印刷してPDFに保存</button>
       </div>
+    </div>
+    <!-- ①31/②39: PDFは印刷ダイアログ経由なので、保存の仕方と環境差をここに書いておく -->
+    <div class="export-print-note">
+      <b>PDFで保存するときは</b>
+      <ul>
+        <li>印刷ダイアログの「送信先」（Safari は「PDF」メニュー）で <b>PDFに保存</b> を選びます。</li>
+        <li>用紙は <b>A4・縦</b>、拡大縮小は「既定」のままにしてください。</li>
+        <li>色の付いた見出しや帯を残すには <b>背景のグラフィック</b>（Chrome）／<b>背景を印刷</b>（Firefox）をONにします。</li>
+        <li>ヘッダーとフッター（URL・日付）は不要ならOFFにしてください。</li>
+      </ul>
+      <p class="note">ブラウザとOSによって既定値や余白の扱いが異なります。上の設定で出したPDFが崩れる場合は、
+        別のブラウザ（Chrome推奨）でもう一度お試しください。</p>
     </div>
     <div class="actions" style="margin-top:18px;">
       <button type="button" class="btn secondary" data-export="back-list">← 保存した配置案の一覧へ</button>

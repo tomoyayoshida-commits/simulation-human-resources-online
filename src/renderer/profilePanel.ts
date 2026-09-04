@@ -45,21 +45,52 @@ export function renderProfilePhotosStatus(okCount: number, errors: string[]): vo
   setHtml('profile-photos-status', `${pill(kind, `読込${okCount}件${errors.length > 0 ? `／失敗${errors.length}件` : ''}`)}${errorHtml}`)
 }
 
-function profileCardHtml(p: EmployeeProfile, deletable: boolean): string {
-  const face = p.photo
-    ? `<img class="profile-face" src="${escapeAttr(p.photo)}" alt="">`
+function faceHtml(photo: string): string {
+  return photo
+    ? `<img class="profile-face" src="${escapeAttr(photo)}" alt="">`
     : '<span class="profile-face profile-face-none">写真なし</span>'
-  const del = deletable
-    ? `<button type="button" class="profile-del" data-profile-del="${escapeAttr(p.id)}" aria-label="${escapeAttr(p.id)}を削除">✕</button>`
+}
+
+function profileCardHtml(p: EmployeeProfile, deletable: boolean): string {
+  // 削除できる＝登録済み一覧。そこでだけ1名ずつの編集に入れる（①37注記/②45）
+  const actions = deletable
+    ? `<div class="profile-actions">
+        <button type="button" class="profile-edit" data-profile-edit="${escapeAttr(p.id)}" aria-label="${escapeAttr(p.id)}を編集">✎</button>
+        <button type="button" class="profile-del" data-profile-del="${escapeAttr(p.id)}" aria-label="${escapeAttr(p.id)}を削除">✕</button>
+      </div>`
     : ''
   return `
     <div class="profile-item">
-      ${face}
+      ${faceHtml(p.photo)}
       <div class="profile-meta">
         <div class="profile-id">${escapeHtml(p.id)}</div>
         <div class="profile-name">${escapeHtml(p.name)}</div>
       </div>
-      ${del}
+      ${actions}
+    </div>`
+}
+
+/**
+ * 編集中の1名（①37注記/②45）。専用ページは作らず、登録済み一覧のカードをその場でフォームに替える
+ * （認証・権限を別に用意せずに済ませるため。手順書 §5「やらないこと」）。
+ * `photo` は差し替え候補。null なら現在の写真をそのまま使う。
+ */
+function profileEditHtml(p: EmployeeProfile, photo: string | null): string {
+  return `
+    <div class="profile-item profile-editing">
+      ${faceHtml(photo ?? p.photo)}
+      <div class="profile-meta">
+        <div class="profile-id">${escapeHtml(p.id)}</div>
+        <input type="text" id="profile-edit-name" class="profile-name-input" maxlength="40" value="${escapeAttr(p.name)}" aria-label="氏名">
+        <label class="profile-edit-photo">写真を選び直す
+          <input type="file" id="profile-edit-photo" accept="image/*" hidden>
+        </label>
+        ${photo === null ? '' : '<span class="profile-edit-hint">新しい写真を読み込みました（更新するまで保存されません）</span>'}
+        <div class="profile-edit-actions">
+          <button type="button" class="btn secondary btn-inline" data-profile-edit-cancel="1">やめる</button>
+          <button type="button" class="btn btn-inline" data-profile-edit-save="${escapeAttr(p.id)}">更新する</button>
+        </div>
+      </div>
     </div>`
 }
 
@@ -102,13 +133,19 @@ export function renderProfileDraft(draft: ProfileDraft | null): void {
   if (saveBtn) saveBtn.disabled = draft.profiles.length === 0
 }
 
+/** 編集中の1名（①37注記/②45）。`photo` は差し替え候補で、null なら現在の写真のまま。 */
+export interface ProfileEditing {
+  id: string
+  photo: string | null
+}
+
 /** マスタに登録済みの一覧（1名だけの差し替え・削除の起点）。 */
-export function renderRegisteredProfiles(profiles: ProfileMap): void {
+export function renderRegisteredProfiles(profiles: ProfileMap, editing: ProfileEditing | null = null): void {
   const list = Object.values(profiles).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
   setHtml(
     'profile-registered',
     list.length === 0
       ? '<p class="note">まだ登録がありません。上の①②から登録してください。</p>'
-      : list.map((p) => profileCardHtml(p, true)).join(''),
+      : list.map((p) => (p.id === editing?.id ? profileEditHtml(p, editing.photo) : profileCardHtml(p, true))).join(''),
   )
 }
