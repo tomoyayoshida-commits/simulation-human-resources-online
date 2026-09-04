@@ -200,7 +200,7 @@ function buildActionsHtml(
       </div>
       <div class="wb-actions-right">
         <button type="button" class="btn secondary" data-wb-action="undo"${state.history.length === 0 ? ' disabled' : ''}>元に戻す</button>
-        <button type="button" class="btn secondary" data-wb-action="reset">最適解に戻す</button>
+        <button type="button" class="btn secondary" data-wb-action="reset" title="出発点（最適解）の配置に戻す">リセット</button>
         <button type="button" class="btn secondary" data-wb-action="resolve">この人数配分のまま最適に組み直す</button>
         <button type="button" class="btn" data-wb-action="save"${savingTitle === null ? '' : ' disabled'}>この案を保存</button>
       </div>
