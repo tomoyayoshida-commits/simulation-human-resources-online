@@ -242,6 +242,10 @@ tr.whatif-moved{background:#fef3dc;}
 /* ロック中の既存社員。掴めないことをカーソルと彩度で示す（クリック選択も無効） */
 .hwb-locked{cursor:default;opacity:.72;}
 .hwb-lock-mark{margin-right:3px;}
+/* B-2: 🔒 の有無で行の文字数が変わると .hwb-board の 1fr 列が min-content ごと動き、
+   ロックのつけ外しでカード幅が伸縮する。非ロック側にも同じ幅の空きを置いて幅を固定する。 */
+#hwb-root .wb-card-id::before{content:'🔒';margin-right:3px;visibility:hidden;}
+#hwb-root .hwb-locked .wb-card-id::before{content:none;}
 .hwb-candidate{border-left:3px solid var(--good);}
 .hwb-card-pool{margin-top:3px;}
 

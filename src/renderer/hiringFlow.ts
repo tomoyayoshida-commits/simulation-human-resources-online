@@ -32,10 +32,17 @@ const hiringErr10: HiringImportIds = {
   reasonList: 'hiring-error-reasons-10',
 }
 
+// 左右それぞれの取込欄に残っているエラー件数。どちらかに残る間は「次へ」ボタンごと隠す（②18注記）。
+const importErrorCount: Record<HiringSlot, number> = { hiringBase100: 0, hiringAdd10: 0 }
+
 /** 取込状態・前提パラメータの変化を画面に反映する（#p4 の refreshCompareGate と同じ役目）。 */
 export function refreshHiringGate(): void {
   const proceedBtn = $('p5-proceed') as HTMLButtonElement | null
-  if (proceedBtn) proceedBtn.disabled = !(state.hiringBase100 && state.hiringAdd10 && p5Params.isValid())
+  if (proceedBtn) {
+    proceedBtn.disabled = !(state.hiringBase100 && state.hiringAdd10 && p5Params.isValid())
+    // エラー時は押せないボタンを残さず消す。直すべき対象（エラー表）へ視線を向けるため。
+    proceedBtn.toggleAttribute('hidden', importErrorCount.hiringBase100 + importErrorCount.hiringAdd10 > 0)
+  }
   updateResumeButtons()
   saveSnapshot()
 }
@@ -47,12 +54,15 @@ type HiringSlot = 'hiringBase100' | 'hiringAdd10'
 function acceptHiring(slot: HiringSlot, ids: HiringImportIds, employees: Employee[], note = ''): void {
   renderHiringImportOk(ids, employees.length, note)
   state[slot] = employees
+  importErrorCount[slot] = 0
   refreshHiringGate()
 }
 
 function rejectHiring(slot: HiringSlot, ids: HiringImportIds, errors: ValidationError[], message: string): void {
   state[slot] = null
   renderHiringImportError(ids, errors, message)
+  // 明細の無い保留（左側未取込・ID重複）も「エラーが残っている」として数える
+  importErrorCount[slot] = Math.max(errors.length, 1)
   refreshHiringGate()
 }
 

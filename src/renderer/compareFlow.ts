@@ -17,6 +17,12 @@ import { getProfiles } from './profileStore.ts'
 import { withLoading } from './loading.ts'
 import { $ } from './dom.ts'
 
+// ファイルを一度でも投入したか。取込がエラーなら state.employees100 は null のままなので、
+// 「ファイルを変更／取り込みを解除」の出し分けを取込成否ではなくこちらで判定する（B-1）。
+let fileTouched = false
+// 直近の取込で出たエラー件数。エラーが残る間は「次へ」ボタンごと隠す（②18注記）。
+let importErrorCount = 0
+
 /**
  * 取込状態・前提パラメータの変化を画面に反映する。
  * 「次へ」ボタンの活殺・前提条件の表示・ファイル操作ボタン・トップの再開導線・保存を必ず揃えて動かす。
@@ -25,8 +31,13 @@ export function refreshCompareGate(): void {
   const params = p4Params.getParams()
   renderImportConditions(params.prevYearRevenue, params.optimalHeadcount, params.minHeadcount)
   const proceedBtn = $('p4-proceed') as HTMLButtonElement | null
-  if (proceedBtn) proceedBtn.disabled = !(state.employees100 && p4Params.isValid())
-  $('p4-file-actions')?.toggleAttribute('hidden', !state.employees100)
+  if (proceedBtn) {
+    proceedBtn.disabled = !(state.employees100 && p4Params.isValid())
+    // エラー時は押せないボタンを残さず消す。直すべき対象（エラー表）へ視線を向けるため。
+    proceedBtn.toggleAttribute('hidden', importErrorCount > 0)
+  }
+  // 取込エラー時こそやり直す手段が要るので、取込に失敗していても投入済みなら出したままにする（B-1）
+  $('p4-file-actions')?.toggleAttribute('hidden', !(state.employees100 || fileTouched))
   updateResumeButtons()
   saveSnapshot()
 }
@@ -37,6 +48,8 @@ export function initCompareFlow(): void {
   setupDropzone('dropzone-100', 'file-100', (text) => {
     const { employees, errors } = importEmployees(text, 100)
     state.employees100 = employees
+    fileTouched = true
+    importErrorCount = errors.length
     renderImportReport(employees, errors)
     refreshCompareGate()
   })
@@ -63,6 +76,8 @@ export function initCompareFlow(): void {
   // 「取り込みを解除」：取込結果をクリアして未取込状態に戻す（前回の到達点も一緒に捨てる）
   $('p4-file-clear')?.addEventListener('click', () => {
     state.employees100 = null
+    fileTouched = false
+    importErrorCount = 0
     renderImportReport(null, [])
     showStep('p4', 'import')
     refreshCompareGate()
@@ -98,6 +113,7 @@ export function restoreCompareFrom(snap: SessionSnapshot): void {
   if (snap.p4Params) p4Params.setParams(snap.p4Params)
   if (snap.employees100) {
     state.employees100 = snap.employees100
+    fileTouched = true
     renderImportReport(snap.employees100, [])
   }
   refreshCompareGate()

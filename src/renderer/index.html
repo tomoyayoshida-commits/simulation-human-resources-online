@@ -97,6 +97,17 @@
         <div class="stat"><div class="k">エラー件数</div><div class="v">0</div></div>
         <div class="stat"><div class="k">判定</div><div class="v"><span class="pill warn">未取込</span></div></div>
       </div>
+      <!-- ①10注記: エラー表は「配置の前提条件」より前。直すべき対象が先、前提の確認が後 -->
+      <div class="card" id="validation-errors-card" hidden>
+        <table class="errtable" id="validation-errors">
+          <tr><th>行番号</th><th>カラム</th><th class="num">実測値</th><th>期待範囲</th></tr>
+        </table>
+        <p class="note">エラー行が1件でもある場合、比較画面には進めない。該当行を修正して再取込。</p>
+        <details class="card" id="validation-error-reasons-detail" hidden>
+          <summary class="detail-summary">エラー理由</summary>
+          <ul id="validation-error-reasons"></ul>
+        </details>
+      </div>
       <div class="card">
         <div class="section-title" style="margin-top:0;">配置の前提条件</div>
         <div class="stat-row" id="cond-cards">
@@ -115,16 +126,6 @@
             <div class="stat"><div class="k">B事業部 最低人数</div><div class="v" id="cond-min-B"></div></div>
             <div class="stat"><div class="k">C事業部 最低人数</div><div class="v" id="cond-min-C"></div></div>
           </div>
-        </details>
-      </div>
-      <div class="card" id="validation-errors-card" hidden>
-        <table class="errtable" id="validation-errors">
-          <tr><th>行番号</th><th>カラム</th><th class="num">実測値</th><th>期待範囲</th></tr>
-        </table>
-        <p class="note">エラー行が1件でもある場合、比較画面には進めない。該当行を修正して再取込。</p>
-        <details class="card" id="validation-error-reasons-detail" hidden>
-          <summary class="detail-summary">エラー理由</summary>
-          <ul id="validation-error-reasons"></ul>
         </details>
       </div>
 
