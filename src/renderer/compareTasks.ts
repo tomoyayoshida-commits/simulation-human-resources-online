@@ -83,11 +83,19 @@ function primaryLabel(task: TaskId, mode: BarMode): string {
  * モード切替のたびに runOptimization を回さないよう結果をキャッシュする。
  * 可変な状態はこの1オブジェクトに閉じ、HTML生成は buildCompareGridHtml（純粋関数）に出してある。
  */
-const view: { barMode: BarMode; metrics: TaskMetrics; all: AllTaskResults | null; params: SimParams } = {
+const view: {
+  barMode: BarMode
+  metrics: TaskMetrics
+  all: AllTaskResults | null
+  params: SimParams
+  /** 作業机へ持ち込む配置案として選ばれている課題（①20注記：選択と実行を分ける） */
+  picked: TaskId | null
+} = {
   barMode: 'profit',
   metrics: defaultMetrics(),
   all: null,
   params: DEFAULT_PARAMS,
+  picked: null,
 }
 
 /** 事業部別売上バーの共通スケール（4課題×3事業部の最大値）。利益は既存の固定スケールを維持。 */
@@ -109,6 +117,8 @@ interface CardContext {
   params: SimParams
   /** 「全社売上最大化比」の基準。いま選ばれている指標で解いた課題1の結果 */
   baseline: SimulationResult | null
+  /** 配置案として選ばれている課題（選択中カードの見た目を変えるためだけに使う） */
+  picked: TaskId | null
 }
 
 /**
@@ -120,9 +130,15 @@ interface CardContext {
 function cardHead(task: TaskId, metric: TaskMetric): string {
   const button = (m: TaskMetric): string =>
     `<button type="button" class="card-metric-btn${m === metric ? ' active' : ''}" data-cmp-task="${task}" data-cmp-metric="${m}" aria-pressed="${m === metric}">${METRIC_LABEL[m]}</button>`
+  // C-1（2026-09-04）: 課題1では売上／利益が「別の課題」ではなく「同じ課題の指標」の切替であることを添える。
+  // 課題を切り替えたと誤解されると、他の3枚との読み比べ方を取り違えるため（トグル自体は残す）。
+  const note =
+    task === 1
+      ? `<span class="card-metric-note">${metric === 'profit' ? '全社利益の最大化で解いています（配置は売上最大化と同じ）' : '同じ課題の指標の切替です'}</span>`
+      : ''
   return (
     `<div class="compare-head"><span class="compare-badge" style="background:${BADGE_COLOR[task]};"></span><h4>${taskLabel(task, metric)}</h4></div>` +
-    `<div class="card-metric"><span class="card-metric-label">最適化：</span>${button('revenue')}${button('profit')}</div>`
+    `<div class="card-metric"><span class="card-metric-label">最適化：</span>${button('revenue')}${button('profit')}${note}</div>`
   )
 }
 
@@ -187,7 +203,12 @@ function card(task: TaskId, r: SimulationResult, ctx: CardContext): string {
   const summary = buildSummary(task, r, baseline, metric, taskLabel(1, ctx.metrics[1]))
   const reasonHtml = `<details class="compare-reason"><summary>配置理由</summary>${generateReasonText(r, task, params, metric)}</details>`
   // 機能15 作業机（docs/workbench-plan.md §4.1）。実行不能カードには出さない（持ち込む配置が無いため）。
-  const workbenchHtml = `<div class="compare-actions"><button type="button" class="btn secondary wb-open-btn" data-wb-open="${task}">この配置の人員配置を調整する ▶</button></div>`
+  // ①20注記: ここは「選ぶ」まで。作業机を開くのは結果ステップ下部の実行ボタン（選択と実行を分ける）。
+  const picked = ctx.picked === task
+  const workbenchHtml =
+    `<div class="compare-actions">` +
+    `<button type="button" class="btn secondary wb-open-btn${picked ? ' picked' : ''}" data-wb-pick="${task}" aria-pressed="${picked}">` +
+    `${picked ? '✓ 配置案として選択中' : 'この配置案を選ぶ'}</button></div>`
 
   return `
     <div class="compare-card"${borderColor ? ` style="border-color:${borderColor};"` : ''}>
@@ -243,6 +264,7 @@ export function buildCompareGridHtml(
   mode: BarMode,
   metrics: TaskMetrics,
   params: SimParams = DEFAULT_PARAMS,
+  picked: TaskId | null = null,
 ): string {
   const results = selectResults(all, metrics)
   const first = results[1]
@@ -252,6 +274,7 @@ export function buildCompareGridHtml(
     scale: mode === 'profit' ? PROFIT_SCALE : revenueScale(results),
     params,
     baseline: 'infeasible' in first ? null : first,
+    picked,
   }
   return TASK_IDS.map((t) => {
     const res = results[t]
@@ -273,10 +296,29 @@ export function currentCardResult(
   return { metric, result: r, params: view.params }
 }
 
+/**
+ * 「選んだ配置案を作業机で調整する」ボタンと選択中ラベルを引き直す（①20注記）。
+ * 選択は課題単位で持つので、指標トグルやバー表示を切り替えても選択は外れない。
+ * ただし切り替えた先が実行不能なら持ち込む配置が無いので、実行ボタンは伏せる。
+ */
+function renderPickState(): void {
+  const task = view.picked
+  const btn = $('p4-open-bench') as HTMLButtonElement | null
+  const label = $('p4-picked-label')
+  if (btn) btn.disabled = task === null || currentCardResult(task) === null
+  if (label) {
+    label.textContent =
+      task === null
+        ? 'カード下の「この配置案を選ぶ」で、調整したい配置案を1つ選んでください'
+        : `選択中：${taskLabel(task, view.metrics[task])}`
+  }
+}
+
 /** キャッシュ済みの結果から #p4 のカードを再描画する（最適化の再実行はしない）。 */
 function renderCards(): void {
   if (!view.all) return
-  setHtml('compare-tasks-grid', buildCompareGridHtml(view.all, view.barMode, view.metrics, view.params))
+  setHtml('compare-tasks-grid', buildCompareGridHtml(view.all, view.barMode, view.metrics, view.params, view.picked))
+  renderPickState()
 }
 
 /**
@@ -294,6 +336,8 @@ export function renderCompareTasks(employees: Employee[], params: SimParams = DE
   }
   view.all = all
   view.params = params
+  // 計算をやり直したら前回の選択は持ち越さない（別の前提で選んだ案を引きずらないため）
+  view.picked = null
   renderCards()
 }
 
@@ -335,14 +379,23 @@ export function initCompareModeToggle(): void {
 }
 
 /**
- * カード下部の「この配置を作業机で調整する」ボタンを配線する（機能15・§4.1）。
+ * 配置案の「選択」と作業机を開く「実行」を配線する（機能15・§4.1、①20注記）。
+ *
+ * カード下部のボタンは選ぶだけで画面を動かさない。作業机へ入るのは結果ステップ下部の
+ * `#p4-open-bench` を押したときだけ（押した瞬間に別画面へ飛ぶ動きを無くすため）。
  * `#compare-tasks-grid` は再描画のたびに innerHTML が作り直されるため、`initCompareModeToggle` と
  * 同じくグリッドへの委譲リスナで拾う（別リスナとして独立に張る。属性が別なので干渉しない）。
  */
 export function initWorkbenchLaunch(onOpen: (task: TaskId) => void): void {
   $('compare-tasks-grid')?.addEventListener('click', (e) => {
-    const btn = (e.target as HTMLElement | null)?.closest?.('[data-wb-open]')
+    const btn = (e.target as HTMLElement | null)?.closest?.('[data-wb-pick]')
     if (!(btn instanceof HTMLElement)) return
-    onOpen(Number(btn.dataset.wbOpen) as TaskId)
+    const task = Number(btn.dataset.wbPick) as TaskId
+    // 選択中のカードをもう一度押したら選択解除（選び直しの取り消し手段）
+    view.picked = view.picked === task ? null : task
+    renderCards()
+  })
+  $('p4-open-bench')?.addEventListener('click', () => {
+    if (view.picked !== null) onOpen(view.picked)
   })
 }

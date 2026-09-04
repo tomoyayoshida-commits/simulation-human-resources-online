@@ -66,13 +66,20 @@
         <button class="btn secondary home-resume" id="p5-resume" hidden>↳ 前回の続き（採用前後比較）▶</button>
       </div>
     </div>
+    <!-- ①33/②41: 保存した配置案への入口はトップバーだけでなく本文にも置く -->
+    <div class="home-foot">
+      <p>これまでに保存した配置案の確認・CSV／PDF出力はこちらから。</p>
+      <button class="btn secondary" data-go="p7">保存した配置案を見る・出力する ▶</button>
+    </div>
   </section>
 
   <!-- 配置比較（データ取込 → 4課題横断比較） -->
   <section class="panel" id="p4">
     <div id="p4-import-step">
       <h2>配置比較：社員データ取込</h2>
-      <p class="subtitle">社員データを読み込み、取込結果と検証結果を同じ画面で確認する</p>
+      <!-- ①14: このあとの画面で何をするのかを取込の時点で示す（C-2 の決定） -->
+      <p class="subtitle">社員データを読み込み、取込結果と検証結果を同じ画面で確認する。<br>
+        このあと<b>目的の異なる4通りの最適配置</b>を並べて見比べ、そこから<b>配置案を1つ選んで</b>人員配置を調整します。</p>
       <div class="card">
         <div class="dropzone" id="dropzone-100">📄 社員データをドラッグ&ドロップ、または <span class="file-select-link">ファイルを選択</span></div>
         <input type="file" id="file-100" accept=".csv" hidden>
@@ -146,7 +153,9 @@
 
     <div id="p4-result-step" hidden>
       <h2>4課題横断比較ダッシュボード</h2>
-      <p class="subtitle">4課題分の要約カードを並べ、目的間のトレードオフを見比べる</p>
+      <!-- ①14/①8: 「なぜ4課題を比べるのか」＝配置案を1つ選ぶため、を先に書く（C-2 の決定） -->
+      <p class="subtitle">目的（何を最大化するか）を変えると最適な配置も変わります。4通りを並べてトレードオフを見比べ、
+        <b>配置案として採る1つを選んでください</b>。選んだあと、作業机で1名ずつ調整できます。</p>
 
       <div class="mode-toggle" id="compare-mode-toggle">
         <span class="mode-toggle-label">見出し・事業部別バーの表示：</span>
@@ -156,9 +165,16 @@
 
       <div class="compare-grid" id="compare-tasks-grid"></div>
 
-      <div class="actions" style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
+      <!-- ①20注記: 選択（カード下）と実行（このボタン）を分ける -->
+      <div class="actions" style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:10px;">
         <button class="btn secondary" id="p4-result-back">← 前の画面へ戻る</button>
+        <span class="picked-label" id="p4-picked-label"></span>
+        <button class="btn" id="p4-open-bench" disabled>選んだ配置案の人員配置を調整する ▶</button>
       </div>
+      <!-- ①21/②29: 氏名・顔写真の登録画面への導線（作業机のカード表示に効く） -->
+      <p class="note nav-hint">作業机のカードに氏名・顔写真を出すには
+        <button class="btn secondary btn-inline" data-go="p6">人材登録</button>
+        で登録します（登録内容は次に作業机を開いたときに反映されます）。</p>
     </div>
 
     <!-- 機能15 作業机：1名ずつドラッグ&ドロップで配置を微調整する（docs/workbench-plan.md） -->
@@ -166,6 +182,8 @@
       <div id="wb-root"></div>
       <div class="actions" style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
         <button class="btn secondary" id="p4-bench-back">← 前の画面へ戻る</button>
+        <!-- ①21: 顔写真・氏名の登録はここからも入れる（調整中の配置は保持される） -->
+        <button class="btn secondary" data-go="p6">人材登録（氏名・顔写真）</button>
       </div>
     </div>
   </section>
@@ -237,8 +255,13 @@
       </div>
       <div class="actions" style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
         <button class="btn secondary" id="p5-result-back">← 前の画面へ戻る</button>
-        <button class="btn" id="p5-open-bench">この採用を作業机で調整する ▶</button>
+        <!-- ②22: 機能名（作業机）ではなく、そこで何をするかを書く -->
+        <button class="btn" id="p5-open-bench">採用する10名と配置を1名ずつ決める ▶</button>
       </div>
+      <!-- ②29: 氏名・顔写真の登録画面への導線 -->
+      <p class="note nav-hint">候補者のカードに氏名・顔写真を出すには
+        <button class="btn secondary btn-inline" data-go="p6">人材登録</button>
+        で登録します（登録内容は次に作業机を開いたときに反映されます）。</p>
     </div>
 
     <!-- 機能15b 採用判断の作業机：A/B/C＋採用候補プールの4列（docs/hiring-workbench-plan.md §5.3） -->
@@ -246,6 +269,8 @@
       <div id="hwb-root"></div>
       <div class="actions" style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
         <button class="btn secondary" id="p5-bench-back">← 前の画面へ戻る</button>
+        <!-- ②29: 顔写真・氏名の登録はここからも入れる（調整中の配置は保持される） -->
+        <button class="btn secondary" data-go="p6">人材登録（氏名・顔写真）</button>
       </div>
     </div>
   </section>
