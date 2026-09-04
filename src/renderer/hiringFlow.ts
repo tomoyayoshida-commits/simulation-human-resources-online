@@ -10,7 +10,7 @@ import { saveSnapshot, type SessionSnapshot } from './session.ts'
 import { importEmployees, mergeEmployees, parseAssignmentColumn } from './csv.ts'
 import type { HiringImportIds } from './importPanel.ts'
 import { renderHiringImportError, renderHiringImportOk, renderImportConditions, setupDropzone } from './importPanel.ts'
-import { renderCompareHiring } from './compareHiring.ts'
+import { currentHiringTarget, initHiringTargetToggle, renderCompareHiring, renderHiringTargetToggle } from './compareHiring.ts'
 import { openHiringWorkbench } from './hiringWorkbenchPanel.ts'
 import { computeSimulationResult } from './calcEngine.ts'
 import { runOptimization } from './optimizer.ts'
@@ -74,6 +74,7 @@ const errorMessage = (errors: ValidationError[]): string => `取込を保留（�
 export function initHiringFlow(): void {
   const initial = p5Params.getParams()
   renderImportConditions(initial.prevYearRevenue, initial.optimalHeadcount, initial.minHeadcount, 'p5-')
+  renderHiringTargetToggle()
   p5Params.init(refreshHiringGate)
   setupDropzone('dropzone-hiring-100', 'file-hiring-100', (text) => {
     const { employees: base100, errors } = importEmployees(text, 100)
@@ -111,15 +112,26 @@ export function initHiringFlow(): void {
     const { hiringBase100, hiringAdd10 } = state
     if (!hiringBase100 || !hiringAdd10 || !p5Params.isValid()) return
     const params = p5Params.getParams()
-    void withLoading('採用前後の効果を計算しています…', () => renderCompareHiring(hiringBase100, hiringAdd10, 1, params)).then(() => {
+    const { task, metric } = currentHiringTarget()
+    void withLoading('採用前後の効果を計算しています…', () => renderCompareHiring(hiringBase100, hiringAdd10, task, params, metric)).then(() => {
       showStep('p5', 'result')
     })
+  })
+  // Phase 7（②19）: 目的を選び直したらその場で解き直す（採用前・採用後の2回）
+  initHiringTargetToggle(() => {
+    const { hiringBase100, hiringAdd10 } = state
+    if (!hiringBase100 || !hiringAdd10 || !p5Params.isValid()) return
+    const { task, metric } = currentHiringTarget()
+    void withLoading('選んだ目的で計算し直しています…', () =>
+      renderCompareHiring(hiringBase100, hiringAdd10, task, p5Params.getParams(), metric),
+    )
   })
   // トップの「前回の続き」（#p4と同じ扱い。作業机は復元対象外なので結果ステップまで戻す）
   $('p5-resume')?.addEventListener('click', () => {
     const { hiringBase100, hiringAdd10 } = state
     if (!hiringBase100 || !hiringAdd10 || !p5Params.isValid()) return
-    void withLoading('前回の比較結果を復元しています…', () => renderCompareHiring(hiringBase100, hiringAdd10, 1, p5Params.getParams())).then(() => {
+    const { task, metric } = currentHiringTarget()
+    void withLoading('前回の比較結果を復元しています…', () => renderCompareHiring(hiringBase100, hiringAdd10, task, p5Params.getParams(), metric)).then(() => {
       showStep('p5', 'result')
       void go('p5')
     })
@@ -132,8 +144,8 @@ export function initHiringFlow(): void {
     const { hiringBase100, hiringAdd10, hiringBaseAssignment } = state
     if (!hiringBase100 || !hiringAdd10 || !p5Params.isValid()) return
     const params = p5Params.getParams()
-    const task = 1
-    const metric = 'revenue' as const
+    // Phase 7（②19）: 比較画面で選んだ目的をそのまま作業机へ持ち込む（旧：task=1/metric='revenue' 固定）
+    const { task, metric } = currentHiringTarget()
     const roster = [...hiringBase100, ...hiringAdd10]
     void withLoading('作業机の基準を計算しています…', () => {
       // 上段Δの相手。分岐1は取り込んだ現行配置そのもの（最適解ではない）、分岐2は採用前の最適解。
