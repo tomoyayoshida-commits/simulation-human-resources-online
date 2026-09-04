@@ -1,4 +1,4 @@
-// 設計書§10: CSV取込UI（#p1 社員データ取込・#p5 採用前後比較の2つの取込欄）のDOM更新。
+// 設計書§10: CSV取込UI（#p4 社員データ取込・#p5 採用前後比較の2つの取込欄）のDOM更新。
 // 表示専用で計算を持たない（CLAUDE.md §5）。取り込んだデータの保持と後続処理は renderer.ts 側。
 
 import type { Employee, ValidationError } from './types.ts'
@@ -136,8 +136,8 @@ function renderHiringImport(
 
 /**
  * 採用前後比較(#p5)の取込エラー表示。
- * alert()はElectronで主プロセスとの同期IPCを介するため、file inputのchangeイベント直後に
- * 呼ぶと描画が一瞬止まって固まったように見える。取込報告(#p1)と同様にインライン表示する。
+ * `window.alert()` は file input の change イベント直後に呼ぶと描画が止まり固まったように見えるため
+ * （Electron版で顕著だった。Web版でもモーダルで操作が止まる点は同じ）、取込報告(#p4)と同様にインライン表示する。
  */
 export function renderHiringImportError(
   ids: HiringImportIds,
@@ -154,7 +154,7 @@ export function renderHiringImportOk(ids: HiringImportIds, count: number, note =
   renderHiringImport(ids, 'good', `取込OK（${count}件）${note}`, [], '')
 }
 
-/** 入力検証レポート（#p1・機能13/D-2）。プレビュー・サマリー・エラー表・次へボタンの活性を更新する。 */
+/** 入力検証レポート（#p4・機能13/D-2）。プレビュー・サマリー・エラー表・次へボタンの活性を更新する。 */
 export function renderImportReport(employees: Employee[] | null, errors: ValidationError[]): void {
   // プレビュー（先頭5名）
   const rows = employees ?? []

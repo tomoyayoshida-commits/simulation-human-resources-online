@@ -32,7 +32,7 @@ function dateTimeText(d: Date | null): string {
 /** 一覧の中身（§4.1）。0件のときは説明文を出す。 */
 export function buildRunListHtml(runs: RunSummary[]): string {
   if (runs.length === 0) {
-    return `<p class="note">保存された配置案はまだありません。「配置比較」→作業机で調整し、「この案を保存」から保存すると、ここに並びます。</p>`
+    return `<p class="note">保存された配置案はまだありません。「配置比較」または「採用判断」→作業机で調整し、「この案を保存」から保存すると、ここに並びます。</p>`
   }
   const rows = runs
     .map(
@@ -60,7 +60,7 @@ function buildExportTutorialHtml(): string {
   return `
     <div class="hint" id="p7-tutorial">
       保存できました。このあと3つの出力から選べます：
-      <b>CSV</b>は取り込み直して再計算できる全項目の明細、
+      <b>CSV</b>は全項目の明細（100名ちょうどの案なら取り込み直して再計算できます）、
       <b>告知用PDF</b>は社員に配る新体制表、
       <b>エグゼクティブサマリPDF</b>は経営層向けの数字だけの1枚です。
       <button type="button" class="btn secondary" data-export="dismiss-tutorial" style="margin-left:10px;">閉じる</button>
@@ -79,7 +79,7 @@ export function buildExportHtml(run: SavedRun, justSaved = false): string {
     <div class="export-grid">
       <div class="export-card">
         <h3>データ（CSV）</h3>
-        <p>全項目を含む明細。取り込み直して再計算できます。</p>
+        <p>全項目を含む明細。100名ちょうどの案はそのまま取り込み直して再計算できます（採用後110名の案は取込の件数検証に合わないため読み戻せません）。</p>
         <p class="note">社員番号・能力値4項目・人件費・配置先・貢献度・タイプ</p>
         <button type="button" class="btn" data-export="csv"${disabled}>CSVを保存</button>
       </div>

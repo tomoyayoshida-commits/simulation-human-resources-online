@@ -2,7 +2,8 @@
 
 100名（採用後110名）の社員を A/B/C 事業部に配置し、売上・利益を最適化するWebアプリ（SPA）。
 TypeScript（ブラウザ標準APIのみ）で実装。社内限定公開のため Firebase Hosting / Authentication（Google認証）/
-Firestore（データ永続化）を導入予定（詳細は `docs/web-firebase-plan.md`）。旧版はElectron製デスクトップアプリ
+Firestore（`employees`＝人材プロフィール・`simulationRuns`＝保存した配置案）を導入済み。`datasets` と
+`firestoreSync.ts` は未着手（詳細は `docs/web-firebase-plan.md`）。旧版はElectron製デスクトップアプリ
 （`simulation-human-resources`リポジトリ）だったが、複数人・複数端末でのデータ共有・履歴管理を要件化したため
 本リポジトリとしてWeb化した。
 
@@ -17,32 +18,39 @@ npm install       # 依存インストール
 npm run dev       # Vite dev サーバ起動（ブラウザで http://localhost:5173 を開く）
 npm run build     # tsc 型チェック → vite build（dist/ に静的サイトを生成）
 npm run preview   # dist/ を静的サイトとしてローカル配信（本番相当の確認）
-npm test          # node:test による単体テスト（93件）
+npm test          # node:test による単体テスト（167件・約37〜45秒）
 npm run test:e2e  # Playwright移行待ちのため一時的に無効（旧Electron実機E2Eは撤去）
 npm run snapshot  # 実データ4課題の結果が変わっていないかを基準ファイルと照合
 npm run lint      # oxlint
 ```
 
-デプロイ（Firebase導入後）: `npm run build && firebase deploy`（詳細は `docs/web-firebase-plan.md`）
+デプロイ: `npm run deploy`（= `npm run build && firebase deploy --only hosting`）。
+Security Rules を変えたときは `firebase deploy --only firestore:rules` も要る（詳細は `docs/web-firebase-plan.md`）
 
 ## ディレクトリ構成（設計書§1）
 
 ```
 src/
   renderer/
-    index.html     モックの HTML 骨格（#p0〜#p5 パネル、.topbar 等）
+    index.html     モックの HTML 骨格（#p0・#p4〜#p7 パネル、.topbar 等）
     styles.css     モックのスタイル
     renderer.ts    画面初期化・遷移（go(id)）・イベントバインド
-    （以降、後続手順で追加）
     types.ts / constants.ts        型・事業部別定数・表示定数（§2）
     format.ts / dom.ts             文字列整形（エスケープ含む）・DOMヘルパ
     csv.ts / validation.ts         CSV入出力・入力検証（§3,§7,§8）
     calcEngine.ts                  貢献度〜利益の計算（§4）
     assignment.ts / optimizer.ts   割当（min-cost flow）・最適化（§5）
     reasonText.ts                  配置方針テキスト生成（§9）
-    importPanel.ts                 #p1/#p5 の取込UIと検証レポート（§10）
-    dashboard.ts / gauge.ts / compareTasks.ts / compareHiring.ts  DOM更新（§10）
-    whatif.ts / whatifController.ts / whatifPanel.ts  What-if分析（機能14）の計算・状態・DOM更新
+    importPanel.ts                 #p4/#p5 の取込UIと検証レポート（§10）
+    compareTasks.ts / compareHiring.ts   4課題横断比較・採用前後比較のDOM更新（§10）
+    whatif.ts                      What-if（機能14）の純粋関数群。作業机が再利用する
+    workbench.ts / workbenchPanel.ts              作業机（機能15・#p4）
+    hiringWorkbench.ts / hiringWorkbenchPanel.ts  採用判断の作業机（機能15b・#p5）
+    runStore.ts / exportDocs.ts / exportPanel.ts  保存と3通りの出力（#p7）
+    photo.ts / profileStore.ts / profilePanel.ts  人材プロフィール（#p6）
+    firebase.ts / auth.ts          Firebase初期化・Google認証
+    paramsOptions.ts / loading.ts  前提パラメータ編集・ローディング演出
+    （dashboard.ts / gauge.ts / whatifController.ts / whatifPanel.ts は v0.8.0 の画面再構成で撤去）
 ```
 
 ## 実装状況
@@ -52,6 +60,7 @@ src/
 - [x] 手順2: 計算エンジン（機能2, 3）… `calcEngine.ts`
 - [x] 手順3: 最適化エンジン＋制約チェック・実行不能原因表示（機能4, 5, 12）… `optimizer.ts` / `assignment.ts`
 - [x] 手順4: 結果ダッシュボード（機能6, 10, 11）… `dashboard.ts` / `reasonText.ts`
+  （`dashboard.ts` と `#p3` は v0.8.0 の画面再構成で撤去。結果表示は `compareTasks.ts` のカードに統合済み）
 - [x] 手順5: 4課題横断比較（機能9）… `compareTasks.ts`
 - [x] 手順6: 採用前後比較（機能7）… `compareHiring.ts`
 - [x] 手順7: CSV出力（機能8）… `csv.ts`
@@ -72,7 +81,8 @@ src/
   これは `docs/web-firebase-plan.md` Phase (d) の一部先行実装にあたる（`datasets`/`simulationRuns` は未着手）。
 - [x] 手順13: 保存と3通りの出力（`docs/export-plan.md`）… 作業机から出力を切り離し、
   「この案を保存」→ Firestore `simulationRuns/{runId}` に追記 → `#p7`（保存した配置案）で出力、という流れにした。
-  出力は ①データCSV（往復可能な全項目）／②告知用PDF（全100名の新体制表・顔写真つき・**人件費と能力値を含まない**）／
+  出力は ①データCSV（往復可能な全項目）／②告知用PDF（全100名の新体制表＝社員番号・氏名・配属先の3列。
+  **顔写真・人件費・能力値を含まない**。顔写真カード案から名簿表へ変更・2026-09-03）／
   ③エグゼクティブサマリPDF（A4一枚・個人名なし）の3通り。PDFはライブラリを入れず印刷CSS＋`window.print()`で出す
   （日本語フォント同梱で数百KB増えるのを避けるため）。
   制約違反の配置は**記録として保存はできるが出力はできない**（作業机にあった門を出力側へ移した）。
@@ -90,7 +100,7 @@ src/
   出力は持たず、[この案を保存] から手順13 の `#p7` へ合流する。
   `hiringWorkbench.ts`（純粋関数）/ `hiringWorkbenchPanel.ts`（表示専用）。
 
-テストは `npm test`（Node 標準 `node:test` ＋型ストリップ、設計書§11 準拠）。全161件。
+テストは `npm test`（Node 標準 `node:test` ＋型ストリップ、設計書§11 準拠）。13ファイル・全167件（約37〜45秒）。
 単体テストは純粋関数までしか触れないため、取込UI〜状態〜描画の配線を確認する結線テストは
 旧Electron実機E2E（21項目）が担っていたが、Web化に伴い撤去。Playwright版への移行待ち
 （`npm run test:e2e` は現在無効。`docs/web-firebase-plan.md` 参照）。
@@ -106,6 +116,7 @@ src/
 - **表示層のリファクタリング（v0.6・`docs/refactor-plan.md`）**：事業部名・色・億円表記・判定ピル・DOM取得・ゲージ描画が
   表示モジュールごとに重複定義されていたため、`constants.ts` / `format.ts` / `dom.ts` / `gauge.ts` に集約。
   573行あった `renderer.ts` を `importPanel.ts`（取込UI）・`whatifController.ts`（#p6の状態と配線）へ分割し170行にした。
+  （`gauge.ts` / `whatifController.ts` はv0.8.0で撤去済み。`renderer.ts` はその後の機能追加で現在698行）
   同時に3件の不具合を修正：①#p3 と #p6 でゲージのマーカー位置の式が違い、充足率1.4で10.7ポイントずれていた
   （`SURPLUS_TABLE` の1.6と対応が取れる #p3 側に統一）。②前提パラメータのエラーを直しても「再最適化」ボタンが
   無効のまま復帰しなかった。③CSV由来の社員番号を無エスケープで innerHTML に埋めていた。

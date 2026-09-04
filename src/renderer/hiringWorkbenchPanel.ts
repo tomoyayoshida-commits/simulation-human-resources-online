@@ -456,7 +456,10 @@ async function commitSave(): Promise<void> {
         assignment: { ...state.assignment },
         params: state.params,
         roster: hiredRoster,
-        feasible: evaluation.result.feasible,
+        // 出力の可否は「全社売上下限」と「最低人数」の両方で決まる（機能16 §4.5・workbenchPanel.ts と同じ）。
+        // result.feasible は売上下限しか見ないため、最低人数割れの案が #p7 で「制約を満たす」と出て
+        // 告知用PDFまで出せてしまう（保存フォームの警告文とも食い違う）。
+        feasible: !hasViolation(evaluation),
         companyRevenue: evaluation.result.companyRevenue,
         companyProfit: evaluation.result.companyProfit,
         movedFromBaseline: evaluation.movedFromBaseline,

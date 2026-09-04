@@ -6,7 +6,7 @@
 <!-- default-src 'none' のホワイトリスト方式を維持。読み込み元は自分自身に閉じる。
      画像は CSV プレビュー等で data: を使う余地を残す。
      Firebase Auth(Google Sign-In)導入のため connect-src/frame-src/img-src/script-src に必要なドメインのみ追加
-     （docs/web-firebase-plan.md 参照。全面緩和はしない。Firestore導入時はさらに追記する）。
+     （docs/web-firebase-plan.md 参照。全面緩和はしない。Firestoreぶんは connect-src の *.googleapis.com で足りている）。
      script-src: signInWithPopup がgapi(https://apis.google.com/js/api.js)を動的読込するため必要。 -->
 <meta http-equiv="Content-Security-Policy"
       content="default-src 'none'; script-src 'self' https://apis.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.googleusercontent.com; font-src 'self'; connect-src 'self' https://*.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; frame-src https://summer011.web.app https://accounts.google.com">
@@ -44,11 +44,11 @@
 
 <div class="wrap" id="app-wrap" hidden>
 
-  <!-- 0. トップページ（目的別の3つの入口） -->
+  <!-- 0. トップページ（目的別の2つの入口。人材登録(#p6)・保存配置(#p7)はトップバーから入る） -->
   <section class="panel active" id="p0">
     <div class="home-hero">
       <h2>何を確認・判断したいですか？</h2>
-      <p>「この配置・この採用判断でいいと言い切れるか」を裏付けるための3つの入口です。</p>
+      <p>「この配置・この採用判断でいいと言い切れるか」を裏付けるための2つの入口です。</p>
     </div>
     <div class="home-grid">
       <div class="home-card">
@@ -117,7 +117,7 @@
       </div>
       <div class="card" id="validation-errors-card" hidden>
         <table class="errtable" id="validation-errors">
-          <tr><th>行番号</th><th>社員ID</th><th>カラム</th><th class="num">実測値</th><th>期待範囲</th></tr>
+          <tr><th>行番号</th><th>カラム</th><th class="num">実測値</th><th>期待範囲</th></tr>
         </table>
         <p class="note">エラー行が1件でもある場合、比較画面には進めない。該当行を修正して再取込。</p>
         <details class="card" id="validation-error-reasons-detail" hidden>

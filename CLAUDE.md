@@ -8,8 +8,9 @@
 ## 2. 何を作っているか
 100名（採用後110名）をA/B/C事業部へ配置し売上・利益を最適化するアプリ。Web(SPA)+TypeScript+Firebase。
 社内限定公開のためFirebase Auth（Google認証・許可リスト）を使い、外部通信あり。
-Firestoreは**`employees`（人材プロフィール＝氏名・顔写真のマスタ）のみ実装済み**（`profileStore.ts`・`docs/profile-plan.md`）。
-`datasets`/`simulationRuns`（取込・実行履歴の永続化）は未着手（`docs/web-firebase-plan.md` Phase (d)）。
+Firestoreは**`employees`（人材プロフィール＝氏名・顔写真のマスタ。`profileStore.ts`・`docs/profile-plan.md`）と
+`simulationRuns`（保存した配置案。追記のみ・更新削除不可。`runStore.ts`・`docs/export-plan.md`）が実装済み**。
+`datasets`と`firestoreSync.ts`は未着手（`docs/web-firebase-plan.md` Phase (d)）。
 **数理最適化ライブラリは不使用**（自前実装で十分高速）。
 旧方針「Electron・外部通信なし」は2026-08-28に撤回（社内共有・履歴要件のため。`docs/web-firebase-plan.md`）。
 Electron版`simulation-human-resources`から複製した専用リポジトリ。
@@ -31,7 +32,7 @@ WSL2 Ubuntu。PowerShellから実行時は**ログインシェル経由必須**�
 |---|---|
 | `npm run dev` | Vite起動・HMR（localhost:5173） |
 | `npm run preview` | `dist/`を本番相当でローカル配信 |
-| `npm test` | node:test全66件・約37秒 |
+| `npm test` | node:test全167件・約37〜45秒（2026-09-04に3回実測。負荷で振れる） |
 | `npm run test:one -- --test-name-pattern='<正規表現>' <file>` | 1件だけ実行。マッチ0件でもexit 0なので`✔`表示で確認必須（§8） |
 | `npm run test:e2e` | Playwright移行待ちで無効 |
 | `npm run snapshot` | 実データ4課題を`docs/baseline-snapshot.txt`と照合。`-- --write`で更新 |
@@ -52,9 +53,11 @@ WSL2 Ubuntu。PowerShellから実行時は**ログインシェル経由必須**�
 - `hiringWorkbench.ts` 採用判断の作業机(機能15b)の純粋関数群（`docs/hiring-workbench-plan.md`）。
   未採用は`assignment`のキー削除で表現する（`membersByUnit`/`headcountOf`が飛ばすため計算側は無変更）
 - `firebase.ts` / `auth.ts` Firebase初期化・Google認証（Phase (c)）。`firebase.ts`は`db`（Firestore・永続キャッシュ有効）も持つ
+- `runStore.ts` `simulationRuns`の追記と読み出し（更新・削除の関数は置かない）／`exportDocs.ts` 告知用・エグゼクティブサマリのHTML生成（純粋関数）／`exportPanel.ts` `#p7`表示専用（`docs/export-plan.md`）
+- `paramsOptions.ts` `#p4`/`#p5`「オプション」の前提パラメータ編集（検証は`whatif.validateParams`を共用）／`loading.ts` ローディング演出
 - `photo.ts` 顔写真の正規化（File→128px JPEG data URI）／`profileStore.ts` `employees`マスタのI/Oとキャッシュ／`profilePanel.ts` `#p6`表示専用（`docs/profile-plan.md`）
 - 画面パネルは `#p0`（トップ）／`#p4`（配置比較：`import`→`result`→`bench`の3ステップ）／`#p5`（採用判断：`import`→`result`→`bench`の3ステップ）／`#p6`（管理：人材プロフィール登録）／`#p7`（保存した配置案：`list`→`export`）
-- `test/` node:test 13ファイル161件。`helpers/lpOracle.ts`はHiGHSラッパー（テスト専用）。`e2e/run.mjs`は実行不可。`snapshot.ts`は別枠
+- `test/` node:test 13ファイル167件。`helpers/lpOracle.ts`はHiGHSラッパー（テスト専用）。`e2e/run.mjs`は実行不可。`snapshot.ts`は別枠
 - 表示の重複を作らない（事業部名・色・億円表記・エスケープ等は`constants.ts`/`format.ts`に集約済み）
 - What-if設計は`docs/whatif-plan.md`。作業机設計は`docs/workbench-plan.md`、採用判断の作業机は`docs/hiring-workbench-plan.md`。主要関数は`SimParams`を末尾引数で受け取れる（式は不変）
 
@@ -86,7 +89,7 @@ WSL2 Ubuntu。PowerShellから実行時は**ログインシェル経由必須**�
 - CSV入出力はフォーミュラインジェクション対策・RFC4180準拠済み。`'`始まりもガード対象（片方だけ直すと非対称になり往復不可に戻るので対で扱う）
 - 上界の並べ替えは候補ループ外に巻き上げ済み（`optimizer.buildValueOrders`）。例外は**利益がprimaryになる事業部**（コスト項がありeffに依存）。判定は`buildValues`の`isTarget`と同形＝課題1（targetUnit=null）は利益指標だと3事業部すべてが例外。総当たり比較テストではこの退行は検出できない（`upperBoundsForCandidates`のビット一致テストが唯一の守り）
 - #p4はカードごとの「最適化：売上／利益」で(課題×指標)8通りから選ぶため、`runOptimization`等は第4引数`metric`で`TASK_SPEC`の指標を上書きできる。省略時は原文どおりで挙動不変。テストは8通り全部を総当たりと突き合わせる
-- 最適化速度は解決済み：実データ4課題で約0.95秒、8通り先読みでも約1.6秒（枝刈り導入前は約10秒という情報は古い）。`npm test`の37秒は枝刈り無し基準実装のテスト1本(32秒・8通り)が占める。詳細`docs/pruning-plan.md`
+- 最適化速度は解決済み：実データ4課題で約0.95秒、8通り先読みでも約1.6秒（枝刈り導入前は約10秒という情報は古い）。`npm test`の37〜45秒は枝刈り無し基準実装のテスト1本(32〜38秒・8通り)が占める。詳細`docs/pruning-plan.md`
 - E2Eは画面が要る（WSL2はWSLg経由）。期待値は`docs/baseline-snapshot.txt`と紐づくため計算仕様変更時は要更新
 - `--test-name-pattern`はマッチ0件でもexit 0。`✔`表示で実行確認必須。正規表現なので半角括弧はエスケープ要（全角は不要）
 - 追加採用10名CSV入手済み：`~/development/資料/テストケース/採用01_正常10名.csv`。異常系CSV（採用02〜07・形状01〜09・計算01〜10・基本01〜10）も同フォルダにあり堅牢性テストに使える
