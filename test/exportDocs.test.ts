@@ -167,3 +167,27 @@ test('buildExecSummaryHtml: 前提条件を満たすかどうかで判定文が�
   const expected = result.feasible ? '前提条件を満たしています' : '前提条件を満たしていません'
   assert.ok(html.includes(expected))
 })
+
+test('buildExecSummaryHtml: params の値がタグとして解釈されない（CLAUDE.md §8）', () => {
+  // #p7 の params は保存済み配置案（Firestore）由来＝外部入力で、型どおり数値とは限らない。
+  // runStore.loadRun は params を検証せずキャストするため（保存された数値を既定値で
+  // 捏造しないための意図的な素通し）、防波堤は描画側のエスケープだけになる。
+  const result = computeSimulationResult(makeAssignment(), makeRoster())
+  const evilParams = {
+    ...DEFAULT_PARAMS,
+    prevYearRevenue: '<script>alert(1)</script>' as unknown as number,
+    optimalHeadcount: { A: '<img src=x onerror=alert(1)>', B: 30, C: 30 } as unknown as Record<UnitId, number>,
+  }
+  const html = buildExecSummaryHtml({
+    title: 't',
+    savedAt: null,
+    task: 1,
+    metric: 'revenue',
+    result,
+    params: evilParams,
+    movedFromBaseline: 0,
+  })
+  assert.ok(!html.includes('<script>'))
+  assert.ok(!html.includes('<img src=x'))
+  assert.ok(html.includes('&lt;script&gt;'))
+})

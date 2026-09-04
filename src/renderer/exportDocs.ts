@@ -128,6 +128,10 @@ export interface ExecSummaryData {
  * ③エグゼクティブサマリ：A4縦1枚（§4.3）。
  * 個人名・社員番号は出さない。数字と判断根拠だけを載せる。
  * 体裁は mockup-exec-summary.html を移植したもの。
+ *
+ * params は保存済み配置案（Firestore）由来＝外部入力なので、型どおり数値とは限らない。
+ * 直接埋める箇所は数値のつもりでも escapeHtml を通す（CLAUDE.md §8）。
+ * verdict.body は下の描画側で escapeHtml しているため、ここでは通さない（二重エスケープになる）。
  */
 export function buildExecSummaryHtml(d: ExecSummaryData): string {
   const { result, params } = d
@@ -162,7 +166,7 @@ export function buildExecSummaryHtml(d: ExecSummaryData): string {
     return `
       <tr>
         <td><span class="doc-dot" style="background:${UNIT_VAR[u]};"></span>${escapeHtml(UNIT_LABEL[u])}</td>
-        <td class="num">${r.count}名${short ? `<span class="doc-warn">最低${params.minHeadcount[u]}名</span>` : ''}</td>
+        <td class="num">${r.count}名${short ? `<span class="doc-warn">最低${escapeHtml(params.minHeadcount[u])}名</span>` : ''}</td>
         <td class="num">${pct(r.fulfillmentRate)}</td>
         <td class="num">${oku1(r.finalRevenue)}</td>
         <td class="num">${oku1(r.profit)}</td>

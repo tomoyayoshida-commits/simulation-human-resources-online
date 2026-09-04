@@ -187,7 +187,7 @@ function card(task: TaskId, r: SimulationResult, ctx: CardContext): string {
   const summary = buildSummary(task, r, baseline, metric, taskLabel(1, ctx.metrics[1]))
   const reasonHtml = `<details class="compare-reason"><summary>配置理由</summary>${generateReasonText(r, task, params, metric)}</details>`
   // 機能15 作業机（docs/workbench-plan.md §4.1）。実行不能カードには出さない（持ち込む配置が無いため）。
-  const workbenchHtml = `<div class="compare-actions"><button type="button" class="btn secondary wb-open-btn" data-wb-open="${task}">この配置を作業机で調整する ▶</button></div>`
+  const workbenchHtml = `<div class="compare-actions"><button type="button" class="btn secondary wb-open-btn" data-wb-open="${task}">この配置の人員配置を調整する ▶</button></div>`
 
   return `
     <div class="compare-card"${borderColor ? ` style="border-color:${borderColor};"` : ''}>

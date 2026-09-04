@@ -3,11 +3,15 @@
 import type { SimParams, SimulationResult, TaskId } from './types.ts'
 import type { TaskMetric } from './constants.ts'
 import { DEFAULT_PARAMS, round2, taskLabel, taskTargetLabel, UNIT_IDS, UNIT_LABEL } from './constants.ts'
-import { pct } from './format.ts'
+import { escapeHtml, pct } from './format.ts'
 
 /**
  * 配置方針・理由の文章を生成する（設計書§9）。
  * reason-box の innerHTML として使う <ul> 文字列を返す。
+ *
+ * params は #p7（保存済み配置案）経由だと Firestore 由来＝外部入力になる。
+ * 型どおり数値とは限らないため、埋め込む値は数値のつもりでも escapeHtml を通す（CLAUDE.md §8）。
+ * result 側は computeSimulationResult が返す計算値なので対象外。
  */
 export function generateReasonText(
   result: SimulationResult,
@@ -31,7 +35,7 @@ export function generateReasonText(
     if (r.surplusFactor < 1) notes.push(`過剰補正 ${r.surplusFactor.toFixed(2)}`)
     const factorText = notes.length > 0 ? notes.join('・') + ' が適用' : '不足・過剰ペナルティなし（補正1.00）'
     bullets.push(
-      `${UNIT_LABEL[u]}：充足率 ${pct(r.fulfillmentRate)}（適正${params.optimalHeadcount[u]}名に対し${r.count}名）→ ${factorText}。`,
+      `${UNIT_LABEL[u]}：充足率 ${pct(r.fulfillmentRate)}（適正${escapeHtml(params.optimalHeadcount[u])}名に対し${r.count}名）→ ${factorText}。`,
     )
   }
 
@@ -39,7 +43,7 @@ export function generateReasonText(
   const diff = round2(result.companyRevenue - params.prevYearRevenue)
   const sign = diff >= 0 ? '+' : ''
   bullets.push(
-    `全社売上は ${result.companyRevenue}億円で前年度売上（${params.prevYearRevenue}億円）を ${sign}${diff}億円 ${diff > 0 ? '上回り' : '下回り'}、全社利益は ${result.companyProfit}億円。`,
+    `全社売上は ${result.companyRevenue}億円で前年度売上（${escapeHtml(params.prevYearRevenue)}億円）を ${sign}${diff}億円 ${diff > 0 ? '上回り' : '下回り'}、全社利益は ${result.companyProfit}億円。`,
   )
 
   // 4. 課題2〜4は辞書式方針の説明
