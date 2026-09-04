@@ -222,7 +222,8 @@ async function handleExportAction(action: string): Promise<void> {
         savedAt: run.savedAt,
         task: run.task,
         metric: run.metric,
-        members: buildAnnouncementMembers(run.roster, run.assignment, getProfiles()),
+        // ②46: 採用判断の案なら新規採用者を名簿上で見分けられるようにする
+        members: buildAnnouncementMembers(run.roster, run.assignment, getProfiles(), run.hiredIds),
       }),
     )
     return
@@ -237,6 +238,9 @@ async function handleExportAction(action: string): Promise<void> {
         result: runResult(run),
         params: run.params,
         movedFromBaseline: run.movedFromBaseline,
+        // ②47: 採用の有無で「何が変わったか」の書き方が変わる（配置比較の案では undefined）
+        hiredIds: run.hiredIds,
+        assignment: run.assignment,
       }),
     )
   }

@@ -8,7 +8,7 @@
 import type { Employee, ProfileMap, SimParams, SimulationResult, TaskId, UnitId } from './types.ts'
 import type { TaskMetric } from './constants.ts'
 import { taskLabel, UNIT_IDS, UNIT_LABEL, UNIT_VAR } from './constants.ts'
-import { escapeHtml, oku, oku1, pct } from './format.ts'
+import { escapeHtml, oku, oku1, pct, signed } from './format.ts'
 import { generateReasonText } from './reasonText.ts'
 
 /** 文書ヘッダに出す日付。保存直後で serverTimestamp が未解決なら空にする。 */
@@ -24,6 +24,24 @@ function dateText(savedAt: Date | null): string {
 export interface AnnouncementMember {
   id: string
   name: string
+  /** 追加採用で入った人か（②46）。配置比較(#p4)由来の案では全員 false */
+  isNew: boolean
+}
+
+/**
+ * 事業部ごとの新規採用人数（②46）。assignment と採用者の社員番号だけで数えられる。
+ * 能力値・人件費は見ないので、告知用の「持ち出さない」方針を崩さない。
+ */
+export function countNewHiresByUnit(
+  assignment: Record<string, UnitId>,
+  hiredIds: string[] = [],
+): Record<UnitId, number> {
+  const counts: Record<UnitId, number> = { A: 0, B: 0, C: 0 }
+  for (const id of hiredIds) {
+    const unit = assignment[id]
+    if (unit) counts[unit]++
+  }
+  return counts
 }
 
 export interface AnnouncementData {
@@ -43,13 +61,15 @@ export function buildAnnouncementMembers(
   roster: Employee[],
   assignment: Record<string, UnitId>,
   profiles: ProfileMap,
+  hiredIds: string[] = [],
 ): Record<UnitId, AnnouncementMember[]> {
+  const hired = new Set(hiredIds)
   const members: Record<UnitId, AnnouncementMember[]> = { A: [], B: [], C: [] }
   for (const e of roster) {
     const unit = assignment[e.id]
     if (!unit) continue
     const p = profiles[e.id]
-    members[unit].push({ id: e.id, name: p?.name ?? '' })
+    members[unit].push({ id: e.id, name: p?.name ?? '', isNew: hired.has(e.id) })
   }
   for (const u of UNIT_IDS) members[u].sort((a, b) => a.id.localeCompare(b.id))
   return members
@@ -70,12 +90,23 @@ export function buildAnnouncementMembers(
  */
 export function buildAnnouncementHtml(d: AnnouncementData): string {
   const total = UNIT_IDS.reduce((n, u) => n + d.members[u].length, 0)
-  const summary = UNIT_IDS.map(
-    (u) => `
+  const newTotal = UNIT_IDS.reduce((n, u) => n + d.members[u].filter((m) => m.isNew).length, 0)
+  // ②46: 事業部ごとの内訳を「既存＋新規」の積み上げ帯で示す。人数だけの表より、
+  // どの事業部に新しい人が入ったのかが一目で分かる。新規が0名なら帯も表記も出さない。
+  const summary = UNIT_IDS.map((u) => {
+    const count = d.members[u].length
+    const newCount = d.members[u].filter((m) => m.isNew).length
+    const newPct = count > 0 ? (newCount / count) * 100 : 0
+    const bar =
+      newTotal === 0
+        ? ''
+        : `<span class="doc-unit-bar"><span class="doc-unit-bar-new" style="width:${newPct.toFixed(1)}%;background:${UNIT_VAR[u]};"></span></span>`
+    const newText = newTotal === 0 ? '' : `<span class="doc-unit-new">うち新規 ${newCount}名</span>`
+    return `
       <li class="doc-unit-chip" style="border-left-color:${UNIT_VAR[u]};">
-        <span>${escapeHtml(UNIT_LABEL[u])}</span><b>${d.members[u].length}名</b>
-      </li>`,
-  ).join('')
+        <span>${escapeHtml(UNIT_LABEL[u])}</span><b>${count}名</b>${newText}${bar}
+      </li>`
+  }).join('')
 
   // 事業部の区切り行＋その事業部の全員（社員番号順は buildAnnouncementMembers が済ませている）
   const rows = UNIT_IDS.map((u) => {
@@ -88,8 +119,8 @@ export function buildAnnouncementHtml(d: AnnouncementData): string {
     const members = d.members[u]
       .map(
         (m) => `
-        <tr>
-          <td class="doc-roster-id">${escapeHtml(m.id)}</td>
+        <tr${m.isNew ? ' class="doc-roster-new"' : ''}>
+          <td class="doc-roster-id">${escapeHtml(m.id)}${m.isNew ? '<span class="doc-new-badge">新規</span>' : ''}</td>
           <td>${m.name ? escapeHtml(m.name) : '<span class="doc-roster-blank">（氏名未登録）</span>'}</td>
           <td class="doc-roster-unit" style="border-left-color:${UNIT_VAR[u]};">${escapeHtml(UNIT_LABEL[u])}</td>
         </tr>`,
@@ -102,7 +133,7 @@ export function buildAnnouncementHtml(d: AnnouncementData): string {
     <article class="doc doc-announce">
       <header class="doc-head">
         <h2>${escapeHtml(d.title)}</h2>
-        <p class="doc-meta">新体制のご案内（全${total}名）　${escapeHtml(dateText(d.savedAt))}</p>
+        <p class="doc-meta">新体制のご案内（全${total}名${newTotal > 0 ? `・うち新規採用${newTotal}名` : ''}）　${escapeHtml(dateText(d.savedAt))}</p>
       </header>
       <ul class="doc-unit-summary">${summary}</ul>
       <table class="doc-table doc-roster">
@@ -122,6 +153,10 @@ export interface ExecSummaryData {
   params: SimParams
   /** 最適解から人手で動かした人数。経営層向けには「判断の量」を示す数字になる */
   movedFromBaseline: number
+  /** 採用判断の案なら、採用した候補の社員番号（②46/②47）。配置比較の案では undefined */
+  hiredIds?: string[]
+  /** この案の配置。事業部ごとの新規採用人数を数えるのに使う（②46） */
+  assignment?: Record<string, UnitId>
 }
 
 /**
@@ -148,25 +183,47 @@ export function buildExecSummaryHtml(d: ExecSummaryData): string {
         body: `全社売上 ${oku(result.companyRevenue)} が前年 ${params.prevYearRevenue}億円 を下回ります。`,
       }
 
+  // ②47: 「いまいくらか」ではなく「基準からどれだけ動いたか」を主役にする。
+  // 基準はすべて params と result の中にある値（前年度実績・適正人数・最低人数・最適解）なので、
+  // 追加の最適化計算を回さずに変化を出せる。
+  const total = result.headcount.A + result.headcount.B + result.headcount.C
+  const newByUnit = countNewHiresByUnit(d.assignment ?? {}, d.hiredIds)
+  const newTotal = UNIT_IDS.reduce((n, u) => n + newByUnit[u], 0)
+  const revenueDelta = result.companyRevenue - params.prevYearRevenue
+  const costTotal = result.companyRevenue - result.companyProfit
+
   const stats = [
-    { k: '全社売上', v: oku(result.companyRevenue), good: feasible },
-    { k: '全社利益', v: oku(result.companyProfit), good: false },
-    { k: '最適解からの調整', v: `${d.movedFromBaseline}名`, good: false },
-    { k: '対象人数', v: `${result.headcount.A + result.headcount.B + result.headcount.C}名`, good: false },
+    {
+      k: '全社売上',
+      v: oku(result.companyRevenue),
+      d: `前年度実績 ${params.prevYearRevenue}億円 比 ${signed(revenueDelta)}億円`,
+      good: feasible,
+    },
+    { k: '全社利益', v: oku(result.companyProfit), d: `人件費 ${oku1(costTotal)}`, good: false },
+    {
+      k: '人数',
+      v: `${total}名`,
+      d: d.hiredIds === undefined ? '配置比較（採用なし）' : `採用前 ${total - newTotal}名 → ${signed(newTotal)}名`,
+      good: false,
+    },
+    { k: '最適解からの調整', v: `${d.movedFromBaseline}名`, d: '人手で動かした人数', good: false },
   ]
     .map(
       (s) =>
-        `<div class="doc-stat"><span class="k">${escapeHtml(s.k)}</span><span class="v${s.good ? ' good' : ''}">${escapeHtml(s.v)}</span></div>`,
+        `<div class="doc-stat"><span class="k">${escapeHtml(s.k)}</span><span class="v${s.good ? ' good' : ''}">${escapeHtml(s.v)}</span><span class="doc-stat-d">${escapeHtml(s.d)}</span></div>`,
     )
     .join('')
 
   const rows = UNIT_IDS.map((u) => {
     const r = result.units[u]
     const short = r.count < params.minHeadcount[u]
+    const optimalDelta = r.count - params.optimalHeadcount[u]
     return `
       <tr>
         <td><span class="doc-dot" style="background:${UNIT_VAR[u]};"></span>${escapeHtml(UNIT_LABEL[u])}</td>
         <td class="num">${r.count}名${short ? `<span class="doc-warn">最低${escapeHtml(params.minHeadcount[u])}名</span>` : ''}</td>
+        <td class="num">${signed(optimalDelta)}名</td>
+        ${newTotal > 0 ? `<td class="num">${newByUnit[u]}名</td>` : ''}
         <td class="num">${pct(r.fulfillmentRate)}</td>
         <td class="num">${oku1(r.finalRevenue)}</td>
         <td class="num">${oku1(r.profit)}</td>
@@ -184,9 +241,9 @@ export function buildExecSummaryHtml(d: ExecSummaryData): string {
         <p>${escapeHtml(verdict.body)}</p>
       </div>
       <div class="doc-stats">${stats}</div>
-      <h3 class="doc-section">事業部別</h3>
+      <h3 class="doc-section">事業部別（適正人数との差・${newTotal > 0 ? '新規採用の配属・' : ''}充足率）</h3>
       <table class="doc-table">
-        <thead><tr><th>事業部</th><th class="num">人数</th><th class="num">充足率</th><th class="num">売上</th><th class="num">利益</th></tr></thead>
+        <thead><tr><th>事業部</th><th class="num">人数</th><th class="num">適正比</th>${newTotal > 0 ? '<th class="num">うち新規</th>' : ''}<th class="num">充足率</th><th class="num">売上</th><th class="num">利益</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
       <h3 class="doc-section">配置の根拠</h3>

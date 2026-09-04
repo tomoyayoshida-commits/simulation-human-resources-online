@@ -7,6 +7,7 @@ import {
   buildAnnouncementHtml,
   buildAnnouncementMembers,
   buildExecSummaryHtml,
+  countNewHiresByUnit,
 } from '../src/renderer/exportDocs.ts'
 import { computeSimulationResult } from '../src/renderer/calcEngine.ts'
 import { DEFAULT_PARAMS } from '../src/renderer/constants.ts'
@@ -39,13 +40,53 @@ const profiles: ProfileMap = {
   E002: { id: 'E002', name: '鈴木 花子', photo: 'data:image/jpeg;base64,AAAA' },
 }
 
-test('buildAnnouncementMembers: id・name 以外を持ち出さない（受入基準5の構造的な担保）', () => {
+// isNew は ui-overhaul-plan.md Phase 8-1（②46）で足した「新規採用か」の真偽値。
+// Employee 由来の値ではないので、人件費・能力値を持ち出さないという担保は変わらない。
+test('buildAnnouncementMembers: id・name・isNew 以外を持ち出さない（受入基準5の構造的な担保）', () => {
   const members = buildAnnouncementMembers(makeRoster(), makeAssignment(), profiles)
   const all = [...members.A, ...members.B, ...members.C]
   assert.equal(all.length, 6)
   for (const m of all) {
-    assert.deepEqual(Object.keys(m).sort(), ['id', 'name'])
+    assert.deepEqual(Object.keys(m).sort(), ['id', 'isNew', 'name'])
   }
+})
+
+test('buildAnnouncementMembers: hiredIds に載っている社員だけ isNew が立つ（②46）', () => {
+  const members = buildAnnouncementMembers(makeRoster(), makeAssignment(), profiles, ['E002'])
+  const all = [...members.A, ...members.B, ...members.C]
+  assert.deepEqual(all.filter((m) => m.isNew).map((m) => m.id), ['E002'])
+})
+
+test('buildAnnouncementMembers: hiredIds 未指定なら誰も新規にならない（配置比較の案）', () => {
+  const members = buildAnnouncementMembers(makeRoster(), makeAssignment(), profiles)
+  const all = [...members.A, ...members.B, ...members.C]
+  assert.ok(all.every((m) => !m.isNew))
+})
+
+test('buildAnnouncementHtml: 新規採用がある案では名簿に新規の印と人数が出る（②46）', () => {
+  const withNew = buildAnnouncementHtml({
+    title: '採用案',
+    savedAt: null,
+    task: 1,
+    metric: 'revenue',
+    members: buildAnnouncementMembers(makeRoster(), makeAssignment(), profiles, ['E002']),
+  })
+  assert.ok(withNew.includes('新規'))
+  assert.ok(withNew.includes('うち新規採用1名'))
+  // 採用なしの案では新規の表記そのものを出さない（全員が既存なので意味を持たないため）
+  const noNew = buildAnnouncementHtml({
+    title: '配置案',
+    savedAt: null,
+    task: 1,
+    metric: 'revenue',
+    members: buildAnnouncementMembers(makeRoster(), makeAssignment(), profiles),
+  })
+  assert.ok(!noNew.includes('新規'))
+})
+
+test('countNewHiresByUnit: 配属先ごとに新規採用を数える（プールの候補は数えない）', () => {
+  const counts = countNewHiresByUnit({ E001: 'A', E002: 'B' }, ['E002', 'E999'])
+  assert.deepEqual(counts, { A: 0, B: 1, C: 0 })
 })
 
 test('buildAnnouncementMembers: 顔写真を持ち出さない（§4.3.2）', () => {

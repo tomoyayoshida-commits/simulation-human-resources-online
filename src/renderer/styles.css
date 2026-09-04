@@ -361,6 +361,15 @@ body.printing .print-doc{display:block;}
 .doc-unit-chip{flex:1;display:flex;justify-content:space-between;align-items:baseline;gap:8px;
   border:1px solid var(--grid);border-left:5px solid var(--baseline);border-radius:4px;padding:6px 10px;font-size:9.5pt;}
 .doc-unit-chip b{font-size:11pt;font-variant-numeric:tabular-nums;}
+/* ②46: 新規採用の内訳。背景色が出ない紙でも読めるよう、帯だけに頼らず人数も文字で書く */
+.doc-unit-chip{flex-wrap:wrap;}
+.doc-unit-new{font-size:8.5pt;color:var(--text-secondary);}
+.doc-unit-bar{flex-basis:100%;height:4px;border:1px solid var(--grid);border-radius:2px;overflow:hidden;margin-top:4px;}
+.doc-unit-bar-new{display:block;height:100%;}
+.doc-new-badge{margin-left:5px;padding:0 4px;border:1px solid var(--good);border-radius:3px;font-size:7.5pt;color:var(--good);}
+.doc-roster-new .doc-roster-id{font-weight:700;}
+/* ②47: 各数字の下に「何と比べての値か」を1行で添える */
+.doc-stat-d{font-size:8pt;color:var(--text-secondary);margin-top:2px;}
 /* thead を table-header-group にすると改ページ後の各ページにも見出し行が出る（100名で3枚前後になる） */
 .doc-roster thead{display:table-header-group;}
 .doc-roster tr{break-inside:avoid;}
