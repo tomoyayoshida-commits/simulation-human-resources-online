@@ -23,18 +23,28 @@ import {
 import { solveForHeadcount } from './optimizer.ts'
 import { saveRun, titleExists, type SavedRun } from './runStore.ts'
 import { withLoading } from './loading.ts'
-import { round2, taskLabel, UNIT_IDS, UNIT_LABEL, UNIT_VAR } from './constants.ts'
-import { clampPct, deltaText, escapeAttr, escapeHtml, oku, oku1, pct, pill, signed } from './format.ts'
+import { round2, taskLabel, UNIT_IDS, UNIT_LABEL } from './constants.ts'
+import { deltaText, escapeAttr, escapeHtml, oku, pill, signed } from './format.ts'
+import {
+  buildAlertHtml,
+  buildCardFaceHtml,
+  buildSaveFormHtml,
+  buildSortOptionsHtml,
+  buildUnitColumnHtml,
+  DRAG_BADGE_HTML,
+  type SaveFormIds,
+} from './workbenchView.ts'
 import { $, setHtml } from './dom.ts'
 
 // ---- 純粋関数：HTML生成（テスト対象） ----
 
-const SORT_OPTIONS: { key: WorkbenchSortKey; label: string }[] = [
-  { key: 'id', label: '社員番号順' },
-  { key: 'contribution', label: '貢献度順（現在の所属）' },
-  { key: 'type', label: '型別' },
-  { key: 'cost', label: '人件費順' },
-]
+/** 共有部品に渡す #p4 側の目印。#p5 は同じ形で hwb- を使う（workbenchView.ts）。 */
+const SAVE_FORM_IDS: SaveFormIds = {
+  inputId: 'wb-save-title',
+  actionAttr: 'data-wb-action',
+  label: 'この配置案の名前',
+}
+const ALERT_DISMISS_ATTR = 'data-wb-alert-dismiss'
 
 /**
  * 現在の assignment を baseline と突き合わせて評価する。
@@ -66,14 +76,6 @@ export interface WorkbenchViewData {
   saveError?: string | null
 }
 
-function buildAlertHtml(alertText: string | null): string {
-  if (!alertText) return ''
-  return (
-    `<div class="wb-alert-banner"><span>${escapeHtml(alertText)}</span>` +
-    `<button type="button" class="wb-alert-close" data-wb-alert-dismiss aria-label="閉じる">✕</button></div>`
-  )
-}
-
 function buildHeaderHtml(
   state: WorkbenchState,
   evaluation: WhatIfEvaluation,
@@ -98,18 +100,6 @@ function buildHeaderHtml(
     <div class="wb-status">${statusPill}${minHcPill}</div>`
 }
 
-/**
- * 顔写真の枠（docs/profile-plan.md §4.6）。写真が無い社員でもレイアウトが崩れないよう、
- * 同じ寸法のプレースホルダ（所属事業部色の丸＋社員番号の下2桁）を必ず返す。
- * photo は Firestore 由来の外部入力なので escapeAttr を通す（CLAUDE.md §8）。
- */
-function buildCardFaceHtml(c: WorkbenchCard): string {
-  if (c.profile?.photo) {
-    return `<img class="wb-card-photo" src="${escapeAttr(c.profile.photo)}" alt="" draggable="false">`
-  }
-  return `<span class="wb-card-photo wb-card-photo-none" style="background:${UNIT_VAR[c.unit]};">${escapeHtml(c.employee.id.slice(-2))}</span>`
-}
-
 function buildCardHtml(c: WorkbenchCard, selectedEmployeeId: string | null, showPhotos: boolean): string {
   const others = UNIT_IDS.filter((u) => u !== c.unit)
   const otherText = others.map((u) => `${u} ${c.contributions[u].toFixed(2)}`).join(' ／ ')
@@ -128,56 +118,6 @@ function buildCardHtml(c: WorkbenchCard, selectedEmployeeId: string | null, show
     </div>`
 }
 
-/** 列の生成が共通で読む文脈。事業部ごとに作り直す必要のない値をまとめてある。 */
-interface ColumnContext {
-  state: WorkbenchState
-  evaluation: WhatIfEvaluation
-  /** 全社員ぶんのカード（並び替え済み）。事業部で絞るのは各列側 */
-  sortedCards: WorkbenchCard[]
-  selectedEmployeeId: string | null
-  /** 顔写真サムネイルを出すか（§4.6） */
-  showPhotos: boolean
-}
-
-function buildColumnHtml(u: UnitId, ctx: ColumnContext): string {
-  const { state, evaluation, sortedCards, selectedEmployeeId, showPhotos } = ctx
-  const unitResult = evaluation.result.units[u]
-  const baseUnitResult = state.baseline.units[u]
-  const violation = evaluation.minHeadcountViolations.includes(u)
-  const meterPct = clampPct(unitResult.fulfillmentRate * 100)
-  const cardsHtml = sortedCards
-    .filter((c) => c.unit === u)
-    .map((c) => buildCardHtml(c, selectedEmployeeId, showPhotos))
-    .join('')
-  return `
-    <div class="wb-column${violation ? ' violation' : ''}" data-unit="${u}">
-      <div class="wb-unit-head">
-        <div class="wb-unit-title"><b>${UNIT_LABEL[u]}</b> ${unitResult.count}名 <span class="wb-unit-pct">${pct(unitResult.fulfillmentRate)}</span>${violation ? ` <span class="wb-unit-warn">⚠ 最低${state.params.minHeadcount[u]}名</span>` : ''}</div>
-        <div class="meter-mini"><div class="meter-mini-fill" style="width:${meterPct.toFixed(1)}%;background:${UNIT_VAR[u]};"></div></div>
-        <div class="wb-unit-sub">売上${oku1(unitResult.finalRevenue)}（${deltaText(unitResult.finalRevenue, baseUnitResult.finalRevenue)}）</div>
-      </div>
-      <div class="wb-cards">${cardsHtml}</div>
-    </div>`
-}
-
-/**
- * 保存時の命名フォーム（docs/export-plan.md §4.8）。`savingTitle` が null なら閉じている。
- * 別ダイアログにせず操作列の直下に開く。制約違反があっても保存自体は止めない（§4.5）。
- */
-function buildSaveFormHtml(savingTitle: string | null, violation: boolean, saveError: string | null): string {
-  if (savingTitle === null) return ''
-  return `
-    <div class="wb-save-form">
-      <label class="wb-save-label">この配置案の名前
-        <input type="text" id="wb-save-title" class="wb-save-input" maxlength="80" value="${escapeAttr(savingTitle)}">
-      </label>
-      <button type="button" class="btn" data-wb-action="save-confirm">保存する</button>
-      <button type="button" class="btn secondary" data-wb-action="save-cancel">やめる</button>
-      ${saveError ? `<p class="warn-text">${escapeHtml(saveError)}</p>` : ''}
-      ${violation ? '<p class="warn-text">制約違反があります。記録としては保存できますが、CSV・PDFの出力はできません。</p>' : ''}
-    </div>`
-}
-
 function buildActionsHtml(
   state: WorkbenchState,
   evaluation: WhatIfEvaluation,
@@ -189,9 +129,7 @@ function buildActionsHtml(
   const violation = hasViolation(evaluation)
   const diffs = diffAssignment(state.baseline.assignment, state.assignment)
   const diffText = diffs.length === 0 ? '異動なし' : diffs.map((d) => `${d.from}→${d.to} ${d.count}名`).join(' ／ ')
-  const sortOptionsHtml = SORT_OPTIONS.map(
-    (o) => `<option value="${o.key}"${o.key === sortKey ? ' selected' : ''}>${o.label}</option>`,
-  ).join('')
+  const sortOptionsHtml = buildSortOptionsHtml(sortKey)
   return `
     <div class="wb-actions">
       <div class="wb-actions-left">
@@ -205,7 +143,7 @@ function buildActionsHtml(
         <button type="button" class="btn" data-wb-action="save"${savingTitle === null ? '' : ' disabled'}>この案を保存</button>
       </div>
     </div>
-    ${buildSaveFormHtml(savingTitle, violation, saveError)}
+    ${buildSaveFormHtml(savingTitle, violation, saveError, SAVE_FORM_IDS)}
     <p class="wb-diff">異動の内訳：${diffText}</p>`
 }
 
@@ -218,23 +156,26 @@ export function buildWorkbenchHtml(data: WorkbenchViewData): string {
   const evaluation = evaluate(state)
   // カードの組み立て（100名×3事業部の貢献度）と並び替えは事業部に依存しないので、
   // 列ごとに作り直さず1回で済ませる（従来は3列それぞれで buildWorkbenchCards を呼び直していた）。
-  const ctx: ColumnContext = {
-    state,
-    evaluation,
-    sortedCards: sortCards(buildWorkbenchCards(state), sortKey),
-    selectedEmployeeId,
-    showPhotos,
-  }
-  const columnsHtml = UNIT_IDS.map((u) => buildColumnHtml(u, ctx)).join('')
+  const sortedCards = sortCards(buildWorkbenchCards(state), sortKey)
+  const columnsHtml = UNIT_IDS.map((u) =>
+    buildUnitColumnHtml(u, {
+      slotAttr: 'data-unit',
+      unitResult: evaluation.result.units[u],
+      baseUnitResult: state.baseline.units[u],
+      violation: evaluation.minHeadcountViolations.includes(u),
+      minHeadcount: state.params.minHeadcount[u],
+      cardsHtml: sortedCards
+        .filter((c) => c.unit === u)
+        .map((c) => buildCardHtml(c, selectedEmployeeId, showPhotos))
+        .join(''),
+    }),
+  ).join('')
   return (
-    buildAlertHtml(alertText) +
+    buildAlertHtml(alertText, ALERT_DISMISS_ATTR) +
     buildHeaderHtml(state, evaluation) +
     `<div class="wb-board">${columnsHtml}</div>` +
     buildActionsHtml(state, evaluation, sortKey, showPhotos, data.savingTitle ?? null, data.saveError ?? null) +
-    // ドラッグ中の増減プレビュー。列ヘッダに置くと長い列の下端を掴んでいるとき画面外に出て読めないため、
-    // カーソル追従の浮動バッジにしている。ドラッグ中はstateが変わらず再描画も起きないので、
-    // このHTMLに含めておけばドラッグ開始から終了まで生き残る。
-    `<div class="wb-drag-badge" hidden></div>`
+    DRAG_BADGE_HTML
   )
 }
 
