@@ -31,6 +31,7 @@ import {
   buildCardFaceHtml,
   buildConstraintNoteHtml,
   buildNextStepHtml,
+  CONTRIBUTION_NOTE_HTML,
   buildSaveFormHtml,
   buildSortOptionsHtml,
   buildUnitColumnHtml,
@@ -94,11 +95,14 @@ function buildHeaderHtml(
       : ''
   return `
     <h2>作業机：${taskLabel(state.task, state.metric)}の配置を調整</h2>
-    <p class="subtitle">最適解を出発点に人手で寄せ、そのコストをその場で確認する</p>
+    <!-- ②28: 「最適解」が何を指すかを画面に書く。Δの基準もこれ -->
+    <p class="subtitle">最適解を出発点に人手で寄せ、そのコストをその場で確認する。<br>
+      ここでいう<b>最適解</b>とは、取り込んだ${state.roster.length}名と現在の前提条件のもとで
+      「${taskLabel(state.task, state.metric)}」を最大化する配置のことです（この盤面の出発点）。</p>
     <div class="wb-totals">
-      <div class="wb-stat"><span class="k">全社売上</span><span class="v">${oku(result.companyRevenue)}</span><span class="d">${deltaText(result.companyRevenue, baseline.companyRevenue)}</span></div>
-      <div class="wb-stat"><span class="k">全社利益</span><span class="v">${oku(result.companyProfit)}</span><span class="d">${deltaText(result.companyProfit, baseline.companyProfit)}</span></div>
-      <div class="wb-stat"><span class="k">異動</span><span class="v">${evaluation.movedFromBaseline}名</span></div>
+      <div class="wb-stat"><span class="k">全社売上</span><span class="v">${oku(result.companyRevenue)}</span><span class="d">最適解比 ${deltaText(result.companyRevenue, baseline.companyRevenue)}</span></div>
+      <div class="wb-stat"><span class="k">全社利益</span><span class="v">${oku(result.companyProfit)}</span><span class="d">最適解比 ${deltaText(result.companyProfit, baseline.companyProfit)}</span></div>
+      <div class="wb-stat"><span class="k">異動</span><span class="v">${evaluation.movedFromBaseline}名</span><span class="d">最適解から</span></div>
     </div>
     <div class="wb-status">${statusPill}${minHcPill}</div>
     ${buildConstraintNoteHtml(state.params.prevYearRevenue, state.params.minHeadcount)}
@@ -149,7 +153,8 @@ function buildActionsHtml(
       </div>
     </div>
     ${buildSaveFormHtml(savingTitle, violation, saveError, SAVE_FORM_IDS)}
-    <p class="wb-diff">異動の内訳：${diffText}</p>`
+    <p class="wb-diff">異動の内訳：${diffText}</p>
+    ${CONTRIBUTION_NOTE_HTML}`
 }
 
 /** 作業机パネル全体のHTMLを組み立てる（純粋関数・DOM非依存）。 */
@@ -167,6 +172,7 @@ export function buildWorkbenchHtml(data: WorkbenchViewData): string {
       slotAttr: 'data-unit',
       unitResult: evaluation.result.units[u],
       baseUnitResult: state.baseline.units[u],
+      baselineLabel: '最適解比',
       violation: evaluation.minHeadcountViolations.includes(u),
       minHeadcount: state.params.minHeadcount[u],
       cardsHtml: sortedCards
@@ -303,8 +309,10 @@ function commitMove(id: string, unit: UnitId): void {
   // §8-1: feasible→infeasible に変わった操作の直後だけ警告を出す（ドロップ自体は拒否しない）
   if (!hasViolation(before) && hasViolation(after)) {
     view.alertKind = !after.result.feasible ? 'revenue' : 'headcount'
+    // ①27注記: バナーには現在値を書かない。バナーは操作を続けても残るため、書いた瞬間の値が
+    // すぐ古くなる（現在値はヘッダの全社売上に常時出ており、そちらは再描画のたびに更新される）。
     view.alertText = !after.result.feasible
-      ? `全社売上が${state.params.prevYearRevenue}億円を下回りました（現在${oku(after.result.companyRevenue)}）`
+      ? `全社売上が下限（${state.params.prevYearRevenue}億円）を下回りました`
       : `最低人数を割りました（${after.minHeadcountViolations.join('・')}）`
   } else {
     clearAlertIfResolved(after)

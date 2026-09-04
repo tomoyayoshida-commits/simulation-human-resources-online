@@ -79,6 +79,15 @@ export function buildNextStepHtml(feasible: boolean, minHeadcountViolations: Uni
   return `<div class="wb-nextstep"><b>次にできること</b>${lines.map((t) => `<p>${t}</p>`).join('')}</div>`
 }
 
+/**
+ * カードに並ぶ数字の読み方（①22注記）。両画面のカードは同じ組み立てなので文言も共有する。
+ * 貢献度そのものの定義（能力値×重み）を書いておかないと、Δ何億円との関係が読めない。
+ */
+export const CONTRIBUTION_NOTE_HTML =
+  '<p class="wb-note">カードの大きい数字は<b>いまの所属事業部での貢献度</b>' +
+  '（社員の能力値 × その事業部の重みの合計）。小さい数字は他の事業部へ移したときの貢献度です。' +
+  '事業部の売上は所属者の貢献度の合計から決まるので、貢献度の高い人ほど動かしたときの増減が大きくなります。</p>'
+
 /** 顔写真の枠に必要な最小限のカード情報。unit が null なのは未採用（プール）の候補。 */
 export interface CardFaceData {
   employee: Employee
@@ -147,6 +156,11 @@ export interface UnitColumnData {
   unitResult: ColumnUnitStat
   /** 比較の基準（#p4 は最適解、#p5 は採用前） */
   baseUnitResult: ColumnUnitStat
+  /**
+   * Δの基準の呼び名（①22/②30）。「最適解比」「採用前比」など。
+   * 基準名の無い ±X は何と比べた差か読めないため、画面ごとに必ず渡す。
+   */
+  baselineLabel: string
   /** 最低人数割れか */
   violation: boolean
   /** 割れているときに出す最低人数 */
@@ -163,7 +177,7 @@ export function buildUnitColumnHtml(u: UnitId, d: UnitColumnData): string {
       <div class="wb-unit-head">
         <div class="wb-unit-title"><b>${UNIT_LABEL[u]}</b> ${d.unitResult.count}名 <span class="wb-unit-pct">${pct(d.unitResult.fulfillmentRate)}</span>${d.violation ? ` <span class="wb-unit-warn">⚠ 最低${d.minHeadcount}名</span>` : ` <span class="wb-unit-min">最低${d.minHeadcount}名</span>`}</div>
         <div class="meter-mini"><div class="meter-mini-fill" style="width:${meterPct.toFixed(1)}%;background:${UNIT_VAR[u]};"></div></div>
-        <div class="wb-unit-sub">売上${oku1(d.unitResult.finalRevenue)}（${deltaText(d.unitResult.finalRevenue, d.baseUnitResult.finalRevenue)}）</div>
+        <div class="wb-unit-sub">売上${oku1(d.unitResult.finalRevenue)}（${escapeHtml(d.baselineLabel)} ${deltaText(d.unitResult.finalRevenue, d.baseUnitResult.finalRevenue)}）</div>
       </div>
       <div class="wb-cards">${d.cardsHtml}</div>
     </div>`

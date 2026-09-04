@@ -13,24 +13,46 @@ function profitBars(r: SimulationResult): string {
   ).join('')
 }
 
-function beforeCard(r: SimulationResult): string {
+/**
+ * ②16注記: 事業部別のバーが利益だけだと、採用で売上がどう動いたかが事業部単位で読めない。
+ * 売上バーも並べる。スケールは採用前後の全事業部の最大値で揃える（#p4 の revenueScale と同じ考え）。
+ */
+function revenueBars(r: SimulationResult, scale: number): string {
+  return UNIT_IDS.map((u) =>
+    barRow(u, (r.units[u].finalRevenue / scale) * 100, UNIT_VAR[u], oku1(r.units[u].finalRevenue), true),
+  ).join('')
+}
+
+function revenueScale(before: SimulationResult, after: SimulationResult): number {
+  let max = 0
+  for (const r of [before, after]) {
+    for (const u of UNIT_IDS) max = Math.max(max, r.units[u].finalRevenue)
+  }
+  return max > 0 ? max : 1
+}
+
+function beforeCard(r: SimulationResult, scale: number): string {
   return `
     <div class="compare-before">
       <div class="compare-head"><span class="compare-badge" style="background:var(--baseline);color:#0b0b0b;">採用前</span><h4>${totalHeadcount(r)}名</h4></div>
       <div class="compare-primary"><div class="k">全社売上</div><div class="v">${r.companyRevenue.toFixed(2)}<span class="unit">億円</span></div></div>
+      <div class="bars-label">事業部別売上（共通スケール 0〜${scale.toFixed(2)}億円）</div>
+      <div class="compare-bars">${revenueBars(r, scale)}</div>
       <div class="bars-label">事業部別利益（共通スケール 0〜${PROFIT_SCALE}億円）</div>
       <div class="compare-bars">${profitBars(r)}</div>
       <div class="compare-sub"><div><span class="cs-k">全社利益</span><span class="cs-v">${oku(r.companyProfit)}</span></div></div>
     </div>`
 }
 
-function afterCard(r: SimulationResult, before: SimulationResult): string {
+function afterCard(r: SimulationResult, before: SimulationResult, scale: number): string {
   const dRev = round2(r.companyRevenue - before.companyRevenue)
   const dProfit = round2(r.companyProfit - before.companyProfit)
   return `
     <div class="compare-after">
       <div class="compare-head"><span class="compare-badge" style="background:var(--good);">採用後</span><h4>${totalHeadcount(r)}名</h4></div>
       <div class="compare-primary"><div class="k">全社売上</div><div class="v" style="color:var(--good);">${r.companyRevenue.toFixed(2)}<span class="unit">億円</span></div><div class="d good">採用前比 ${signed(dRev)}億円</div></div>
+      <div class="bars-label">事業部別売上（共通スケール 0〜${scale.toFixed(2)}億円）</div>
+      <div class="compare-bars">${revenueBars(r, scale)}</div>
       <div class="bars-label">事業部別利益（共通スケール 0〜${PROFIT_SCALE}億円）</div>
       <div class="compare-bars">${profitBars(r)}</div>
       <div class="compare-sub"><div><span class="cs-k">全社利益</span><span class="cs-v" style="color:var(--good);">${oku(r.companyProfit)}　<span style="font-size:11px;">(${signed(dProfit)}億円)</span></span></div></div>
@@ -61,7 +83,8 @@ export function renderCompareHiring(
     return
   }
 
-  setHtml('compare-hiring-grid', beforeCard(beforeRes) + afterCard(afterRes, beforeRes))
+  const barScale = revenueScale(beforeRes, afterRes)
+  setHtml('compare-hiring-grid', beforeCard(beforeRes, barScale) + afterCard(afterRes, beforeRes, barScale))
 
   // ROI（参考）
   // 億円表示のため calcEngine.unitCostTotal と同じ換算（÷COST_UNIT_DIVISOR）を通す

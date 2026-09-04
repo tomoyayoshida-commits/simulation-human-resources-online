@@ -42,6 +42,7 @@ import {
   buildCardFaceHtml,
   buildConstraintNoteHtml,
   buildNextStepHtml,
+  CONTRIBUTION_NOTE_HTML,
   buildSaveFormHtml,
   buildSortOptionsHtml,
   buildUnitColumnHtml as buildUnitColumn,
@@ -110,7 +111,11 @@ function buildHeaderHtml(state: HiringWorkbenchState, evaluation: WhatIfEvaluati
   const lockHtml = `<label class="hwb-lock"><input type="checkbox" id="hwb-lock"${state.lockBase ? ' checked' : ''}>既存${state.base.length}名を固定する</label>`
   return `
     <h2>採用判断の作業机：${escapeHtml(originText)}（${taskLabel(state.task, state.metric)}）</h2>
-    <p class="subtitle">誰を採り、どこに置くかを1つの盤面で決める。プールに残した候補は採用しない</p>
+    <!-- ②28: 2段Δの基準がそれぞれ何を指すのかを画面に書く -->
+    <p class="subtitle">誰を採り、どこに置くかを1つの盤面で決める。プールに残した候補は採用しない。<br>
+      <b>採用前比</b>＝採用しなかった場合（${state.branch === 'existing' ? '取り込んだ現行配置' : '採用前の最適解'}・既存${state.base.length}名）との差。
+      <b>最適解比</b>＝候補を全員採用し、${state.base.length + state.candidates.length}名で
+      「${taskLabel(state.task, state.metric)}」を最大化したときの配置との差です。</p>
     <div class="hwb-totals">
       ${buildStatHtml('全社売上', oku(result.companyRevenue), deltaText(result.companyRevenue, beforeBaseline.companyRevenue), afterBaseline ? deltaText(result.companyRevenue, afterBaseline.companyRevenue) : null)}
       ${buildStatHtml('全社利益', oku(result.companyProfit), deltaText(result.companyProfit, beforeBaseline.companyProfit), afterBaseline ? deltaText(result.companyProfit, afterBaseline.companyProfit) : null)}
@@ -188,6 +193,7 @@ function buildUnitColumnHtml(u: UnitId, ctx: ColumnContext): string {
     slotAttr: 'data-hslot',
     unitResult: evaluation.result.units[u],
     baseUnitResult: state.beforeBaseline.units[u],
+    baselineLabel: '採用前比',
     violation: evaluation.minHeadcountViolations.includes(u),
     minHeadcount: state.params.minHeadcount[u],
     cardsHtml: sortedCards
@@ -242,7 +248,8 @@ function buildActionsHtml(
       </div>
     </div>
     ${buildSaveFormHtml(savingTitle, violation, saveError, SAVE_FORM_IDS)}
-    <p class="wb-diff">内訳：${escapeHtml(diffLine(state))}</p>`
+    <p class="wb-diff">内訳：${escapeHtml(diffLine(state))}</p>
+    ${CONTRIBUTION_NOTE_HTML}`
 }
 
 /** 採用判断の作業机パネル全体のHTMLを組み立てる（純粋関数・DOM非依存）。 */
@@ -377,8 +384,10 @@ function commitMove(id: string, slot: HiringSlot): void {
   // §5.9: feasible→infeasible に変わった操作の直後だけ警告を出す（ドロップ自体は拒否しない）
   if (!hasViolation(before) && hasViolation(after)) {
     view.alertKind = !after.result.feasible ? 'revenue' : 'headcount'
+    // ①27注記: バナーには現在値を書かない（書いた瞬間の値が続く操作ですぐ古くなるため）。
+    // 現在値はヘッダの全社売上に常時出ており、そちらは再描画のたびに更新される。
     view.alertText = !after.result.feasible
-      ? `全社売上が${state.params.prevYearRevenue}億円を下回りました（現在${oku(after.result.companyRevenue)}）`
+      ? `全社売上が下限（${state.params.prevYearRevenue}億円）を下回りました`
       : `最低人数を割りました（${after.minHeadcountViolations.join('・')}）`
   } else {
     clearAlertIfResolved(after)
