@@ -34,7 +34,8 @@ import { headcountOf } from './whatif.ts'
 import { solveForHeadcount } from './optimizer.ts'
 import { saveRun, titleExists, type SavedRun } from './runStore.ts'
 import { withLoading } from './loading.ts'
-import { round2, taskLabel, UNIT_IDS, UNIT_LABEL } from './constants.ts'
+import { taskLabel, UNIT_IDS, UNIT_LABEL } from './constants.ts'
+import { createDragController } from './workbenchDnd.ts'
 import { deltaText, escapeAttr, escapeHtml, oku, pill, signed } from './format.ts'
 import {
   buildAlertHtml,
@@ -291,9 +292,6 @@ const view: {
   state: HiringWorkbenchState | null
   sortKey: WorkbenchSortKey
   selectedEmployeeId: string | null
-  dragEmployeeId: string | null
-  dragBaseRevenue: number
-  dragHoverSlot: HiringSlot | null
   alertText: string | null
   alertKind: 'revenue' | 'headcount' | null
   showPhotos: boolean
@@ -303,9 +301,6 @@ const view: {
   state: null,
   sortKey: 'id',
   selectedEmployeeId: null,
-  dragEmployeeId: null,
-  dragBaseRevenue: 0,
-  dragHoverSlot: null,
   alertText: null,
   alertKind: null,
   showPhotos: true,
@@ -348,10 +343,9 @@ export function openHiringWorkbench(initial: HiringWorkbenchState): void {
   view.selectedEmployeeId = null
   view.alertText = null
   view.alertKind = null
-  view.dragEmployeeId = null
-  view.dragHoverSlot = null
   view.savingTitle = null
   view.saveError = null
+  drag.reset()
   render()
 }
 
@@ -531,113 +525,23 @@ function handleChange(e: Event): void {
   render()
 }
 
-function columnAt(e: Event): HTMLElement | null {
-  return (e.target as HTMLElement | null)?.closest<HTMLElement>('[data-hslot]') ?? null
-}
-
-let badgeSize = { w: 0, h: 0 }
-
-function dragBadgeEl(): HTMLElement | null {
-  return $('hwb-root')?.querySelector<HTMLElement>('.wb-drag-badge') ?? null
-}
-
-function moveDragBadge(x: number, y: number): void {
-  const el = dragBadgeEl()
-  if (!el || el.hidden) return
-  const gap = 14
-  const edge = 8
-  el.style.left = `${Math.max(edge, Math.min(x + gap, window.innerWidth - badgeSize.w - edge))}px`
-  el.style.top = `${Math.max(edge, Math.min(y + gap, window.innerHeight - badgeSize.h - edge))}px`
-}
-
-function clearAllDropHints(): void {
-  if (view.dragHoverSlot === null) return
-  $('hwb-root')?.querySelectorAll<HTMLElement>('[data-hslot]').forEach((el) => el.classList.remove('drop-hover'))
-  const el = dragBadgeEl()
-  if (el) el.hidden = true
-  view.dragHoverSlot = null
-}
-
-/** その列へ移した場合の全社売上差をバッジに出し、列を強調する。 */
-function showDropHint(colEl: HTMLElement, slot: HiringSlot): void {
-  const state = view.state
-  if (!state || !view.dragEmployeeId) return
-  const preview = previewMoveTo(state, view.dragEmployeeId, slot)
-  const d = round2(preview.companyRevenue - view.dragBaseRevenue)
-  const el = dragBadgeEl()
-  if (el) {
-    const dest = slot === 'pool' ? '採用しない' : `${UNIT_LABEL[slot]}へ移す`
-    el.textContent = `${dest}と 全社売上 ${signed(d)}億円`
-    el.hidden = false
-    badgeSize = { w: el.offsetWidth, h: el.offsetHeight }
-  }
-  colEl.classList.add('drop-hover')
-  view.dragHoverSlot = slot
-}
-
-function handleDragStart(e: DragEvent): void {
-  const cardEl = (e.target as HTMLElement | null)?.closest<HTMLElement>('[data-emp]')
-  const state = view.state
-  if (!cardEl || !state) return
-  const id = cardEl.dataset.emp ?? ''
-  if (!canMove(state, id)) {
-    e.preventDefault()
-    return
-  }
-  view.dragEmployeeId = id
-  view.dragHoverSlot = null
-  view.dragBaseRevenue = evaluateHiring(state).result.companyRevenue
-  e.dataTransfer?.setData('text/plain', id)
-}
-
-function handleDragOver(e: DragEvent): void {
-  const colEl = columnAt(e)
-  if (!colEl) {
-    clearAllDropHints()
-    return
-  }
-  const slot = colEl.dataset.hslot as HiringSlot
-  // §5.5.1: 置けない列では preventDefault しない＝ブラウザ標準の「ドロップ不可」カーソルになる。
-  // 掴んだまま近づいた時点で入らないと分かるので、落としてから断られるより手前で止まる。
-  if (view.state && view.dragEmployeeId && !canPlace(view.state, view.dragEmployeeId, slot)) {
-    clearAllDropHints()
-    return
-  }
-  e.preventDefault()
-  if (slot !== view.dragHoverSlot) {
-    clearAllDropHints()
-    showDropHint(colEl, slot)
-  }
-  moveDragBadge(e.clientX, e.clientY)
-}
-
-function handleDragEnter(e: DragEvent): void {
-  // 受け入れ可否の判定は handleDragOver に一本化してある（§5.5.1）。ここで無条件に
-  // preventDefault すると、禁止列でも一瞬だけ「置ける」表示になる。
-  const colEl = columnAt(e)
-  if (!colEl || !view.state || !view.dragEmployeeId) return
-  if (canPlace(view.state, view.dragEmployeeId, colEl.dataset.hslot as HiringSlot)) e.preventDefault()
-}
-
-function handleDragLeave(e: DragEvent): void {
-  const root = $('hwb-root')
-  const to = e.relatedTarget as Node | null
-  if (root && to && !root.contains(to)) clearAllDropHints()
-}
-
-function handleDrop(e: DragEvent): void {
-  e.preventDefault()
-  const colEl = columnAt(e)
-  clearAllDropHints()
-  const id = e.dataTransfer?.getData('text/plain') || view.dragEmployeeId
-  view.dragEmployeeId = null
-  if (colEl && id) commitMove(id, colEl.dataset.hslot as HiringSlot)
-}
-
-function handleDragEnd(): void {
-  view.dragEmployeeId = null
-  clearAllDropHints()
-}
+/**
+ * ドラッグ&ドロップは workbenchDnd.ts と共有する（#p4 と処理が同一だったため）。
+ * #p5 だけの事情はロック（canMove）とプール列の受け入れ制限（canPlace）の2つで、
+ * どちらも引数で渡す（§5.5・§5.5.1）。
+ */
+const drag = createDragController<HiringSlot>({
+  rootId: 'hwb-root',
+  slotSelector: '[data-hslot]',
+  slotOf: (colEl) => colEl.dataset.hslot as HiringSlot,
+  isReady: () => view.state !== null,
+  canGrab: (id) => view.state !== null && canMove(view.state, id),
+  accept: (id, slot) => view.state !== null && id !== null && canPlace(view.state, id, slot),
+  baseRevenue: () => (view.state ? evaluateHiring(view.state).result.companyRevenue : 0),
+  previewRevenue: (id, slot) => (view.state ? previewMoveTo(view.state, id, slot).companyRevenue : 0),
+  badgeText: (slot, d) => `${slot === 'pool' ? '採用しない' : `${UNIT_LABEL[slot]}へ移す`}と 全社売上 ${signed(d)}億円`,
+  onDrop: commitMove,
+})
 
 /** 採用判断の作業机の委譲リスナを1回だけ張る（`#hwb-root` は起動時から存在する空div）。 */
 export function initHiringWorkbenchPanel(onSavedRun: (run: SavedRun) => void): void {
@@ -646,10 +550,5 @@ export function initHiringWorkbenchPanel(onSavedRun: (run: SavedRun) => void): v
   if (!root) return
   root.addEventListener('click', handleClick)
   root.addEventListener('change', handleChange)
-  root.addEventListener('dragstart', handleDragStart)
-  root.addEventListener('dragover', handleDragOver)
-  root.addEventListener('dragenter', handleDragEnter)
-  root.addEventListener('dragleave', handleDragLeave)
-  root.addEventListener('drop', handleDrop)
-  root.addEventListener('dragend', handleDragEnd)
+  drag.attach(root)
 }

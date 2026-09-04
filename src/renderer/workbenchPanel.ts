@@ -23,7 +23,8 @@ import {
 import { solveForHeadcount } from './optimizer.ts'
 import { saveRun, titleExists, type SavedRun } from './runStore.ts'
 import { withLoading } from './loading.ts'
-import { round2, taskLabel, UNIT_IDS, UNIT_LABEL } from './constants.ts'
+import { taskLabel, UNIT_IDS, UNIT_LABEL } from './constants.ts'
+import { createDragController } from './workbenchDnd.ts'
 import { deltaText, escapeAttr, escapeHtml, oku, pill, signed } from './format.ts'
 import {
   buildAlertHtml,
@@ -185,11 +186,6 @@ const view: {
   state: WorkbenchState | null
   sortKey: WorkbenchSortKey
   selectedEmployeeId: string | null
-  dragEmployeeId: string | null
-  /** ドラッグ開始時点の全社売上。ドラッグ中は state が変わらないので、列に入るたびに測り直さない（§7） */
-  dragBaseRevenue: number
-  /** いまプレビューを出している列。同じ列の中で動いている間は再計算しないための番人（§7） */
-  dragHoverUnit: UnitId | null
   alertText: string | null
   /** alertText を出した原因の種類。原因が解消されたら自動で消すための判定に使う */
   alertKind: 'revenue' | 'headcount' | null
@@ -203,9 +199,6 @@ const view: {
   state: null,
   sortKey: 'id',
   selectedEmployeeId: null,
-  dragEmployeeId: null,
-  dragBaseRevenue: 0,
-  dragHoverUnit: null,
   alertText: null,
   alertKind: null,
   showPhotos: true,
@@ -238,10 +231,9 @@ export function openWorkbench(initial: WorkbenchState): void {
   view.selectedEmployeeId = null
   view.alertText = null
   view.alertKind = null
-  view.dragEmployeeId = null
-  view.dragHoverUnit = null
   view.savingTitle = null
   view.saveError = null
+  drag.reset()
   render()
 }
 
@@ -392,121 +384,22 @@ function handleChange(e: Event): void {
   render()
 }
 
-/** イベント発生位置の事業部列。ドラッグ系4ハンドラが同じ探索をしていたのを1箇所に。 */
-function columnAt(e: Event): HTMLElement | null {
-  return (e.target as HTMLElement | null)?.closest<HTMLElement>('[data-unit]') ?? null
-}
-
-/** カーソル追従バッジ。表示中の寸法を持っておき、画面端でのはみ出し補正を計測なしで済ませる。 */
-let badgeSize = { w: 0, h: 0 }
-
-function dragBadgeEl(): HTMLElement | null {
-  return $('wb-root')?.querySelector<HTMLElement>('.wb-drag-badge') ?? null
-}
-
-/** バッジをカーソルの右下に置く。画面右端・下端では内側へ折り返す。 */
-function moveDragBadge(x: number, y: number): void {
-  const el = dragBadgeEl()
-  if (!el || el.hidden) return
-  const gap = 14
-  const edge = 8
-  el.style.left = `${Math.max(edge, Math.min(x + gap, window.innerWidth - badgeSize.w - edge))}px`
-  el.style.top = `${Math.max(edge, Math.min(y + gap, window.innerHeight - badgeSize.h - edge))}px`
-}
-
-/** 列のドロップ強調を消す。 */
-function clearDropHint(colEl: Element | null | undefined): void {
-  colEl?.classList.remove('drop-hover')
-}
-
-/** どの列にもプレビューが出ていない状態へ戻す。 */
-function clearAllDropHints(): void {
-  if (view.dragHoverUnit === null) return
-  $('wb-root')?.querySelectorAll<HTMLElement>('[data-unit]').forEach((el) => clearDropHint(el))
-  const el = dragBadgeEl()
-  if (el) el.hidden = true
-  view.dragHoverUnit = null
-}
-
-/** その列へ移した場合の全社売上差をバッジに出し、列を強調する。 */
-function showDropHint(colEl: HTMLElement, unit: UnitId): void {
-  const state = view.state
-  if (!state || !view.dragEmployeeId) return
-  const preview = previewMove(state, view.dragEmployeeId, unit)
-  const d = round2(preview.companyRevenue - view.dragBaseRevenue)
-  const el = dragBadgeEl()
-  if (el) {
-    // バッジは列から離れて浮くので、どこへ移す話なのかを行き先の名前で示す
-    el.textContent = `${UNIT_LABEL[unit]}へ移すと 全社売上 ${signed(d)}億円`
-    el.hidden = false
-    badgeSize = { w: el.offsetWidth, h: el.offsetHeight }
-  }
-  colEl.classList.add('drop-hover')
-  view.dragHoverUnit = unit
-}
-
-function handleDragStart(e: DragEvent): void {
-  const cardEl = (e.target as HTMLElement | null)?.closest<HTMLElement>('[data-emp]')
-  const state = view.state
-  if (!cardEl || !state) return
-  const id = cardEl.dataset.emp ?? ''
-  view.dragEmployeeId = id
-  view.dragHoverUnit = null
-  // ドラッグ中に state は変わらないので、比較の基準はここで1回だけ求める
-  view.dragBaseRevenue = evaluate(state).result.companyRevenue
-  e.dataTransfer?.setData('text/plain', id)
-}
-
 /**
- * プレビューの表示位置判定はここに一本化する（機能15の判定幅拡張）。
- * dragenter/dragleave は列の中の社員カードをまたぐたびに発火し、しかも
- * 「新しい要素へenter → 古い要素をleave」の順で来るため、enterで出した吹き出しを
- * 直後のleaveが消してしまい、実質ヘッダ周辺でしか見えなかった。
- * dragoverなら列の全域（社員カードの上を含む）で毎フレーム位置が取れる。
- * 重い previewMove は列が変わったときだけ呼ぶので、毎フレームの計算にはならない（§7）。
+ * ドラッグ&ドロップは workbenchDnd.ts と共有する（#p5 と処理が同一だったため）。
+ * #p4 は置けない列が無いので accept は常に true、掴めない社員も無いので canGrab も常に true。
  */
-function handleDragOver(e: DragEvent): void {
-  const colEl = columnAt(e)
-  if (!colEl) {
-    clearAllDropHints()
-    return
-  }
-  e.preventDefault()
-  const unit = colEl.dataset.unit as UnitId
-  if (unit !== view.dragHoverUnit) {
-    clearAllDropHints()
-    showDropHint(colEl, unit)
-  }
-  // 位置合わせだけは毎フレーム。計算は伴わない
-  moveDragBadge(e.clientX, e.clientY)
-}
-
-function handleDragEnter(e: DragEvent): void {
-  // 表示はdragover側の担当。ここはドロップ先として認めるpreventDefaultのみ。
-  if (columnAt(e)) e.preventDefault()
-}
-
-function handleDragLeave(e: DragEvent): void {
-  // 作業机の外へ出たときだけ消す。列や社員カードをまたぐdragleaveでは消さない。
-  // relatedTargetを返さないブラウザでは何もせず、dragend側の全消しに任せる。
-  const root = $('wb-root')
-  const to = e.relatedTarget as Node | null
-  if (root && to && !root.contains(to)) clearAllDropHints()
-}
-
-function handleDrop(e: DragEvent): void {
-  e.preventDefault()
-  const colEl = columnAt(e)
-  clearAllDropHints()
-  const id = e.dataTransfer?.getData('text/plain') || view.dragEmployeeId
-  view.dragEmployeeId = null
-  if (colEl && id) commitMove(id, colEl.dataset.unit as UnitId)
-}
-
-function handleDragEnd(): void {
-  view.dragEmployeeId = null
-  clearAllDropHints()
-}
+const drag = createDragController<UnitId>({
+  rootId: 'wb-root',
+  slotSelector: '[data-unit]',
+  slotOf: (colEl) => colEl.dataset.unit as UnitId,
+  isReady: () => view.state !== null,
+  canGrab: () => true,
+  accept: () => true,
+  baseRevenue: () => (view.state ? evaluate(view.state).result.companyRevenue : 0),
+  previewRevenue: (id, unit) => (view.state ? previewMove(view.state, id, unit).companyRevenue : 0),
+  badgeText: (unit, d) => `${UNIT_LABEL[unit]}へ移すと 全社売上 ${signed(d)}億円`,
+  onDrop: commitMove,
+})
 
 /**
  * 作業机の委譲リスナを1回だけ張る（`#p4-bench-step` は骨格のみindex.htmlに存在し、
@@ -519,10 +412,5 @@ export function initWorkbenchPanel(onSavedRun: (run: SavedRun) => void): void {
   if (!root) return
   root.addEventListener('click', handleClick)
   root.addEventListener('change', handleChange)
-  root.addEventListener('dragstart', handleDragStart)
-  root.addEventListener('dragover', handleDragOver)
-  root.addEventListener('dragenter', handleDragEnter)
-  root.addEventListener('dragleave', handleDragLeave)
-  root.addEventListener('drop', handleDrop)
-  root.addEventListener('dragend', handleDragEnd)
+  drag.attach(root)
 }

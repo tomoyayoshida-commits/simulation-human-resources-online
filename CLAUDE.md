@@ -48,6 +48,8 @@ WSL2 Ubuntu。PowerShellから実行時は**ログインシェル経由必須**�
 - `assignment.ts` 最小費用流(SSP+Johnson+Dijkstra)で内側割当を厳密解
 - `types.ts` / `format.ts`（escapeHtml等）/ `dom.ts` / `csv.ts` / `validation.ts` / `reasonText.ts`
 - `importPanel.ts` / `compareTasks.ts` / `compareHiring.ts` / `workbenchPanel.ts` / `hiringWorkbenchPanel.ts` — 表示専用（計算持たない）
+- `workbenchView.ts` / `workbenchDnd.ts` — 作業机2画面(#p4/#p5)の共有部品。前者はHTML生成（純粋関数）、
+  後者はドラッグ&ドロップ配線（`createDragController`）。画面差は引数で渡す＝共有側に画面固有の分岐を置かない
 - `whatif.ts` What-if(機能14)の純粋関数群。本番の利用者は`workbenchPanel.ts`と`hiringWorkbench.ts`
 - `workbench.ts` 作業机(機能15)の純粋関数群（`docs/workbench-plan.md`）
 - `hiringWorkbench.ts` 採用判断の作業机(機能15b)の純粋関数群（`docs/hiring-workbench-plan.md`）。
