@@ -27,6 +27,14 @@ export interface WorkbenchState {
    * 番号のみのカードで正常に動く必要があるため（受入基準2）。
    */
   profiles?: ProfileMap
+  /**
+   * 動かさないと決めた社員（①25「移動させたくない人物を設定」）。
+   *
+   * 探索には渡さない——optimizer は固定制約を受け取れないため、ロックは
+   * 「盤面上で手で動かせない」という操作の制約に留める（ui-overhaul-plan.md Phase 5 のゲート）。
+   * 未指定＝誰もロックしていない。既存の呼び出し・保存データはそのまま通る。
+   */
+  lockedIds?: string[]
 }
 
 /** 履歴の保持上限（§4.7）。 */
@@ -61,11 +69,53 @@ export function previewMove(state: WorkbenchState, employeeId: string, unit: Uni
  */
 export function withMove(state: WorkbenchState, employeeId: string, unit: UnitId): WorkbenchState {
   if (!state.roster.some((e) => e.id === employeeId)) return state
+  if (isLocked(state, employeeId)) return state
   if (state.assignment[employeeId] === unit) return state
   const nextAssignment = { ...state.assignment, [employeeId]: unit }
   const nextHistory = [...state.history, state.assignment]
   if (nextHistory.length > MAX_HISTORY) nextHistory.shift()
   return { ...state, assignment: nextAssignment, history: nextHistory }
+}
+
+/** その社員が動かせない状態か（①25）。lockedIds を持たない状態では常に false。 */
+export function isLocked(state: WorkbenchState, employeeId: string): boolean {
+  return state.lockedIds?.includes(employeeId) ?? false
+}
+
+/**
+ * 個人ロックを付け外しする（①25）。
+ * 配置も履歴も変えない——ロックは配置そのものではなく「以後どこへも動かさない」という
+ * 操作の制約なので、「元に戻す」の対象にすると履歴が配置の変化と混ざって読めなくなる。
+ */
+export function withLockToggled(state: WorkbenchState, employeeId: string): WorkbenchState {
+  const current = state.lockedIds ?? []
+  const next = current.includes(employeeId)
+    ? current.filter((id) => id !== employeeId)
+    : [...current, employeeId]
+  return { ...state, lockedIds: next }
+}
+
+/** 1名分の異動（①24）。集計行では誰が動いたか分からないため社員番号で持つ。 */
+export interface EmployeeMove {
+  employeeId: string
+  from: UnitId
+  to: UnitId
+}
+
+/**
+ * baseline から現在の assignment までに動いた社員を1名ずつ列挙する（①24）。
+ * 並びは社員番号順（表示の決定性。CLAUDE.md §7-6 のタイブレークと同じ作法）。
+ */
+export function listMoves(
+  baseline: Record<string, UnitId>,
+  assignment: Record<string, UnitId>,
+): EmployeeMove[] {
+  const moves: EmployeeMove[] = []
+  for (const [employeeId, from] of Object.entries(baseline)) {
+    const to = assignment[employeeId]
+    if (to !== undefined && to !== from) moves.push({ employeeId, from, to })
+  }
+  return moves.sort((a, b) => (a.employeeId < b.employeeId ? -1 : a.employeeId > b.employeeId ? 1 : 0))
 }
 
 /** 1手戻す（§4.7「元に戻す」）。履歴が空なら何もしない。 */
@@ -105,6 +155,8 @@ export interface WorkbenchCard {
   contributions: Record<UnitId, number>
   /** 氏名・顔写真（docs/profile-plan.md §4.2）。マスタ未登録なら undefined。 */
   profile?: EmployeeProfile
+  /** 個人ロックにより動かせないか（①25）。#p5 の HiringCard.locked と同じ役目。 */
+  locked: boolean
 }
 
 /**
@@ -115,7 +167,14 @@ export function buildWorkbenchCards(state: WorkbenchState): WorkbenchCard[] {
   return state.roster.map((e) => {
     const contributions = {} as Record<UnitId, number>
     for (const u of UNIT_IDS) contributions[u] = contribution(e, u, state.params)
-    return { employee: e, unit: state.assignment[e.id], type: classifyType(e), contributions, profile: state.profiles?.[e.id] }
+    return {
+      employee: e,
+      unit: state.assignment[e.id],
+      type: classifyType(e),
+      contributions,
+      profile: state.profiles?.[e.id],
+      locked: isLocked(state, e.id),
+    }
   })
 }
 

@@ -80,6 +80,50 @@ export function buildNextStepHtml(feasible: boolean, minHeadcountViolations: Uni
 }
 
 /**
+ * カード内の錠前ボタン（①25/②33）。押すとその社員を動かせなくする。
+ * 一括ロック（#p5 の lockBase）で既に固定されている社員には出さない——
+ * 押しても外れないボタンになるため。呼び出し側が `togglable` で切り分ける。
+ */
+export function buildLockButtonHtml(employeeId: string, locked: boolean, lockAttr: string): string {
+  const label = locked ? 'この社員の固定を解除する' : 'この社員を動かさないように固定する'
+  return (
+    `<button type="button" class="wb-lock-btn${locked ? ' locked' : ''}" ${lockAttr}="${escapeAttr(employeeId)}"` +
+    ` title="${label}" aria-label="${label}" aria-pressed="${locked}">${locked ? '🔒' : '🔓'}</button>`
+  )
+}
+
+/** 1名分の異動チップ。元の所属を左端の色帯で示す（①24/②32）。 */
+export interface MoveChip {
+  employeeId: string
+  /** 表示する遷移（例：A→C、採用→B、A→見送り） */
+  transition: string
+  /** 色帯に使う元の所属。採用（元の所属なし）は null */
+  from: UnitId | null
+  /** 氏名（登録済みなら番号の後ろに出す） */
+  name?: string
+}
+
+/**
+ * 異動した社員の一覧（①24/②32）。集計行（A→B 3名）だけでは誰が動いたか分からないため、
+ * 社員番号を1名ずつ並べる。元の所属は事業部色の帯で表し、行が長くなっても追えるようにする。
+ * 0件のときは何も出さない（「異動なし」は集計行が既に書いている）。
+ */
+export function buildMoveChipsHtml(chips: MoveChip[]): string {
+  if (chips.length === 0) return ''
+  const items = chips
+    .map((c) => {
+      const color = c.from ? UNIT_VAR[c.from] : 'var(--good)'
+      const name = c.name ? ` <span class="wb-move-name">${escapeHtml(c.name)}</span>` : ''
+      return (
+        `<span class="wb-move" style="border-left-color:${color};">` +
+        `<b>${escapeHtml(c.employeeId)}</b>${name} <span class="wb-move-arrow">${escapeHtml(c.transition)}</span></span>`
+      )
+    })
+    .join('')
+  return `<div class="wb-moves">${items}</div>`
+}
+
+/**
  * カードに並ぶ数字の読み方（①22注記）。両画面のカードは同じ組み立てなので文言も共有する。
  * 貢献度そのものの定義（能力値×重み）を書いておかないと、Δ何億円との関係が読めない。
  */

@@ -20,11 +20,13 @@ import {
   diffWithPool,
   evaluateHiring,
   hiredCandidates,
+  listHiringMoves,
   previewMoveTo,
   resetToStart,
   serializeHiringWorkbenchState,
   undo,
   withAssignment,
+  withLockToggled,
   withMoveTo,
   type HiringCard,
   type HiringSlot,
@@ -41,6 +43,8 @@ import {
   buildAlertHtml,
   buildCardFaceHtml,
   buildConstraintNoteHtml,
+  buildLockButtonHtml,
+  buildMoveChipsHtml,
   buildNextStepHtml,
   CONTRIBUTION_NOTE_HTML,
   buildSaveFormHtml,
@@ -61,6 +65,8 @@ const SAVE_FORM_IDS: SaveFormIds = {
   label: 'この採用案の名前',
 }
 const ALERT_DISMISS_ATTR = 'data-hwb-alert-dismiss'
+/** 個人ロックの錠前ボタンの目印（②33）。#p4 は data-wb-lock を使う。 */
+const LOCK_ATTR = 'data-hwb-lock'
 
 /** 盤面の列の並び。3事業部のあとにプールを置く（§5.3）。 */
 const SLOTS: HiringSlot[] = [...UNIT_IDS, 'pool']
@@ -135,9 +141,18 @@ function buildHeaderHtml(state: HiringWorkbenchState, evaluation: WhatIfEvaluati
  * カード1枚。プールにいる候補は所属が無いので3事業部ぶんの貢献度を並べる（§5.3）。
  * ロックされた社員は draggable を外し、クリック選択もさせない。
  */
-function buildCardHtml(c: HiringCard, selectedEmployeeId: string | null, showPhotos: boolean): string {
+function buildCardHtml(
+  c: HiringCard,
+  selectedEmployeeId: string | null,
+  showPhotos: boolean,
+  personallyLocked: boolean,
+  lockedByBase: boolean,
+): string {
   const selected = c.employee.id === selectedEmployeeId
   const nameHtml = c.profile?.name ? ` <span class="wb-card-name">${escapeHtml(c.profile.name)}</span>` : ''
+  // ②33: 一括ロック（lockBase）で既に固定されている既存社員には錠前ボタンを出さない。
+  // 押しても外れず、どちらのロックが効いているのか読めなくなるため。
+  const lockBtnHtml = lockedByBase ? '' : buildLockButtonHtml(c.employee.id, personallyLocked, LOCK_ATTR)
   const mainHtml = c.unit
     ? `<div class="wb-card-main">${c.contributions[c.unit].toFixed(2)}</div>
        <div class="wb-card-others">${UNIT_IDS.filter((u) => u !== c.unit).map((u) => `${u} ${c.contributions[u].toFixed(2)}`).join(' ／ ')}</div>`
@@ -149,7 +164,7 @@ function buildCardHtml(c: HiringCard, selectedEmployeeId: string | null, showPho
     <div class="${cls}" draggable="${c.locked ? 'false' : 'true'}" data-emp="${escapeAttr(c.employee.id)}" tabindex="0">
       ${showPhotos ? buildCardFaceHtml(c) : ''}
       <div class="wb-card-body">
-        <div class="wb-card-id">${c.locked ? '<span class="hwb-lock-mark" title="既存社員は固定中">🔒</span>' : ''}${escapeHtml(c.employee.id)}${nameHtml}</div>
+        <div class="wb-card-id">${c.locked ? '<span class="hwb-lock-mark" title="既存社員は固定中">🔒</span>' : ''}${escapeHtml(c.employee.id)}${nameHtml}${lockBtnHtml}</div>
         <span class="wb-card-type">${c.type}</span>
         ${mainHtml}
       </div>
@@ -171,10 +186,19 @@ interface ColumnContext {
  * この列は**追加採用候補の専用列**で、既存社員は入れられない（§5.5.1）。
  * 見出しに明記するのは、盤面上は他の3列と同じに見えてしまうため。
  */
+/**
+ * カード1枚を文脈つきで描く。ロックが「個人指定」か「一括（lockBase）」かはここで見分ける
+ * ——HiringCard.locked はどちらの理由でも true になるため（②33）。
+ */
+function cardHtml(c: HiringCard, ctx: ColumnContext): string {
+  const personallyLocked = ctx.state.lockedIds?.includes(c.employee.id) ?? false
+  return buildCardHtml(c, ctx.selectedEmployeeId, ctx.showPhotos, personallyLocked, c.locked && !personallyLocked)
+}
+
 function buildPoolColumnHtml(ctx: ColumnContext): string {
-  const { state, sortedCards, selectedEmployeeId, showPhotos } = ctx
+  const { state, sortedCards } = ctx
   const cards = sortedCards.filter((c) => c.unit === null)
-  const cardsHtml = cards.map((c) => buildCardHtml(c, selectedEmployeeId, showPhotos)).join('')
+  const cardsHtml = cards.map((c) => cardHtml(c, ctx)).join('')
   const declined = declinedCandidates(state).length
   return `
     <div class="wb-column hwb-pool" data-hslot="pool">
@@ -188,7 +212,7 @@ function buildPoolColumnHtml(ctx: ColumnContext): string {
 
 /** #p5 の事業部列。共有部品に渡す値だけを組み立てる（比較の基準は「採用前」）。 */
 function buildUnitColumnHtml(u: UnitId, ctx: ColumnContext): string {
-  const { state, evaluation, sortedCards, selectedEmployeeId, showPhotos } = ctx
+  const { state, evaluation, sortedCards } = ctx
   return buildUnitColumn(u, {
     slotAttr: 'data-hslot',
     unitResult: evaluation.result.units[u],
@@ -198,9 +222,24 @@ function buildUnitColumnHtml(u: UnitId, ctx: ColumnContext): string {
     minHeadcount: state.params.minHeadcount[u],
     cardsHtml: sortedCards
       .filter((c) => c.unit === u)
-      .map((c) => buildCardHtml(c, selectedEmployeeId, showPhotos))
+      .map((c) => cardHtml(c, ctx))
       .join(''),
   })
+}
+
+/**
+ * ②32: 集計行の下に「誰が」を1名ずつ出す。
+ * 採用は元の所属が無いので色帯を良色にし、遷移も「採用→B」「A→見送り」と言葉で書く。
+ */
+function moveChipsHtml(state: HiringWorkbenchState): string {
+  return buildMoveChipsHtml(
+    listHiringMoves(state.beforeBaseline.assignment, state.assignment, state.roster).map((m) => ({
+      employeeId: m.employeeId,
+      transition: `${m.from ?? '採用'}→${m.to ?? '見送り'}`,
+      from: m.from,
+      name: state.profiles?.[m.employeeId]?.name,
+    })),
+  )
 }
 
 /** 異動の内訳を人が読む1行にする（§5.8）。採用・見送り・異動を区別して並べる。 */
@@ -231,9 +270,12 @@ function buildActionsHtml(
   // §5.6: ロック中の「組み直す」は既存社員を動かしてしまうので押させない。
   // optimizer.ts の内部関数（buildValues 等）が未exportで、既存固定のまま追加分だけ厳密に
   // 解く手段が無いため。export を足しにいくのではなく、ここで止める判断にしてある。
+  // ②33: 個人ロックでも同じ理由で止める（組み直しは全員を配置し直すため）
   const resolveAttr = state.lockBase
     ? ' disabled title="既存社員の固定を外すと実行できます"'
-    : ''
+    : (state.lockedIds?.length ?? 0) > 0
+      ? ' disabled title="固定した社員がいます。固定を外すと実行できます"'
+      : ''
   return `
     <div class="wb-actions">
       <div class="wb-actions-left">
@@ -249,6 +291,7 @@ function buildActionsHtml(
     </div>
     ${buildSaveFormHtml(savingTitle, violation, saveError, SAVE_FORM_IDS)}
     <p class="wb-diff">内訳：${escapeHtml(diffLine(state))}</p>
+    ${moveChipsHtml(state)}
     ${CONTRIBUTION_NOTE_HTML}`
 }
 
@@ -289,6 +332,7 @@ function poolSafeSort(cards: HiringCard[], key: WorkbenchSortKey): HiringCard[] 
     type: c.type,
     contributions: c.contributions,
     profile: c.profile,
+    locked: c.locked,
   })
   const pick = (sorted: WorkbenchCard[]): HiringCard[] => sorted.map((c) => byId.get(c.employee.id)!)
   return [
@@ -499,6 +543,15 @@ function handleClick(e: Event): void {
   const actionBtn = target.closest<HTMLElement>('[data-hwb-action]')
   if (actionBtn) {
     handleAction(actionBtn.dataset.hwbAction ?? '')
+    return
+  }
+
+  // ②33: 錠前ボタンはカードの中にあるので、カード選択より先に拾う
+  const lockBtn = target.closest<HTMLElement>('[data-hwb-lock]')
+  if (lockBtn) {
+    view.state = withLockToggled(view.state, lockBtn.dataset.hwbLock ?? '')
+    view.selectedEmployeeId = null
+    render()
     return
   }
 

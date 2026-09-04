@@ -10,11 +10,14 @@ import { diffAssignment, evaluateAssignment, headcountOf } from './whatif.ts'
 import {
   buildWorkbenchCards,
   hasViolation,
+  isLocked,
+  listMoves,
   previewMove,
   resetToBaseline,
   sortCards,
   undo,
   withAssignment,
+  withLockToggled,
   withMove,
   type WorkbenchCard,
   type WorkbenchSortKey,
@@ -30,6 +33,8 @@ import {
   buildAlertHtml,
   buildCardFaceHtml,
   buildConstraintNoteHtml,
+  buildLockButtonHtml,
+  buildMoveChipsHtml,
   buildNextStepHtml,
   CONTRIBUTION_NOTE_HTML,
   buildSaveFormHtml,
@@ -49,6 +54,8 @@ const SAVE_FORM_IDS: SaveFormIds = {
   label: 'この配置案の名前',
 }
 const ALERT_DISMISS_ATTR = 'data-wb-alert-dismiss'
+/** 個人ロックの錠前ボタンの目印（①25）。#p5 は data-hwb-lock を使う。 */
+const LOCK_ATTR = 'data-wb-lock'
 
 /**
  * 現在の assignment を baseline と突き合わせて評価する。
@@ -116,10 +123,10 @@ function buildCardHtml(c: WorkbenchCard, selectedEmployeeId: string | null, show
   // 氏名は Firestore 由来の外部入力。未登録なら社員番号だけの従来表示に戻る（受入基準2）。
   const nameHtml = c.profile?.name ? ` <span class="wb-card-name">${escapeHtml(c.profile.name)}</span>` : ''
   return `
-    <div class="wb-card${selected ? ' selected' : ''}${showPhotos ? ' with-photo' : ''}" draggable="true" data-emp="${escapeAttr(c.employee.id)}" tabindex="0">
+    <div class="wb-card${selected ? ' selected' : ''}${showPhotos ? ' with-photo' : ''}${c.locked ? ' wb-locked' : ''}" draggable="${c.locked ? 'false' : 'true'}" data-emp="${escapeAttr(c.employee.id)}" tabindex="0">
       ${showPhotos ? buildCardFaceHtml(c) : ''}
       <div class="wb-card-body">
-        <div class="wb-card-id">${escapeHtml(c.employee.id)}${nameHtml}</div>
+        <div class="wb-card-id">${escapeHtml(c.employee.id)}${nameHtml}${buildLockButtonHtml(c.employee.id, c.locked, LOCK_ATTR)}</div>
         <span class="wb-card-type">${c.type}</span>
         <div class="wb-card-main">${c.contributions[c.unit].toFixed(2)}</div>
         <div class="wb-card-others">${otherText}</div>
@@ -138,7 +145,20 @@ function buildActionsHtml(
   const violation = hasViolation(evaluation)
   const diffs = diffAssignment(state.baseline.assignment, state.assignment)
   const diffText = diffs.length === 0 ? '異動なし' : diffs.map((d) => `${d.from}→${d.to} ${d.count}名`).join(' ／ ')
+  // ①24: 集計行の下に「誰が」を1名ずつ出す。元の所属はチップの色帯で示す
+  const moveChipsHtml = buildMoveChipsHtml(
+    listMoves(state.baseline.assignment, state.assignment).map((m) => ({
+      employeeId: m.employeeId,
+      transition: `${m.from}→${m.to}`,
+      from: m.from,
+      name: state.profiles?.[m.employeeId]?.name,
+    })),
+  )
   const sortOptionsHtml = buildSortOptionsHtml(sortKey)
+  // ①25: 組み直しは全員を配置し直すのでロックした社員も動く。#p5 の lockBase と同じ扱いで止める
+  // （optimizer が固定制約を受け取れないため。docs/hiring-workbench-plan.md §5.6 と同じ判断）。
+  const resolveAttr =
+    (state.lockedIds?.length ?? 0) > 0 ? ' disabled title="固定した社員がいます。固定を外すと実行できます"' : ''
   return `
     <div class="wb-actions">
       <div class="wb-actions-left">
@@ -148,12 +168,13 @@ function buildActionsHtml(
       <div class="wb-actions-right">
         <button type="button" class="btn secondary" data-wb-action="undo"${state.history.length === 0 ? ' disabled' : ''}>元に戻す</button>
         <button type="button" class="btn secondary" data-wb-action="reset" title="出発点（最適解）の配置に戻す">リセット</button>
-        <button type="button" class="btn secondary" data-wb-action="resolve">この人数配分のまま最適に組み直す</button>
+        <button type="button" class="btn secondary" data-wb-action="resolve"${resolveAttr}>この人数配分のまま最適に組み直す</button>
         <button type="button" class="btn" data-wb-action="save"${savingTitle === null ? '' : ' disabled'}>この案を保存</button>
       </div>
     </div>
     ${buildSaveFormHtml(savingTitle, violation, saveError, SAVE_FORM_IDS)}
     <p class="wb-diff">異動の内訳：${diffText}</p>
+    ${moveChipsHtml}
     ${CONTRIBUTION_NOTE_HTML}`
 }
 
@@ -369,9 +390,19 @@ function handleClick(e: MouseEvent): void {
     return
   }
 
+  // ①25: 錠前ボタンはカードの中にあるので、カード選択より先に拾う
+  const lockBtn = target.closest<HTMLElement>('[data-wb-lock]')
+  if (lockBtn) {
+    view.state = withLockToggled(view.state, lockBtn.dataset.wbLock ?? '')
+    render()
+    return
+  }
+
   const cardEl = target.closest<HTMLElement>('[data-emp]')
   if (cardEl) {
     const id = cardEl.dataset.emp ?? ''
+    // ロック中の社員は選べない（選んでも行き先の列を押した時点で弾かれ、無反応に見えるため）
+    if (isLocked(view.state, id)) return
     view.selectedEmployeeId = view.selectedEmployeeId === id ? null : id
     render()
     return

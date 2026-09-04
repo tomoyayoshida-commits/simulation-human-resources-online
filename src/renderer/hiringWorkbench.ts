@@ -38,6 +38,12 @@ export interface HiringWorkbenchState {
   afterBaseline: SimulationResult | null
   /** 既存100名を固定するか（確定事項 3-5・既定 true） */
   lockBase: boolean
+  /**
+   * 個人単位で固定した社員（②33「移動させたくない人物を設定」）。lockBase とは独立で、
+   * 候補にも既存社員にも掛けられる（lockBase が一括のスイッチ、こちらが1名ずつの指定）。
+   * 探索には渡さない＝表示と操作の制約に留める（#p4 の lockedIds と同じ扱い）。
+   */
+  lockedIds?: string[]
   branch: HiringBranch
   history: Record<string, UnitId>[]
   /** 氏名・顔写真（docs/profile-plan.md §4.2）。計算には使わない表示専用データ */
@@ -62,6 +68,8 @@ export function isCandidate(state: HiringWorkbenchState, employeeId: string): bo
  */
 export function canMove(state: HiringWorkbenchState, employeeId: string): boolean {
   if (!state.roster.some((e) => e.id === employeeId)) return false
+  // 個人ロック（②33）は lockBase より優先。一括固定を外していても、名指しした人は動かない
+  if (state.lockedIds?.includes(employeeId)) return false
   if (!state.lockBase) return true
   // ロック中に動かせるのは候補だけ（roster = base + candidates なので候補でない＝既存社員）
   return isCandidate(state, employeeId)
@@ -130,6 +138,49 @@ export function withMoveTo(
   if (!canPlace(state, employeeId, slot)) return state
   if (currentSlot(state, employeeId) === slot) return state
   return pushHistory(state, moveEmployeeTo(state, employeeId, slot))
+}
+
+/**
+ * 個人ロックを付け外しする（②33）。配置も履歴も変えない
+ * （ロックは配置ではなく操作の制約なので「元に戻す」の対象にしない・#p4 と同じ扱い）。
+ */
+export function withLockToggled(state: HiringWorkbenchState, employeeId: string): HiringWorkbenchState {
+  const current = state.lockedIds ?? []
+  const next = current.includes(employeeId)
+    ? current.filter((id) => id !== employeeId)
+    : [...current, employeeId]
+  return { ...state, lockedIds: next }
+}
+
+/** 1名分の異動（②32）。プールを含むので from/to は null を取りうる。 */
+export interface HiringMove {
+  employeeId: string
+  /** 'hire'＝プール→事業部（採用）、'decline'＝事業部→プール（見送り）、'move'＝事業部間の異動 */
+  kind: 'hire' | 'decline' | 'move'
+  from: UnitId | null
+  to: UnitId | null
+}
+
+/**
+ * 起点から現在までに動いた社員を1名ずつ列挙する（②32）。
+ * diffWithPool の集計版と同じ範囲を見るが、こちらは社員番号を落とさずに返す。
+ * roster を走査するのは、baseline にキーが無い候補（＝採用）を拾うため（§2.5 と同じ理由）。
+ * 並びは社員番号順（表示の決定性）。
+ */
+export function listHiringMoves(
+  baseline: Record<string, UnitId>,
+  current: Record<string, UnitId>,
+  roster: Employee[],
+): HiringMove[] {
+  const moves: HiringMove[] = []
+  for (const e of roster) {
+    const from = baseline[e.id] ?? null
+    const to = current[e.id] ?? null
+    if (from === to) continue
+    const kind = from === null ? 'hire' : to === null ? 'decline' : 'move'
+    moves.push({ employeeId: e.id, kind, from, to })
+  }
+  return moves.sort((a, b) => (a.employeeId < b.employeeId ? -1 : a.employeeId > b.employeeId ? 1 : 0))
 }
 
 /** 1手戻す。履歴が空なら何もしない。 */

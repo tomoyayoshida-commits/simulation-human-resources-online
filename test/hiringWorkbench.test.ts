@@ -13,11 +13,13 @@ import {
   diffWithPool,
   evaluateHiring,
   hiredCandidates,
+  listHiringMoves,
   moveEmployeeTo,
   previewMoveTo,
   resetToStart,
   serializeHiringWorkbenchState,
   undo,
+  withLockToggled,
   withMoveTo,
   type HiringWorkbenchState,
 } from '../src/renderer/hiringWorkbench.ts'
@@ -305,4 +307,54 @@ test('serializeHiringWorkbenchState: assignment は複製され、後の操作�
   const ex = serializeHiringWorkbenchState(s)
   withMoveTo(s, 'C2', 'B')
   assert.ok(!('C2' in ex.assignment))
+})
+
+// ---- 個人ロックと異動一覧（ui-overhaul-plan.md Phase 5・②32/②33） ----
+
+test('withLockToggled: 個人ロックした候補は動かせない（lockBase とは独立）', () => {
+  const s = makeState({ lockBase: false })
+  const locked = withLockToggled(s, 'C1')
+  assert.ok(!canMove(locked, 'C1'))
+  assert.ok(canMove(locked, 'C2'), '他の候補は動かせる')
+  assert.equal(withMoveTo(locked, 'C1', 'A'), locked, 'ロック中は状態が変わらない')
+})
+
+test('withLockToggled: 既存社員にも個人単位で掛けられ、解除もできる', () => {
+  const s = makeState({ lockBase: false })
+  const locked = withLockToggled(s, 'E1')
+  assert.ok(!canMove(locked, 'E1'))
+  const unlocked = withLockToggled(locked, 'E1')
+  assert.ok(canMove(unlocked, 'E1'))
+  assert.equal(withMoveTo(unlocked, 'E1', 'C').assignment.E1, 'C')
+})
+
+test('withLockToggled: 配置と履歴は変えない', () => {
+  const s = makeState()
+  const locked = withLockToggled(s, 'C1')
+  assert.deepEqual(locked.assignment, s.assignment)
+  assert.deepEqual(locked.history, s.history)
+})
+
+test('buildHiringCards: 個人ロックした候補のカードに locked が立つ', () => {
+  const s = withLockToggled(makeState({ lockBase: false }), 'C1')
+  const cards = buildHiringCards(s)
+  assert.ok(cards.find((c) => c.employee.id === 'C1')?.locked)
+  assert.ok(!cards.find((c) => c.employee.id === 'C2')?.locked)
+})
+
+test('listHiringMoves: 採用・見送り・異動を社員番号つきで返す', () => {
+  const s = makeState({ lockBase: false })
+  // C1 を採用、E1 を A→C へ異動
+  const moved = withMoveTo(withMoveTo(s, 'C1', 'B'), 'E1', 'C')
+  const moves = listHiringMoves(s.beforeBaseline.assignment, moved.assignment, moved.roster)
+  const byId = Object.fromEntries(moves.map((m) => [m.employeeId, m]))
+  assert.deepEqual(byId.C1, { employeeId: 'C1', kind: 'hire', from: null, to: 'B' })
+  assert.deepEqual(byId.E1, { employeeId: 'E1', kind: 'move', from: 'A', to: 'C' })
+  assert.equal(moves.length, 2, '動いていない社員は出さない')
+})
+
+test('listHiringMoves: 採用後に見送りへ戻した候補は出さない（起点と同じ状態）', () => {
+  const s = makeState({ lockBase: false })
+  const back = withMoveTo(withMoveTo(s, 'C1', 'B'), 'C1', 'pool')
+  assert.deepEqual(listHiringMoves(s.beforeBaseline.assignment, back.assignment, back.roster), [])
 })

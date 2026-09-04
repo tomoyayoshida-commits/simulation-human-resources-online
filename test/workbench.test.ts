@@ -11,6 +11,8 @@ import { evaluateAssignment } from '../src/renderer/whatif.ts'
 import {
   buildWorkbenchCards,
   hasViolation,
+  isLocked,
+  listMoves,
   MAX_HISTORY,
   moveEmployee,
   previewMove,
@@ -19,6 +21,7 @@ import {
   sortCards,
   undo,
   withAssignment,
+  withLockToggled,
   withMove,
   type WorkbenchState,
 } from '../src/renderer/workbench.ts'
@@ -208,4 +211,66 @@ test('serializeWorkbenchState: task/metric/assignment を持ち、assignment は
   assert.deepEqual(exported.assignment, state.assignment)
   assert.notEqual(exported.assignment, state.assignment)
   assert.ok(!Number.isNaN(Date.parse(exported.updatedAt)))
+})
+
+// ---- 個人ロックと異動一覧（ui-overhaul-plan.md Phase 5・①24/①25） ----
+
+test('withLockToggled: ロックした社員は withMove で動かせない', () => {
+  const state = makeState()
+  const id = state.roster[0].id
+  const from = state.assignment[id]
+  const to: UnitId = from === 'A' ? 'B' : 'A'
+  const locked = withLockToggled(state, id)
+  assert.ok(isLocked(locked, id))
+  assert.equal(withMove(locked, id, to), locked, 'ロック中は状態が変わらない')
+  assert.equal(locked.assignment[id], from)
+})
+
+test('withLockToggled: もう一度呼ぶと解除され、動かせるようになる', () => {
+  const state = makeState()
+  const id = state.roster[0].id
+  const to: UnitId = state.assignment[id] === 'A' ? 'B' : 'A'
+  const unlocked = withLockToggled(withLockToggled(state, id), id)
+  assert.ok(!isLocked(unlocked, id))
+  assert.equal(withMove(unlocked, id, to).assignment[id], to)
+})
+
+test('withLockToggled: 配置と履歴は変えない（ロックは操作の制約であって配置ではない）', () => {
+  const state = makeState()
+  const id = state.roster[0].id
+  const locked = withLockToggled(state, id)
+  assert.deepEqual(locked.assignment, state.assignment)
+  assert.deepEqual(locked.history, state.history)
+})
+
+test('isLocked: lockedIds を持たない状態では常に false（既存の呼び出しと互換）', () => {
+  const state = makeState()
+  assert.equal(state.lockedIds, undefined)
+  assert.ok(!isLocked(state, state.roster[0].id))
+})
+
+test('listMoves: 動いた社員を社員番号順に1名ずつ返す', () => {
+  const state = makeState()
+  const a = state.roster.find((e) => state.assignment[e.id] === 'A')
+  const b = state.roster.find((e) => state.assignment[e.id] === 'B')
+  assert.ok(a && b)
+  const moved = withMove(withMove(state, b.id, 'C'), a.id, 'C')
+  const moves = listMoves(state.baseline.assignment, moved.assignment)
+  assert.equal(moves.length, 2)
+  assert.deepEqual(moves.map((m) => m.employeeId), [a.id, b.id].sort())
+  const forA = moves.find((m) => m.employeeId === a.id)
+  assert.deepEqual(forA, { employeeId: a.id, from: 'A', to: 'C' })
+})
+
+test('listMoves: 動いていなければ空配列', () => {
+  const state = makeState()
+  assert.deepEqual(listMoves(state.baseline.assignment, state.assignment), [])
+})
+
+test('buildWorkbenchCards: ロック中の社員のカードに locked が立つ', () => {
+  const state = makeState()
+  const id = state.roster[0].id
+  const cards = buildWorkbenchCards(withLockToggled(state, id))
+  assert.ok(cards.find((c) => c.employee.id === id)?.locked)
+  assert.ok(!cards.find((c) => c.employee.id !== id)?.locked)
 })

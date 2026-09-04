@@ -201,6 +201,17 @@ tr.whatif-moved{background:#fef3dc;}
 .wb-unit-min{font-size:10px;color:var(--text-muted);}
 /* ①22注記: カードの数字（貢献度）の読み方。盤面の下に置く */
 .wb-note{margin:6px 0 0;font-size:11.5px;line-height:1.7;color:var(--text-muted);}
+/* ①24/②32: 異動した社員を1名ずつ。元の所属は左端の色帯で示す */
+.wb-moves{display:flex;flex-wrap:wrap;gap:6px;max-height:96px;overflow-y:auto;margin:6px 0 0;}
+.wb-move{display:inline-flex;align-items:center;gap:5px;background:var(--surface-1);border:1px solid var(--border);
+  border-left:3px solid var(--border);border-radius:6px;padding:3px 8px;font-size:11px;font-variant-numeric:tabular-nums;}
+.wb-move-name{color:var(--text-secondary);}
+.wb-move-arrow{color:var(--text-muted);}
+/* ①25/②33: カード内の個人ロック。錠前だけの小さなボタンで、カード選択とは別に拾う */
+.wb-lock-btn{float:right;border:none;background:none;cursor:pointer;font-size:11px;line-height:1;padding:0 0 0 4px;opacity:.45;}
+.wb-lock-btn:hover{opacity:1;}
+.wb-lock-btn.locked{opacity:1;}
+.wb-card.wb-locked{cursor:default;opacity:.72;}
 .wb-alert-banner{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#fef3dc;color:#8a5a00;border:1px solid #f0d28a;border-radius:8px;padding:9px 14px;font-size:12.5px;margin-bottom:14px;}
 .wb-alert-close{border:none;background:none;color:inherit;cursor:pointer;font-size:13px;line-height:1;padding:2px;}
 .wb-board{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px;}
