@@ -9,7 +9,7 @@ import { go, showStep, updateResumeButtons } from './navigation.ts'
 import { saveSnapshot, type SessionSnapshot } from './session.ts'
 import { importEmployees, mergeEmployees, parseAssignmentColumn } from './csv.ts'
 import type { HiringImportIds } from './importPanel.ts'
-import { renderHiringImportError, renderHiringImportOk, setupDropzone } from './importPanel.ts'
+import { renderHiringImportError, renderHiringImportOk, renderImportConditions, setupDropzone } from './importPanel.ts'
 import { renderCompareHiring } from './compareHiring.ts'
 import { openHiringWorkbench } from './hiringWorkbenchPanel.ts'
 import { computeSimulationResult } from './calcEngine.ts'
@@ -37,6 +37,9 @@ const importErrorCount: Record<HiringSlot, number> = { hiringBase100: 0, hiringA
 
 /** 取込状態・前提パラメータの変化を画面に反映する（#p4 の refreshCompareGate と同じ役目）。 */
 export function refreshHiringGate(): void {
+  // ②12/②26: #p5 にも取込の時点で前提条件を出す（オプションを開く前に見える位置に置く）
+  const params = p5Params.getParams()
+  renderImportConditions(params.prevYearRevenue, params.optimalHeadcount, params.minHeadcount, 'p5-')
   const proceedBtn = $('p5-proceed') as HTMLButtonElement | null
   if (proceedBtn) {
     proceedBtn.disabled = !(state.hiringBase100 && state.hiringAdd10 && p5Params.isValid())
@@ -69,6 +72,8 @@ function rejectHiring(slot: HiringSlot, ids: HiringImportIds, errors: Validation
 const errorMessage = (errors: ValidationError[]): string => `取込を保留（エラー${errors.length}件）`
 
 export function initHiringFlow(): void {
+  const initial = p5Params.getParams()
+  renderImportConditions(initial.prevYearRevenue, initial.optimalHeadcount, initial.minHeadcount, 'p5-')
   p5Params.init(refreshHiringGate)
   setupDropzone('dropzone-hiring-100', 'file-hiring-100', (text) => {
     const { employees: base100, errors } = importEmployees(text, 100)

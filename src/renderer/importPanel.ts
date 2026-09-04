@@ -7,12 +7,16 @@ import { escapeHtml, pill } from './format.ts'
 import { $, setHtml } from './dom.ts'
 import { MIN_HEADCOUNT, OPTIMAL_HEADCOUNT, PREV_YEAR_REVENUE, UNIT_IDS } from './constants.ts'
 
-/** 配置比較(#p4)の取込条件カード：全社最低売上・事業部別の適正/最低人数を表示する。パラメータ対応版。 */
-export function renderImportConditions(prevYearRevenue: number = PREV_YEAR_REVENUE, optimalHeadcount: Record<string, number> = OPTIMAL_HEADCOUNT, minHeadcount: Record<string, number> = MIN_HEADCOUNT): void {
-  setHtml('cond-min-revenue', `<span class="cond-revenue-value">${prevYearRevenue}</span>`)
+/**
+ * 取込条件カード：全社最低売上・事業部別の適正/最低人数を表示する。パラメータ対応版。
+ * #p5 の取込ステップにも同じカードを出すため（②12/②26）、要素idの接頭辞を受け取れる
+ * ようにしてある（#p4 は接頭辞なし＝従来のid、#p5 は `p5-`）。
+ */
+export function renderImportConditions(prevYearRevenue: number = PREV_YEAR_REVENUE, optimalHeadcount: Record<string, number> = OPTIMAL_HEADCOUNT, minHeadcount: Record<string, number> = MIN_HEADCOUNT, idPrefix = ''): void {
+  setHtml(`${idPrefix}cond-min-revenue`, `<span class="cond-revenue-value">${prevYearRevenue}</span>`)
   for (const u of UNIT_IDS) {
-    setHtml(`cond-optimal-${u}`, `${optimalHeadcount[u]}名`)
-    setHtml(`cond-min-${u}`, `${minHeadcount[u]}名`)
+    setHtml(`${idPrefix}cond-optimal-${u}`, `${optimalHeadcount[u]}名`)
+    setHtml(`${idPrefix}cond-min-${u}`, `${minHeadcount[u]}名`)
   }
 }
 

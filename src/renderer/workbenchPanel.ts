@@ -29,6 +29,8 @@ import { deltaText, escapeAttr, escapeHtml, oku, pill, signed } from './format.t
 import {
   buildAlertHtml,
   buildCardFaceHtml,
+  buildConstraintNoteHtml,
+  buildNextStepHtml,
   buildSaveFormHtml,
   buildSortOptionsHtml,
   buildUnitColumnHtml,
@@ -98,7 +100,9 @@ function buildHeaderHtml(
       <div class="wb-stat"><span class="k">全社利益</span><span class="v">${oku(result.companyProfit)}</span><span class="d">${deltaText(result.companyProfit, baseline.companyProfit)}</span></div>
       <div class="wb-stat"><span class="k">異動</span><span class="v">${evaluation.movedFromBaseline}名</span></div>
     </div>
-    <div class="wb-status">${statusPill}${minHcPill}</div>`
+    <div class="wb-status">${statusPill}${minHcPill}</div>
+    ${buildConstraintNoteHtml(state.params.prevYearRevenue, state.params.minHeadcount)}
+    ${buildNextStepHtml(result.feasible, evaluation.minHeadcountViolations)}`
 }
 
 function buildCardHtml(c: WorkbenchCard, selectedEmployeeId: string | null, showPhotos: boolean): string {

@@ -168,6 +168,9 @@ tr.whatif-moved{background:#fef3dc;}
 .whatif-params .scalar{margin-top:10px;}
 .whatif-params .scalar input[type="number"]{width:90px;margin-right:0;}
 .whatif-params .scalar .label ~ .label{margin-left:20px;}
+/* ①12注記: オプションの二層目（計算モデルの係数）。前面の制約値と地続きに見えないよう区切る */
+.params-lead{margin-top:0;}
+.params-advanced{margin-top:14px;padding-top:12px;border-top:1px solid var(--border);}
 .whatif-hire-buttons{display:flex;gap:6px;margin-bottom:8px;}
 .whatif-weight-sum{margin-right:14px;}
 .whatif-weight-sum.off{color:var(--warning);font-weight:600;}
@@ -187,6 +190,15 @@ tr.whatif-moved{background:#fef3dc;}
 .wb-stat .v{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;}
 .wb-stat .d{font-size:11px;color:var(--text-secondary);}
 .wb-status{margin-bottom:14px;}
+/* ①26/②34: 守るべき制約は違反の有無によらず常に出す（警告ではなく前提の掲示） */
+.wb-constraints{margin:-6px 0 12px;font-size:12px;color:var(--text-secondary);}
+.wb-constraints b{color:var(--text);}
+/* ①27: 制約を満たさないときだけ出す「次にできること」。具体値は書かない（4-4と同じ方針） */
+.wb-nextstep{background:var(--surface-1);border:1px solid var(--border);border-left:3px solid var(--warning);
+  border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12.5px;line-height:1.7;}
+.wb-nextstep b{display:block;margin-bottom:2px;font-size:12px;}
+.wb-nextstep p{margin:0;color:var(--text-secondary);}
+.wb-unit-min{font-size:10px;color:var(--text-muted);}
 .wb-alert-banner{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#fef3dc;color:#8a5a00;border:1px solid #f0d28a;border-radius:8px;padding:9px 14px;font-size:12.5px;margin-bottom:14px;}
 .wb-alert-close{border:none;background:none;color:inherit;cursor:pointer;font-size:13px;line-height:1;padding:2px;}
 .wb-board{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px;}

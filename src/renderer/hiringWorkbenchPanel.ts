@@ -40,6 +40,8 @@ import { deltaText, escapeAttr, escapeHtml, oku, pill, signed } from './format.t
 import {
   buildAlertHtml,
   buildCardFaceHtml,
+  buildConstraintNoteHtml,
+  buildNextStepHtml,
   buildSaveFormHtml,
   buildSortOptionsHtml,
   buildUnitColumnHtml as buildUnitColumn,
@@ -119,7 +121,9 @@ function buildHeaderHtml(state: HiringWorkbenchState, evaluation: WhatIfEvaluati
       <span class="hwb-moved">異動 ${evaluation.movedFromBaseline}名</span>
       ${lockHtml}
     </div>
-    <div class="wb-status">${statusPill}${minHcPill}</div>`
+    <div class="wb-status">${statusPill}${minHcPill}</div>
+    ${buildConstraintNoteHtml(state.params.prevYearRevenue, state.params.minHeadcount)}
+    ${buildNextStepHtml(result.feasible, evaluation.minHeadcountViolations)}`
 }
 
 /**

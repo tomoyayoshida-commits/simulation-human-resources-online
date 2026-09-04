@@ -9,7 +9,7 @@
 // 分岐を持つと、共有部品のはずが両画面の仕様を抱え込んで元の重複より読みにくくなるため。
 
 import type { Employee, EmployeeProfile, UnitId } from './types.ts'
-import { UNIT_LABEL, UNIT_VAR } from './constants.ts'
+import { UNIT_IDS, UNIT_LABEL, UNIT_VAR } from './constants.ts'
 import { clampPct, deltaText, escapeAttr, escapeHtml, oku1, pct } from './format.ts'
 import type { WorkbenchSortKey } from './workbench.ts'
 
@@ -37,6 +37,46 @@ export function buildAlertHtml(alertText: string | null, dismissAttr: string): s
     `<div class="wb-alert-banner"><span>${escapeHtml(alertText)}</span>` +
     `<button type="button" class="wb-alert-close" ${dismissAttr} aria-label="閉じる">✕</button></div>`
   )
+}
+
+/**
+ * 守るべき制約の常時表示（①26/②34）。
+ *
+ * 従来は最低人数を「割ったときだけ」列見出しに出しており、盤面に入る前に何を守るべきかが
+ * どこにも書かれていなかった。違反の有無によらず出す（＝警告ではなく前提の掲示）。
+ * 値は前提パラメータ由来なので、オプションで変えた値がそのまま出る。
+ */
+export function buildConstraintNoteHtml(prevYearRevenue: number, minHeadcount: Record<UnitId, number>): string {
+  const mins = UNIT_IDS.map((u) => `${u} ${minHeadcount[u]}名`).join('・')
+  return (
+    `<p class="wb-constraints"><b>守るべき制約</b>：全社売上 ${prevYearRevenue}億円超` +
+    `／各事業部の最低人数 ${mins}</p>`
+  )
+}
+
+/**
+ * 制約を満たさないときに、次にできる操作を文章で示す（①27）。
+ *
+ * 具体値（あと何億円・あと何名）は書かない。表示のたびに数字が動き、読んだ瞬間には
+ * 別の値になっていることがあるため（①27注記・Phase 4-4 と同じ方針）。
+ * 満たしているときは何も出さない（常時出すと通常状態でも警告に見える）。
+ */
+export function buildNextStepHtml(feasible: boolean, minHeadcountViolations: UnitId[]): string {
+  const lines: string[] = []
+  if (!feasible) {
+    lines.push(
+      '全社売上が下限を下回っています。充足率のメーターが短い事業部へ貢献度の高い社員を移すと戻りやすく、' +
+        '直前の移動は取り消せます。人数配分を変えずに割当だけ組み直す操作でも改善することがあります。',
+    )
+  }
+  if (minHeadcountViolations.length > 0) {
+    lines.push(
+      `最低人数を割っているのは ${minHeadcountViolations.join('・')} です。` +
+        '人数に余裕のある事業部（充足率の高い列）から、割れている事業部へ移してください。',
+    )
+  }
+  if (lines.length === 0) return ''
+  return `<div class="wb-nextstep"><b>次にできること</b>${lines.map((t) => `<p>${t}</p>`).join('')}</div>`
 }
 
 /** 顔写真の枠に必要な最小限のカード情報。unit が null なのは未採用（プール）の候補。 */
@@ -121,7 +161,7 @@ export function buildUnitColumnHtml(u: UnitId, d: UnitColumnData): string {
   return `
     <div class="wb-column${d.violation ? ' violation' : ''}" ${d.slotAttr}="${u}">
       <div class="wb-unit-head">
-        <div class="wb-unit-title"><b>${UNIT_LABEL[u]}</b> ${d.unitResult.count}名 <span class="wb-unit-pct">${pct(d.unitResult.fulfillmentRate)}</span>${d.violation ? ` <span class="wb-unit-warn">⚠ 最低${d.minHeadcount}名</span>` : ''}</div>
+        <div class="wb-unit-title"><b>${UNIT_LABEL[u]}</b> ${d.unitResult.count}名 <span class="wb-unit-pct">${pct(d.unitResult.fulfillmentRate)}</span>${d.violation ? ` <span class="wb-unit-warn">⚠ 最低${d.minHeadcount}名</span>` : ` <span class="wb-unit-min">最低${d.minHeadcount}名</span>`}</div>
         <div class="meter-mini"><div class="meter-mini-fill" style="width:${meterPct.toFixed(1)}%;background:${UNIT_VAR[u]};"></div></div>
         <div class="wb-unit-sub">売上${oku1(d.unitResult.finalRevenue)}（${deltaText(d.unitResult.finalRevenue, d.baseUnitResult.finalRevenue)}）</div>
       </div>

@@ -60,6 +60,9 @@ export interface ParamsOptionsPanel {
  */
 export function createParamsOptionsPanel(idPrefix: string): ParamsOptionsPanel {
   let params: SimParams = cloneParams(DEFAULT_PARAMS)
+  // 値を1つ変えるたびにフォームを作り直すため、奥の層の開閉はここで覚えておかないと
+  // 入力のたびに閉じてしまう（開いたまま続けて直せるようにする）。
+  let advancedOpen = false
   const dataAttr = `data-${idPrefix}-param`
   const dataUnitAttr = `data-${idPrefix}-unit`
   const dataScalarAttr = `data-${idPrefix}-scalar`
@@ -117,20 +120,36 @@ export function createParamsOptionsPanel(idPrefix: string): ParamsOptionsPanel {
       : ''
   }
 
+  function unitHeadRow(): string {
+    return `<div class="bar-row"><span class="label"></span>${UNIT_IDS.map((u) => `<span class="unit-head">${u}事業部</span>`).join('')}</div>`
+  }
+
+  /**
+   * ①12注記: 1階層に全パラメータが同列で並んでいたので二層にする。
+   * 前面＝配置の可否と評価を直接決める制約値（下限売上・最低人数・適正人数）。
+   * 奥＝売上モデルの係数（重み・基準売上・成長係数・コスト係数）。数式の仕様に属し、
+   * 検討のたびに触る値ではない。分類だけの変更で validateParams の検証内容は変えていない。
+   */
   function renderForm(): void {
     const el = $(`${idPrefix}-params-card`)
     if (el) {
       el.innerHTML = `
-        <div class="bar-row"><span class="label"></span>${UNIT_IDS.map((u) => `<span class="unit-head">${u}事業部</span>`).join('')}</div>
-        ${WEIGHT_FIELDS.map(({ key, label }) => weightRow(`重み・${label}`, key, '0.01')).join('')}
-        ${weightSumRow()}
-        <p class="note" style="margin-top:0;">重みの合計は事業部ごとに1.00である必要がある（貢献度の意味が崩れるため）。</p>
-        ${numRow('基準売上(億円)', 'baseRevenue', '0.1')}
-        ${numRow('成長係数', 'growth', '0.01')}
-        ${numRow('適正人数', 'optimalHeadcount', '1')}
-        ${numRow('最低人数', 'minHeadcount', '1')}
+        <p class="note params-lead">配置の前提として守る値です。変えると比較結果もその前提で計算し直されます。</p>
         ${scalarRow('全社売上下限(億円)', 'prevYearRevenue', '0.1')}
-        ${scalarRow('コスト係数', 'costMultiplier', '0.1')}`
+        ${unitHeadRow()}
+        ${numRow('最低人数', 'minHeadcount', '1')}
+        ${numRow('適正人数', 'optimalHeadcount', '1')}
+        <details class="params-advanced"${advancedOpen ? ' open' : ''}>
+          <summary class="detail-summary">計算モデルの係数（重み・基準売上・成長係数・コスト係数）</summary>
+          <p class="note" style="margin-top:8px;">売上・コストの計算式そのものに関わる値です。通常の検討では変更しません。</p>
+          ${unitHeadRow()}
+          ${WEIGHT_FIELDS.map(({ key, label }) => weightRow(`重み・${label}`, key, '0.01')).join('')}
+          ${weightSumRow()}
+          <p class="note" style="margin-top:0;">重みの合計は事業部ごとに1.00である必要がある（貢献度の意味が崩れるため）。</p>
+          ${numRow('基準売上(億円)', 'baseRevenue', '0.1')}
+          ${numRow('成長係数', 'growth', '0.01')}
+          ${scalarRow('コスト係数', 'costMultiplier', '0.1')}
+        </details>`
     }
     renderErrors()
   }
@@ -140,6 +159,11 @@ export function createParamsOptionsPanel(idPrefix: string): ParamsOptionsPanel {
     isValid: () => validateParams(params).length === 0,
     init(onChange: () => void): void {
       renderForm()
+      // details の toggle はバブルしないので、summary のクリックで開閉状態を控える
+      // （DOM側の開閉はブラウザ既定の動作に任せ、ここでは次の再描画のために覚えるだけ）。
+      $(`${idPrefix}-params-card`)?.addEventListener('click', (e) => {
+        if ((e.target as HTMLElement | null)?.closest?.('.params-advanced > summary')) advancedOpen = !advancedOpen
+      })
       $(`${idPrefix}-params-card`)?.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement
         const unit = target.getAttribute(dataUnitAttr) as UnitId | null

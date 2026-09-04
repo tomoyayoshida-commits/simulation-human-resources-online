@@ -228,6 +228,29 @@
         </div>
       </div>
 
+      <!-- ②12/②26: 採用の前提条件。#p4 と同じ形で、オプションを開く前に見える位置に置く -->
+      <div class="card">
+        <div class="section-title" style="margin-top:0;">採用の前提条件</div>
+        <div class="stat-row" id="p5-cond-cards">
+          <div class="stat cond-highlight" style="grid-column:1 / -1;">
+            <div class="k">全社最低売上</div>
+            <div class="v" id="p5-cond-min-revenue"></div>
+          </div>
+        </div>
+        <p class="note">採用後110名になっても、適正人数は100名基準のまま据え置きます（過剰人員の補正はそのぶん効きやすくなります）。</p>
+        <details>
+          <summary class="detail-summary">詳しく見る（事業部別の適正人数・最低人数）</summary>
+          <div class="stat-row" id="p5-cond-headcount-cards" style="margin-top:10px;">
+            <div class="stat"><div class="k">A事業部 適正人数</div><div class="v" id="p5-cond-optimal-A"></div></div>
+            <div class="stat"><div class="k">B事業部 適正人数</div><div class="v" id="p5-cond-optimal-B"></div></div>
+            <div class="stat"><div class="k">C事業部 適正人数</div><div class="v" id="p5-cond-optimal-C"></div></div>
+            <div class="stat"><div class="k">A事業部 最低人数</div><div class="v" id="p5-cond-min-A"></div></div>
+            <div class="stat"><div class="k">B事業部 最低人数</div><div class="v" id="p5-cond-min-B"></div></div>
+            <div class="stat"><div class="k">C事業部 最低人数</div><div class="v" id="p5-cond-min-C"></div></div>
+          </div>
+        </details>
+      </div>
+
       <details class="card">
         <summary class="detail-summary">オプション</summary>
         <div class="whatif-params" id="p5-params-card" style="margin-top:10px;"></div>
