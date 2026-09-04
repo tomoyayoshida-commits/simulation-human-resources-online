@@ -1,5 +1,6 @@
 // 設計書§10: CSV取込UI（#p4 社員データ取込・#p5 採用前後比較の2つの取込欄）のDOM更新。
-// 表示専用で計算を持たない（CLAUDE.md §5）。取り込んだデータの保持と後続処理は renderer.ts 側。
+// 表示専用で計算を持たない（CLAUDE.md §5）。取り込んだデータの保持と後続処理は
+// compareFlow.ts / hiringFlow.ts 側（#p6 のプロフィール取込だけは renderer.ts）。
 
 import type { Employee, ValidationError } from './types.ts'
 import { escapeHtml, pill } from './format.ts'

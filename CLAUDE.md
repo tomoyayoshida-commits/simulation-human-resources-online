@@ -41,7 +41,10 @@ WSL2 Ubuntu。PowerShellから実行時は**ログインシェル経由必須**�
 
 ## 5. ディレクトリ構成（src/renderer/）
 - ★=中核。仕様変更時はまずここ
-- `renderer.ts`★ 結線層（状態・画面遷移・イベント配線）
+- `renderer.ts`★ 結線層（各モジュールの結び付け・#p6人材プロフィール管理・#p7の入口・認証ガード・`main()`）
+- `appState.ts` アプリ状態（`state`と`p4Params`/`p5Params`）／`navigation.ts` 画面遷移・ステップ切替・パンくず
+  （保存処理は`setAfterNavigate`で注入＝`session.ts`と相互参照しない）／`session.ts` リロード復元の保存と読み出し
+- `compareFlow.ts` #p4配置比較の配線／`hiringFlow.ts` #p5採用判断の配線。どちらも取込→比較→作業机の結び付けだけを持つ
 - `constants.ts`★ 全定数（重み・売上・COLUMN_MAP・round2・DEFAULT_PARAMS等）
 - `calcEngine.ts`★ 貢献度→能力値→売上→コスト→利益（純粋関数）
 - `optimizer.ts`★ 人数配分の全列挙×割当。課題1〜4の目的関数・辞書式合成・solveForHeadcount
