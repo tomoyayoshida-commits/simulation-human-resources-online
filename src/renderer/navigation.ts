@@ -39,12 +39,22 @@ export function showStep(panelId: string, step: Step): void {
  * トップの「前回の続き」導線を出し入れする。取込済みで、かつ比較結果まで進んだ実績がある時だけ出す。
  * 入口ボタン（「始める」）は常に取込ステップへ着地させ、続きから見る操作はこちらに分けてある。
  * 前回位置へ勝手に飛ばさず、どこへ入るかを毎回利用者が選べるようにするための一対。
+ * 作りかけ再開ボタンは draftStore から下書きがあるときだけ出す。
  */
 export function updateResumeButtons(): void {
   const p4Ready = state.employees100 !== null && currentStep('p4') !== 'import'
   const p5Ready = state.hiringBase100 !== null && state.hiringAdd10 !== null && currentStep('p5') !== 'import'
   $('p4-resume')?.toggleAttribute('hidden', !p4Ready)
   $('p5-resume')?.toggleAttribute('hidden', !p5Ready)
+}
+
+/**
+ * トップの「作りかけ再開」導線を出し入れする（draftStore 連携）。
+ * 下書きがある時だけ出す（無い・壊れている場合も hidden のまま）。
+ */
+export function updateDraftResumeButtons(p4HasDraft: boolean, p5HasDraft: boolean): void {
+  $('p4-resume-draft')?.toggleAttribute('hidden', !p4HasDraft)
+  $('p5-resume-draft')?.toggleAttribute('hidden', !p5HasDraft)
 }
 
 /** panelId の現在表示中のステップ。該当要素が無いパネルはそのステップを返さない。 */
@@ -66,7 +76,7 @@ export async function go(id: string): Promise<void> {
   afterNavigate()
 }
 
-const FLOW_LABEL: Record<string, string> = { p4: '配置比較', p5: '採用判断' }
+const FLOW_LABEL: Record<string, string> = { p4: '配置案の検討', p5: '採用判断' }
 
 /** 現在どんな操作をしてここに来たかを示すパンくずリスト。トップバーのタブナビの代わり。 */
 export function renderBreadcrumb(panelId: string): void {

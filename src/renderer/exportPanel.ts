@@ -34,7 +34,7 @@ function dateTimeText(d: Date | null): string {
 /** 一覧の中身（§4.1）。0件のときは説明文を出す。 */
 export function buildRunListHtml(runs: RunSummary[]): string {
   if (runs.length === 0) {
-    return `<p class="note">保存された配置案はまだありません。「配置比較」または「採用判断」→作業机で調整し、「この案を保存」から保存すると、ここに並びます。</p>`
+    return `<p class="note">保存された配置案はまだありません。「配置案の検討」または「採用判断」→作業机で調整し、「この案を保存」から保存すると、ここに並びます。</p>`
   }
   const rows = runs
     .map(
@@ -57,7 +57,7 @@ export function buildRunListHtml(runs: RunSummary[]): string {
       <thead><tr><th>名前</th><th>種別</th><th>課題</th><th class="num">全社売上</th><th class="num">全社利益</th><th class="num">調整</th><th>状態</th><th>保存日時</th><th>保存者</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>
-    <p class="note">「種別」は保存元の画面です。配置比較は100名、採用判断は既存100名＋採用した候補の人数で計算されているため、全社売上をそのまま見比べることはできません。</p>`
+    <p class="note">「種別」は保存元の画面です。配置案の検討は100名、採用判断は既存100名＋採用した候補の人数で計算されているため、全社売上をそのまま見比べることはできません。</p>`
 }
 
 /**

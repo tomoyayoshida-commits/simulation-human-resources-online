@@ -25,14 +25,17 @@ import {
 } from './workbench.ts'
 import { solveForHeadcount } from './optimizer.ts'
 import { saveRun, titleExists, type SavedRun } from './runStore.ts'
+import { readCompareDraft, saveCompareDraft, toWorkbenchState } from './draftStore.ts'
 import { withLoading } from './loading.ts'
 import { taskLabel, UNIT_IDS, UNIT_LABEL } from './constants.ts'
 import { createDragController } from './workbenchDnd.ts'
-import { deltaText, escapeAttr, escapeHtml, oku, pill, signed } from './format.ts'
+import { deltaText, escapeAttr, escapeHtml, oku, pill, shortDateTime, signed } from './format.ts'
 import {
   buildAlertHtml,
   buildCardFaceHtml,
   buildConstraintNoteHtml,
+  buildDraftButtonsHtml,
+  buildDraftNoteHtml,
   buildLockButtonHtml,
   buildMoveChipsHtml,
   buildNextStepHtml,
@@ -85,6 +88,10 @@ export interface WorkbenchViewData {
   savingTitle?: string | null
   /** 保存フォーム直下に出す保存失敗の理由（同名衝突・通信失敗）。`null`/未指定なら非表示。 */
   saveError?: string | null
+  /** 一時保存されている盤面の保存時刻（ISO・draftStore.ts）。`null`/未指定なら下書き無し。 */
+  draftSavedAt?: string | null
+  /** 一時保存・読み込みの結果報告。`null`/未指定なら非表示。 */
+  draftNote?: string | null
 }
 
 function buildHeaderHtml(
@@ -102,17 +109,22 @@ function buildHeaderHtml(
       : ''
   return `
     <h2>作業机：${taskLabel(state.task, state.metric)}の配置を調整</h2>
+    <p class="subtitle">最適解を出発点に人手で寄せ、そのコストをその場で確認する。</p>
     <!-- ②28: 「最適解」が何を指すかを画面に書く。Δの基準もこれ -->
-    <p class="subtitle">最適解を出発点に人手で寄せ、そのコストをその場で確認する。<br>
-      ここでいう<b>最適解</b>とは、取り込んだ${state.roster.length}名と現在の前提条件のもとで
-      「${taskLabel(state.task, state.metric)}」を最大化する配置のことです（この盤面の出発点）。</p>
-    <div class="wb-totals">
-      <div class="wb-stat"><span class="k">全社売上</span><span class="v">${oku(result.companyRevenue)}</span><span class="d">最適解比 ${deltaText(result.companyRevenue, baseline.companyRevenue)}</span></div>
-      <div class="wb-stat"><span class="k">全社利益</span><span class="v">${oku(result.companyProfit)}</span><span class="d">最適解比 ${deltaText(result.companyProfit, baseline.companyProfit)}</span></div>
-      <div class="wb-stat"><span class="k">異動</span><span class="v">${evaluation.movedFromBaseline}名</span><span class="d">最適解から</span></div>
+    <details class="wb-detail">
+      <summary class="detail-summary">詳細</summary>
+      <p class="subtitle">ここでいう<b>最適解</b>とは、取り込んだ${state.roster.length}名と現在の前提条件のもとで
+        「${taskLabel(state.task, state.metric)}」を最大化する配置のことです（この盤面の出発点）。</p>
+    </details>
+    <div class="wb-header-row">
+      <div class="wb-totals">
+        <div class="wb-stat"><span class="k">全社売上</span><span class="v">${oku(result.companyRevenue)}</span><span class="d">最適解比 ${deltaText(result.companyRevenue, baseline.companyRevenue)}</span></div>
+        <div class="wb-stat"><span class="k">全社利益</span><span class="v">${oku(result.companyProfit)}</span><span class="d">最適解比 ${deltaText(result.companyProfit, baseline.companyProfit)}</span></div>
+        <div class="wb-stat"><span class="k">異動</span><span class="v">${evaluation.movedFromBaseline}名</span><span class="d">最適解から</span></div>
+      </div>
+      ${buildConstraintNoteHtml(state.params.prevYearRevenue, state.params.minHeadcount)}
     </div>
     <div class="wb-status">${statusPill}${minHcPill}</div>
-    ${buildConstraintNoteHtml(state.params.prevYearRevenue, state.params.minHeadcount)}
     ${buildNextStepHtml(result.feasible, evaluation.minHeadcountViolations)}`
 }
 
@@ -141,6 +153,8 @@ function buildActionsHtml(
   showPhotos: boolean,
   savingTitle: string | null,
   saveError: string | null,
+  /** 一時保存の状態（draftStore.ts）。savedAt が null なら下書き無し */
+  draft: { savedAt: string | null; note: string | null },
 ): string {
   const violation = hasViolation(evaluation)
   const diffs = diffAssignment(state.baseline.assignment, state.assignment)
@@ -169,13 +183,18 @@ function buildActionsHtml(
         <button type="button" class="btn secondary" data-wb-action="undo"${state.history.length === 0 ? ' disabled' : ''}>元に戻す</button>
         <button type="button" class="btn secondary" data-wb-action="reset" title="出発点（最適解）の配置に戻す">リセット</button>
         <button type="button" class="btn secondary" data-wb-action="resolve"${resolveAttr}>この人数配分のまま最適に組み直す</button>
+        ${buildDraftButtonsHtml(draft.savedAt, 'data-wb-action')}
         <button type="button" class="btn" data-wb-action="save"${savingTitle === null ? '' : ' disabled'}>この案を保存</button>
       </div>
     </div>
+    ${buildDraftNoteHtml(draft.note)}
     ${buildSaveFormHtml(savingTitle, violation, saveError, SAVE_FORM_IDS)}
     <p class="wb-diff">異動の内訳：${diffText}</p>
     ${moveChipsHtml}
-    ${CONTRIBUTION_NOTE_HTML}`
+    <details class="wb-detail">
+      <summary class="detail-summary">詳細</summary>
+      ${CONTRIBUTION_NOTE_HTML}
+    </details>`
 }
 
 /** 作業机パネル全体のHTMLを組み立てる（純粋関数・DOM非依存）。 */
@@ -206,7 +225,10 @@ export function buildWorkbenchHtml(data: WorkbenchViewData): string {
     buildAlertHtml(alertText, ALERT_DISMISS_ATTR) +
     buildHeaderHtml(state, evaluation) +
     `<div class="wb-board">${columnsHtml}</div>` +
-    buildActionsHtml(state, evaluation, sortKey, showPhotos, data.savingTitle ?? null, data.saveError ?? null) +
+    buildActionsHtml(state, evaluation, sortKey, showPhotos, data.savingTitle ?? null, data.saveError ?? null, {
+      savedAt: data.draftSavedAt ?? null,
+      note: data.draftNote ?? null,
+    }) +
     DRAG_BADGE_HTML
   )
 }
@@ -226,6 +248,14 @@ const view: {
   savingTitle: string | null
   /** 保存フォーム直下に出す保存失敗の理由（同名衝突・通信失敗）。null なら非表示 */
   saveError: string | null
+  /**
+   * 一時保存されている盤面の保存時刻（draftStore.ts）。null なら下書き無し。
+   * 再描画のたびに localStorage を読み直すとドラッグ中も含めて毎回パースが走るので、
+   * 作業机を開いたときと一時保存を操作したときだけ更新する
+   */
+  draftSavedAt: string | null
+  /** 一時保存・読み込みの結果報告。null なら非表示 */
+  draftNote: string | null
 } = {
   state: null,
   sortKey: 'id',
@@ -235,6 +265,8 @@ const view: {
   showPhotos: true,
   savingTitle: null,
   saveError: null,
+  draftSavedAt: null,
+  draftNote: null,
 }
 
 /** 保存された配置案を受け取る側（#p7 の出力画面へ渡す）。renderer.ts が配線する。 */
@@ -252,7 +284,7 @@ function clearAlertIfResolved(evaluation: WhatIfEvaluation): void {
 
 function render(): void {
   if (!view.state) return
-  setHtml('wb-root', buildWorkbenchHtml({ state: view.state, sortKey: view.sortKey, selectedEmployeeId: view.selectedEmployeeId, alertText: view.alertText, showPhotos: view.showPhotos, savingTitle: view.savingTitle, saveError: view.saveError }))
+  setHtml('wb-root', buildWorkbenchHtml({ state: view.state, sortKey: view.sortKey, selectedEmployeeId: view.selectedEmployeeId, alertText: view.alertText, showPhotos: view.showPhotos, savingTitle: view.savingTitle, saveError: view.saveError, draftSavedAt: view.draftSavedAt, draftNote: view.draftNote }))
 }
 
 /** #p4 のカードから遷移してきた初期状態で作業机を開く（機能15・§4.1）。 */
@@ -264,6 +296,9 @@ export function openWorkbench(initial: WorkbenchState): void {
   view.alertKind = null
   view.savingTitle = null
   view.saveError = null
+  // 下書きの有無は開いた時点で1回だけ読む（以後の再描画では読み直さない）
+  view.draftSavedAt = readCompareDraft()?.savedAt ?? null
+  view.draftNote = null
   drag.reset()
   render()
 }
@@ -371,6 +406,30 @@ function handleAction(action: string): void {
     render()
   } else if (action === 'save-confirm') {
     void commitSave()
+  } else if (action === 'draft-save') {
+    const savedAt = saveCompareDraft(state)
+    view.draftSavedAt = savedAt ?? view.draftSavedAt
+    view.draftNote = savedAt
+      ? `いまの盤面を一時保存しました（${shortDateTime(savedAt)}）。この画面を離れても「一時保存を開く」で続きから戻れます。`
+      : '一時保存できませんでした（このブラウザの保存領域が使えません）。'
+    render()
+  } else if (action === 'draft-load') {
+    const draft = readCompareDraft()
+    if (!draft) {
+      view.draftSavedAt = null
+      view.draftNote = '一時保存した盤面が見つかりませんでした。'
+      render()
+      return
+    }
+    // 下書きは名簿・前提パラメータ・出発点（最適解）を自分で持つので、盤面ごと入れ替える。
+    // 顔写真は保存対象外なので、いま画面が持っているものを引き継ぐ（draftStore.ts 冒頭）。
+    view.state = toWorkbenchState(draft, state.profiles)
+    view.selectedEmployeeId = null
+    view.alertText = null
+    view.alertKind = null
+    view.draftSavedAt = draft.savedAt
+    view.draftNote = `一時保存した盤面（${shortDateTime(draft.savedAt)}）を開きました。「元に戻す」の履歴は引き継ぎません。`
+    render()
   }
 }
 

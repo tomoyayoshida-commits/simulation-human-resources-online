@@ -10,7 +10,7 @@
 
 import type { Employee, EmployeeProfile, UnitId } from './types.ts'
 import { UNIT_IDS, UNIT_LABEL, UNIT_VAR } from './constants.ts'
-import { clampPct, deltaText, escapeAttr, escapeHtml, oku1, pct } from './format.ts'
+import { clampPct, deltaText, escapeAttr, escapeHtml, oku1, pct, shortDateTime } from './format.ts'
 import type { WorkbenchSortKey } from './workbench.ts'
 
 /** 並び順プルダウンの選択肢（両画面で同一）。 */
@@ -49,7 +49,7 @@ export function buildAlertHtml(alertText: string | null, dismissAttr: string): s
 export function buildConstraintNoteHtml(prevYearRevenue: number, minHeadcount: Record<UnitId, number>): string {
   const mins = UNIT_IDS.map((u) => `${u} ${minHeadcount[u]}名`).join('・')
   return (
-    `<p class="wb-constraints"><b>守るべき制約</b>：全社売上 ${prevYearRevenue}億円超` +
+    `<p class="wb-constraints"><b>守るべき制約</b>全社売上 ${prevYearRevenue}億円超` +
     `／各事業部の最低人数 ${mins}</p>`
   )
 }
@@ -184,6 +184,32 @@ export function buildSaveFormHtml(
       ${saveError ? `<p class="warn-text">${escapeHtml(saveError)}</p>` : ''}
       ${violation ? '<p class="warn-text">制約違反があります。記録としては保存できますが、CSV・PDFの出力はできません。</p>' : ''}
     </div>`
+}
+
+/**
+ * 一時保存（draftStore.ts）のボタン2つ。画面差は目印（#p4 は data-wb-action／#p5 は data-hwb-action）だけ。
+ *
+ * 「この案を保存」（Firestore への確定保存）と紛れないよう、文言に必ず「一時保存」を入れる。
+ * 下書きが無いときは「開く」を押せなくする（押しても何も起きないボタンは何が悪いのか読めないため）。
+ */
+export function buildDraftButtonsHtml(draftSavedAt: string | null, actionAttr: string): string {
+  const loadAttr = draftSavedAt
+    ? ` title="一時保存した盤面（${escapeAttr(shortDateTime(draftSavedAt))}）に戻す"`
+    : ' disabled title="一時保存した盤面がありません"'
+  return (
+    `<button type="button" class="btn secondary" ${actionAttr}="draft-save"` +
+    ` title="いまの盤面をこのブラウザに一時保存する（あとで続きから開ける）">一時保存</button>` +
+    `<button type="button" class="btn secondary" ${actionAttr}="draft-load"${loadAttr}>一時保存を開く</button>`
+  )
+}
+
+/**
+ * 一時保存の結果を伝える1行。null なら何も出さない。
+ * 警告バナー（buildAlertHtml）と分けてあるのは、こちらが制約違反ではなく操作の結果報告のため。
+ */
+export function buildDraftNoteHtml(note: string | null): string {
+  if (!note) return ''
+  return `<p class="wb-draft-note">${escapeHtml(note)}</p>`
 }
 
 /** 事業部列の見出しが読む集計値。`UnitResult` の必要な3項目だけを構造的に受ける。 */

@@ -203,7 +203,7 @@ export function buildExecSummaryHtml(d: ExecSummaryData): string {
     {
       k: '人数',
       v: `${total}名`,
-      d: d.hiredIds === undefined ? '配置比較（採用なし）' : `採用前 ${total - newTotal}名 → ${signed(newTotal)}名`,
+      d: d.hiredIds === undefined ? '配置案の検討（採用なし）' : `採用前 ${total - newTotal}名 → ${signed(newTotal)}名`,
       good: false,
     },
     { k: '最適解からの調整', v: `${d.movedFromBaseline}名`, d: '人手で動かした人数', good: false },

@@ -58,6 +58,19 @@ export function pct(rate: number): string {
   return `${Math.round(rate * 100)}%`
 }
 
+/**
+ * 一時保存の時刻表記（例 9/4 14:32）。同じ日に何度も上書きする使い方なので分まで出す。
+ * 壊れた値・未指定のときは空文字（呼び出し側は時刻を出さずに済む）。
+ */
+export function shortDateTime(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  return `${d.getMonth() + 1}/${d.getDate()} ${hh}:${mm}`
+}
+
 /** 判定バッジ。styles.css の .pill.good / .warn / .crit に対応する。 */
 export function pill(kind: 'good' | 'warn' | 'crit', text: string): string {
   return `<span class="pill ${kind}">${text}</span>`

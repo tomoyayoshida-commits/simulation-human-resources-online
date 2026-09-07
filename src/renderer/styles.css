@@ -8,12 +8,15 @@
 }
 *{box-sizing:border-box;}
 body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--page);color:var(--text-primary);}
-.topbar{background:var(--surface-1);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:4px;padding:0 20px;position:sticky;top:0;z-index:10;}
+.topbar{background:var(--surface-1);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:10;}
 .topbar[hidden]{display:none;}
+/* 中身を .wrap（max-width:1040 / 左右padding:24）と同じ土台に載せる＝トップバー右端と本文右端が一致 */
+.topbar-inner{max-width:1040px;margin:0 auto;padding:0 24px;display:flex;align-items:center;gap:4px;}
 .topbar .brand-icon{width:44px;height:44px;object-fit:contain;flex-shrink:0;}
 .topbar h1{font-size:14px;margin:0;padding:12px 18px 12px 10px;border-right:1px solid var(--border);white-space:nowrap;}
 .detail-summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--text-secondary);}
 .detail-summary::marker{color:var(--text-muted);}
+.wb-detail{margin:4px 0 10px;}
 .breadcrumb{display:flex;align-items:center;gap:2px;font-size:12.5px;color:var(--text-muted);flex:1;padding:12px 0;}
 .breadcrumb .crumb-link{color:var(--text-secondary);cursor:pointer;background:none;border:none;font:inherit;padding:4px 9px;border-radius:8px;text-decoration:none;transition:background-color .15s ease,color .15s ease;}
 .breadcrumb .crumb-link:hover{background:#eef4fc;color:var(--a);}
@@ -117,7 +120,7 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
 .mode-toggle-btn.active{border-color:var(--a);background:var(--a);color:#fff;font-weight:600;}
 .compare-before, .compare-after{background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:16px 18px;}
 .compare-after{border-color:var(--good);}
-.home-hero{margin:10px 0 26px;}
+.home-hero{position:relative;margin:10px 0 26px;}
 .home-hero h2{font-size:25px;margin:0 0 8px;}
 .home-hero p{font-size:13px;color:var(--text-secondary);margin:0;}
 .home-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-bottom:10px;}
@@ -146,8 +149,10 @@ tr.whatif-moved{background:#fef3dc;}
 .login-card h1{font-size:18px;margin:0 0 10px;}
 .login-card p{font-size:13px;color:var(--text-secondary);margin:0 0 18px;line-height:1.6;}
 .login-error{color:var(--critical);font-size:12.5px;margin-top:12px !important;}
-.login-user{margin-left:16px;font-size:12px;color:var(--text-secondary);white-space:nowrap;}
-.login-logout{margin-left:12px;}
+/* #p0 の右上・ヘッダー直下だけに表示（トップバーには出さない） */
+.home-user{position:absolute;top:0;right:0;display:flex;align-items:center;gap:10px;}
+.login-user{font-size:12px;color:var(--text-secondary);white-space:nowrap;}
+.login-logout{font-size:11.5px;padding:4px 12px;}
 
 /* --- 以下、同じ指定が複数箇所のインラインstyleに散っていたものを集約 --- */
 /* 上に一段あける（カードを続けて並べるとき） */
@@ -190,9 +195,12 @@ tr.whatif-moved{background:#fef3dc;}
 .wb-stat .v{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;}
 .wb-stat .d{font-size:11px;color:var(--text-secondary);}
 .wb-status{margin-bottom:14px;}
+/* 集計と制約表示を1行に並べ、集計が占めない右側の余白へ制約を大きく出す */
+.wb-header-row{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;}
 /* ①26/②34: 守るべき制約は違反の有無によらず常に出す（警告ではなく前提の掲示） */
-.wb-constraints{margin:-6px 0 12px;font-size:12px;color:var(--text-secondary);}
-.wb-constraints b{color:var(--text);}
+.wb-constraints{margin:0 0 8px;padding:10px 16px;background:var(--surface-1);border:1px solid var(--border);
+  border-radius:10px;font-size:14.5px;line-height:1.6;color:var(--text-secondary);}
+.wb-constraints b{display:block;color:var(--text);font-size:13px;margin-bottom:2px;}
 /* ①27: 制約を満たさないときだけ出す「次にできること」。具体値は書かない（4-4と同じ方針） */
 .wb-nextstep{background:var(--surface-1);border:1px solid var(--border);border-left:3px solid var(--warning);
   border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12.5px;line-height:1.7;}
@@ -266,6 +274,9 @@ tr.whatif-moved{background:#fef3dc;}
 .wb-photo-label{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--text-secondary);}
 .wb-sort{font-size:12px;padding:5px 8px;border-radius:6px;border:1px solid var(--border);}
 .wb-diff{font-size:11.5px;color:var(--text-secondary);margin:0;}
+/* 一時保存の結果報告（draftStore.ts）。制約違反の警告バナーと見分けが付くよう控えめな色にする */
+.wb-draft-note{font-size:12px;color:var(--text-secondary);margin:0 0 8px;padding:7px 10px;
+  background:var(--surface-1);border:1px solid var(--border);border-radius:6px;}
 
 /* 採用判断の作業机（機能15b・docs/hiring-workbench-plan.md §5.3）。
    盤面は3事業部＋採用候補プールの4列。列・カードの見た目は #p4 の .wb-* をそのまま使い、

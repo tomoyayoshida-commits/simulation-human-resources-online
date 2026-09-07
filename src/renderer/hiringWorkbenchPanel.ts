@@ -35,14 +35,17 @@ import {
 import { headcountOf } from './whatif.ts'
 import { solveForHeadcount } from './optimizer.ts'
 import { saveRun, titleExists, type SavedRun } from './runStore.ts'
+import { readHiringDraft, saveHiringDraft, toHiringWorkbenchState } from './draftStore.ts'
 import { withLoading } from './loading.ts'
 import { taskLabel, UNIT_IDS, UNIT_LABEL } from './constants.ts'
 import { createDragController } from './workbenchDnd.ts'
-import { deltaText, escapeAttr, escapeHtml, oku, pill, signed } from './format.ts'
+import { deltaText, escapeAttr, escapeHtml, oku, pill, shortDateTime, signed } from './format.ts'
 import {
   buildAlertHtml,
   buildCardFaceHtml,
   buildConstraintNoteHtml,
+  buildDraftButtonsHtml,
+  buildDraftNoteHtml,
   buildLockButtonHtml,
   buildMoveChipsHtml,
   buildNextStepHtml,
@@ -82,6 +85,10 @@ export interface HiringWorkbenchViewData {
   savingTitle?: string | null
   /** 保存フォーム直下に出す保存失敗の理由（同名衝突・通信失敗）。`null`/未指定なら非表示。 */
   saveError?: string | null
+  /** 一時保存されている盤面の保存時刻（ISO・draftStore.ts）。`null`/未指定なら下書き無し。 */
+  draftSavedAt?: string | null
+  /** 一時保存・読み込みの結果報告。`null`/未指定なら非表示。 */
+  draftNote?: string | null
 }
 
 /**
@@ -117,14 +124,20 @@ function buildHeaderHtml(state: HiringWorkbenchState, evaluation: WhatIfEvaluati
   const lockHtml = `<label class="hwb-lock"><input type="checkbox" id="hwb-lock"${state.lockBase ? ' checked' : ''}>既存${state.base.length}名を固定する</label>`
   return `
     <h2>採用判断の作業机：${escapeHtml(originText)}（${taskLabel(state.task, state.metric)}）</h2>
+    <p class="subtitle">誰を採り、どこに置くかを1つの盤面で決める。プールに残した候補は採用しない。</p>
     <!-- ②28: 2段Δの基準がそれぞれ何を指すのかを画面に書く -->
-    <p class="subtitle">誰を採り、どこに置くかを1つの盤面で決める。プールに残した候補は採用しない。<br>
-      <b>採用前比</b>＝採用しなかった場合（${state.branch === 'existing' ? '取り込んだ現行配置' : '採用前の最適解'}・既存${state.base.length}名）との差。
-      <b>最適解比</b>＝候補を全員採用し、${state.base.length + state.candidates.length}名で
-      「${taskLabel(state.task, state.metric)}」を最大化したときの配置との差です。</p>
-    <div class="hwb-totals">
-      ${buildStatHtml('全社売上', oku(result.companyRevenue), deltaText(result.companyRevenue, beforeBaseline.companyRevenue), afterBaseline ? deltaText(result.companyRevenue, afterBaseline.companyRevenue) : null)}
-      ${buildStatHtml('全社利益', oku(result.companyProfit), deltaText(result.companyProfit, beforeBaseline.companyProfit), afterBaseline ? deltaText(result.companyProfit, afterBaseline.companyProfit) : null)}
+    <details class="wb-detail">
+      <summary class="detail-summary">詳細</summary>
+      <p class="subtitle"><b>採用前比</b>＝採用しなかった場合（${state.branch === 'existing' ? '取り込んだ現行配置' : '採用前の最適解'}・既存${state.base.length}名）との差。
+        <b>最適解比</b>＝候補を全員採用し、${state.base.length + state.candidates.length}名で
+        「${taskLabel(state.task, state.metric)}」を最大化したときの配置との差です。</p>
+    </details>
+    <div class="wb-header-row">
+      <div class="hwb-totals">
+        ${buildStatHtml('全社売上', oku(result.companyRevenue), deltaText(result.companyRevenue, beforeBaseline.companyRevenue), afterBaseline ? deltaText(result.companyRevenue, afterBaseline.companyRevenue) : null)}
+        ${buildStatHtml('全社利益', oku(result.companyProfit), deltaText(result.companyProfit, beforeBaseline.companyProfit), afterBaseline ? deltaText(result.companyProfit, afterBaseline.companyProfit) : null)}
+      </div>
+      ${buildConstraintNoteHtml(state.params.prevYearRevenue, state.params.minHeadcount)}
     </div>
     <div class="hwb-hire-line">
       <span class="hwb-hire"><b>採用 ${hired}/${state.candidates.length}名</b></span>
@@ -133,7 +146,6 @@ function buildHeaderHtml(state: HiringWorkbenchState, evaluation: WhatIfEvaluati
       ${lockHtml}
     </div>
     <div class="wb-status">${statusPill}${minHcPill}</div>
-    ${buildConstraintNoteHtml(state.params.prevYearRevenue, state.params.minHeadcount)}
     ${buildNextStepHtml(result.feasible, evaluation.minHeadcountViolations)}`
 }
 
@@ -264,6 +276,8 @@ function buildActionsHtml(
   showPhotos: boolean,
   savingTitle: string | null,
   saveError: string | null,
+  /** 一時保存の状態（draftStore.ts）。savedAt が null なら下書き無し */
+  draft: { savedAt: string | null; note: string | null },
 ): string {
   const violation = hasViolation(evaluation)
   const sortOptionsHtml = buildSortOptionsHtml(sortKey)
@@ -286,13 +300,18 @@ function buildActionsHtml(
         <button type="button" class="btn secondary" data-hwb-action="undo"${state.history.length === 0 ? ' disabled' : ''}>元に戻す</button>
         <button type="button" class="btn secondary" data-hwb-action="reset" title="出発点（現行配置または採用前の最適解）の配置に戻す">リセット</button>
         <button type="button" class="btn secondary" data-hwb-action="resolve"${resolveAttr}>この人数配分のまま最適に組み直す</button>
+        ${buildDraftButtonsHtml(draft.savedAt, 'data-hwb-action')}
         <button type="button" class="btn" data-hwb-action="save"${savingTitle === null ? '' : ' disabled'}>この案を保存</button>
       </div>
     </div>
+    ${buildDraftNoteHtml(draft.note)}
     ${buildSaveFormHtml(savingTitle, violation, saveError, SAVE_FORM_IDS)}
     <p class="wb-diff">内訳：${escapeHtml(diffLine(state))}</p>
     ${moveChipsHtml(state)}
-    ${CONTRIBUTION_NOTE_HTML}`
+    <details class="wb-detail">
+      <summary class="detail-summary">詳細</summary>
+      ${CONTRIBUTION_NOTE_HTML}
+    </details>`
 }
 
 /** 採用判断の作業机パネル全体のHTMLを組み立てる（純粋関数・DOM非依存）。 */
@@ -313,7 +332,10 @@ export function buildHiringWorkbenchHtml(data: HiringWorkbenchViewData): string 
     buildAlertHtml(alertText, ALERT_DISMISS_ATTR) +
     buildHeaderHtml(state, evaluation) +
     `<div class="hwb-board">${columnsHtml}</div>` +
-    buildActionsHtml(state, evaluation, sortKey, showPhotos, savingTitle, saveError) +
+    buildActionsHtml(state, evaluation, sortKey, showPhotos, savingTitle, saveError, {
+      savedAt: data.draftSavedAt ?? null,
+      note: data.draftNote ?? null,
+    }) +
     DRAG_BADGE_HTML
   )
 }
@@ -352,6 +374,13 @@ const view: {
   showPhotos: boolean
   savingTitle: string | null
   saveError: string | null
+  /**
+   * 一時保存されている盤面の保存時刻（draftStore.ts）。null なら下書き無し。
+   * 再描画のたびに localStorage を読み直さないよう、開いたときと一時保存の操作時だけ更新する
+   */
+  draftSavedAt: string | null
+  /** 一時保存・読み込みの結果報告。null なら非表示 */
+  draftNote: string | null
 } = {
   state: null,
   sortKey: 'id',
@@ -361,6 +390,8 @@ const view: {
   showPhotos: true,
   savingTitle: null,
   saveError: null,
+  draftSavedAt: null,
+  draftNote: null,
 }
 
 /** 保存された配置案を受け取る側（#p7 の出力画面へ渡す）。renderer.ts が配線する。 */
@@ -387,6 +418,8 @@ function render(): void {
       showPhotos: view.showPhotos,
       savingTitle: view.savingTitle,
       saveError: view.saveError,
+      draftSavedAt: view.draftSavedAt,
+      draftNote: view.draftNote,
     }),
   )
 }
@@ -400,6 +433,9 @@ export function openHiringWorkbench(initial: HiringWorkbenchState): void {
   view.alertKind = null
   view.savingTitle = null
   view.saveError = null
+  // 下書きの有無は開いた時点で1回だけ読む（以後の再描画では読み直さない）
+  view.draftSavedAt = readHiringDraft()?.savedAt ?? null
+  view.draftNote = null
   drag.reset()
   render()
 }
@@ -527,6 +563,30 @@ function handleAction(action: string): void {
     render()
   } else if (action === 'save-confirm') {
     void commitSave()
+  } else if (action === 'draft-save') {
+    const savedAt = saveHiringDraft(state)
+    view.draftSavedAt = savedAt ?? view.draftSavedAt
+    view.draftNote = savedAt
+      ? `いまの盤面を一時保存しました（${shortDateTime(savedAt)}）。この画面を離れても「一時保存を開く」で続きから戻れます。`
+      : '一時保存できませんでした（このブラウザの保存領域が使えません）。'
+    render()
+  } else if (action === 'draft-load') {
+    const draft = readHiringDraft()
+    if (!draft) {
+      view.draftSavedAt = null
+      view.draftNote = '一時保存した盤面が見つかりませんでした。'
+      render()
+      return
+    }
+    // 下書きは名簿・候補・前提パラメータ・2段Δの基準を自分で持つので、盤面ごと入れ替える。
+    // 顔写真は保存対象外なので、いま画面が持っているものを引き継ぐ（draftStore.ts 冒頭）。
+    view.state = toHiringWorkbenchState(draft, state.profiles)
+    view.selectedEmployeeId = null
+    view.alertText = null
+    view.alertKind = null
+    view.draftSavedAt = draft.savedAt
+    view.draftNote = `一時保存した盤面（${shortDateTime(draft.savedAt)}）を開きました。「元に戻す」の履歴は引き継ぎません。`
+    render()
   }
 }
 

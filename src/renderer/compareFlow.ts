@@ -7,14 +7,16 @@
 // （取込直後にいきなり結果画面へ切り替わると、取込内容を見直す余地がなくなるため）。
 
 import { p4Params, state } from './appState.ts'
-import { go, showStep, updateResumeButtons } from './navigation.ts'
+import { go, showStep, updateResumeButtons, updateDraftResumeButtons } from './navigation.ts'
 import { saveSnapshot, type SessionSnapshot } from './session.ts'
 import { importEmployees } from './csv.ts'
 import { renderImportConditions, renderImportReport, setupDropzone } from './importPanel.ts'
 import { currentCardResult, initWorkbenchLaunch, renderCompareTasks } from './compareTasks.ts'
 import { openWorkbench } from './workbenchPanel.ts'
+import { readCompareDraft, toWorkbenchState } from './draftStore.ts'
 import { getProfiles } from './profileStore.ts'
 import { withLoading } from './loading.ts'
+import { shortDateTime } from './format.ts'
 import { $ } from './dom.ts'
 
 // ファイルを一度でも投入したか。取込がエラーなら state.employees100 は null のままなので、
@@ -39,7 +41,23 @@ export function refreshCompareGate(): void {
   // 取込エラー時こそやり直す手段が要るので、取込に失敗していても投入済みなら出したままにする（B-1）
   $('p4-file-actions')?.toggleAttribute('hidden', !(state.employees100 || fileTouched))
   updateResumeButtons()
+  refreshDraftHint()
   saveSnapshot()
+}
+
+/**
+ * 比較結果ステップに出す「作りかけの配置を開く」導線の出し分け（draftStore.ts）。
+ * トップページのボタンも同時に出し入れする。
+ * 下書きの有無が変わりうるのは「取込まわりの操作」と「作業机から戻ってきたとき」だけなので、
+ * refreshCompareGate と bench→result の戻りからだけ呼ぶ（毎回 localStorage を読ませない）。
+ */
+function refreshDraftHint(): void {
+  const draft = readCompareDraft()
+  const hasDraft = draft !== null
+  $('p4-draft-hint')?.toggleAttribute('hidden', !hasDraft)
+  const timeEl = $('p4-draft-time')
+  if (timeEl) timeEl.textContent = shortDateTime(draft?.savedAt)
+  updateDraftResumeButtons(hasDraft, false)
 }
 
 export function initCompareFlow(): void {
@@ -105,7 +123,37 @@ export function initCompareFlow(): void {
     showStep('p4', 'bench')
   })
   // 作業机の「← 前の画面へ戻る」は直前の4課題比較結果へ戻す。
-  $('p4-bench-back')?.addEventListener('click', () => showStep('p4', 'result'))
+  $('p4-bench-back')?.addEventListener('click', () => {
+    showStep('p4', 'result')
+    // 作業机で一時保存した直後にここへ戻ることがあるので、導線を出し直す
+    refreshDraftHint()
+  })
+
+  // 一時保存した作りかけの盤面を開く（draftStore.ts）。下書きは名簿・前提条件・出発点を自分で
+  // 持つため、取込や4課題の計算をやり直さずに作業機へ入れる（リロード直後の主な使い道）。
+  $('p4-open-draft')?.addEventListener('click', () => {
+    const draft = readCompareDraft()
+    if (!draft) {
+      refreshDraftHint()
+      return
+    }
+    // 顔写真は下書きに含めない方針なので、いまマスタから取れるものを渡す
+    openWorkbench(toWorkbenchState(draft, getProfiles()))
+    showStep('p4', 'bench')
+  })
+  // トップページの「作りかけの配置を開く」ボタン。結果ステップを経由せず直接作業機へ入る。
+  $('p4-resume-draft')?.addEventListener('click', () => {
+    const draft = readCompareDraft()
+    if (!draft) {
+      refreshDraftHint()
+      return
+    }
+    void withLoading('作りかけの配置を復元しています…', async () => {
+      openWorkbench(toWorkbenchState(draft, getProfiles()))
+      showStep('p4', 'bench')
+      await go('p4')
+    })
+  })
 }
 
 /** リロード直後に #p4 の取込データと前提パラメータを戻す（ステップの復元は renderer.ts 側）。 */

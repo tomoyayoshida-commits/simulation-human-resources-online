@@ -33,13 +33,14 @@
 </div>
 
 <div class="topbar" id="app-topbar" hidden>
-  <img class="brand-icon" src="./assets/samurai-fullmoon.png" alt="">
-  <h1>侍の<br>人材配置</h1>
-  <nav class="breadcrumb" id="breadcrumb"></nav>
-  <button class="btn secondary" data-go="p6">人材登録</button>
-  <button class="btn secondary" data-go="p7">保存配置</button>
-  <span class="login-user" id="login-user"></span>
-  <button class="btn secondary login-logout" id="logout-button">ログアウト</button>
+  <!-- 中身は .wrap と同じ幅・同じ左右padding に揃える（保存配置ボタンの右端が本文右端＝#p0のログアウト右端と一致する） -->
+  <div class="topbar-inner">
+    <img class="brand-icon" src="./assets/samurai-fullmoon.png" alt="">
+    <h1>侍の<br>人材配置</h1>
+    <nav class="breadcrumb" id="breadcrumb"></nav>
+    <button class="btn secondary" data-go="p6">人材登録</button>
+    <button class="btn secondary" data-go="p7">保存配置</button>
+  </div>
 </div>
 
 <div class="wrap" id="app-wrap" hidden>
@@ -47,16 +48,21 @@
   <!-- 0. トップページ（目的別の2つの入口。人材登録(#p6)・保存配置(#p7)はトップバーから入る） -->
   <section class="panel active" id="p0">
     <div class="home-hero">
+      <div class="home-user">
+        <span class="login-user" id="login-user"></span>
+        <button class="btn secondary login-logout" id="logout-button">ログアウト</button>
+      </div>
       <h2>何を確認・判断したいですか？</h2>
       <p>「この配置・この採用判断でいいと言い切れるか」を裏付けるための2つの入口です。</p>
     </div>
     <div class="home-grid">
       <div class="home-card">
         <div class="num">1</div>
-        <h3>配置を比較する</h3>
+        <h3>配置案を検討する</h3>
         <p>4つの最大化方針（全社売上／A事業部利益／B事業部売上／C事業部売上）を並べ、どれが全社利益・各事業部にどう効くかを比較し、最適配置と配置方針・理由を得る。</p>
-        <button class="btn" data-go="p4" data-fresh>配置比較を始める ▶</button>
-        <button class="btn secondary home-resume" id="p4-resume" hidden>↳ 前回の続き（4課題比較）▶</button>
+        <button class="btn" data-go="p4" data-fresh>配置案の検討を始める ▶</button>
+        <button class="btn secondary home-resume" id="p4-resume" hidden>↳ 前回の続き（配置案の検討）▶</button>
+        <button class="btn secondary home-resume" id="p4-resume-draft" hidden>↳ 作りかけの配置を開く ▶</button>
       </div>
       <div class="home-card">
         <div class="num">2</div>
@@ -64,6 +70,7 @@
         <p>追加10名採用の前後比較とROIを確認し、採用可否の判断材料を得る。</p>
         <button class="btn" data-go="p5" data-fresh>採用判断を始める ▶</button>
         <button class="btn secondary home-resume" id="p5-resume" hidden>↳ 前回の続き（採用前後比較）▶</button>
+        <button class="btn secondary home-resume" id="p5-resume-draft" hidden>↳ 作りかけの採用案を開く ▶</button>
       </div>
     </div>
     <!-- ①33/②41: 保存した配置案への入口はトップバーだけでなく本文にも置く -->
@@ -76,7 +83,7 @@
   <!-- 配置比較（データ取込 → 4課題横断比較） -->
   <section class="panel" id="p4">
     <div id="p4-import-step">
-      <h2>配置比較：社員データ取込</h2>
+      <h2>配置案の検討：社員データ取込</h2>
       <!-- ①14: このあとの画面で何をするのかを取込の時点で示す（C-2 の決定） -->
       <p class="subtitle">社員データを読み込み、取込結果と検証結果を同じ画面で確認する。<br>
         このあと<b>目的の異なる4通りの最適配置</b>を並べて見比べ、そこから<b>配置案を1つ選んで</b>人員配置を調整します。</p>
@@ -137,7 +144,7 @@
       </div>
 
       <details class="card">
-        <summary class="detail-summary">オプション</summary>
+        <summary class="detail-summary">計算オプション</summary>
         <div class="whatif-params" id="p4-params-card" style="margin-top:10px;"></div>
         <div id="p4-params-errors"></div>
         <div class="actions" style="margin-top:10px;">
@@ -147,7 +154,7 @@
 
       <div class="actions" style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
         <button class="btn secondary" id="p4-back">← 前の画面へ戻る</button>
-        <button class="btn" id="p4-proceed" disabled>4課題比較を見る ▶</button>
+        <button class="btn" id="p4-proceed" disabled>配置方針を比較する ▶</button>
       </div>
     </div>
 
@@ -171,6 +178,10 @@
         <span class="picked-label" id="p4-picked-label"></span>
         <button class="btn" id="p4-open-bench" disabled>選んだ配置案の人員配置を調整する ▶</button>
       </div>
+      <!-- 一時保存した作りかけの盤面へ戻る導線（draftStore.ts）。下書きは名簿・前提条件・出発点を
+           自分で持つので、リロード直後で比較結果を計算し直していなくてもここから作業机に入れる -->
+      <p class="note nav-hint" id="p4-draft-hint" hidden>一時保存した作りかけの配置があります（<span id="p4-draft-time"></span>）。
+        <button class="btn secondary btn-inline" id="p4-open-draft">作りかけの配置を開く</button></p>
       <!-- ①21/②29: 氏名・顔写真の登録画面への導線（作業机のカード表示に効く） -->
       <p class="note nav-hint">作業机のカードに氏名・顔写真を出すには
         <button class="btn secondary btn-inline" data-go="p6">人材登録</button>
@@ -284,6 +295,9 @@
         <!-- ②22: 機能名（作業机）ではなく、そこで何をするかを書く -->
         <button class="btn" id="p5-open-bench">採用する10名と配置を1名ずつ決める ▶</button>
       </div>
+      <!-- #p4 と同じ一時保存の導線（draftStore.ts）。こちらの下書きは候補10名と採否も持つ -->
+      <p class="note nav-hint" id="p5-draft-hint" hidden>一時保存した作りかけの採用案があります（<span id="p5-draft-time"></span>）。
+        <button class="btn secondary btn-inline" id="p5-open-draft">作りかけの採用案を開く</button></p>
       <!-- ②29: 氏名・顔写真の登録画面への導線 -->
       <p class="note nav-hint">候補者のカードに氏名・顔写真を出すには
         <button class="btn secondary btn-inline" data-go="p6">人材登録</button>

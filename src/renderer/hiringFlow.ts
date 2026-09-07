@@ -5,17 +5,19 @@
 
 import type { Employee, ValidationError } from './types.ts'
 import { p5Params, state } from './appState.ts'
-import { go, showStep, updateResumeButtons } from './navigation.ts'
+import { go, showStep, updateResumeButtons, updateDraftResumeButtons } from './navigation.ts'
 import { saveSnapshot, type SessionSnapshot } from './session.ts'
 import { importEmployees, mergeEmployees, parseAssignmentColumn } from './csv.ts'
 import type { HiringImportIds } from './importPanel.ts'
 import { renderHiringImportError, renderHiringImportOk, renderImportConditions, setupDropzone } from './importPanel.ts'
 import { currentHiringTarget, initHiringTargetToggle, renderCompareHiring, renderHiringTargetToggle } from './compareHiring.ts'
 import { openHiringWorkbench } from './hiringWorkbenchPanel.ts'
+import { readHiringDraft, toHiringWorkbenchState } from './draftStore.ts'
 import { computeSimulationResult } from './calcEngine.ts'
 import { runOptimization } from './optimizer.ts'
 import { getProfiles } from './profileStore.ts'
 import { withLoading } from './loading.ts'
+import { shortDateTime } from './format.ts'
 import { $ } from './dom.ts'
 
 // 左（採用前100名）・右（追加採用10名）の2つの独立した取込欄
@@ -47,7 +49,18 @@ export function refreshHiringGate(): void {
     proceedBtn.toggleAttribute('hidden', importErrorCount.hiringBase100 + importErrorCount.hiringAdd10 > 0)
   }
   updateResumeButtons()
+  refreshDraftHint()
   saveSnapshot()
+}
+
+/** 採用前後比較ステップに出す「作りかけの採用案を開く」導線の出し分け（#p4 の同名関数と同じ役目）。 */
+function refreshDraftHint(): void {
+  const draft = readHiringDraft()
+  const hasDraft = draft !== null
+  $('p5-draft-hint')?.toggleAttribute('hidden', !hasDraft)
+  const timeEl = $('p5-draft-time')
+  if (timeEl) timeEl.textContent = shortDateTime(draft?.savedAt)
+  updateDraftResumeButtons(false, hasDraft)
 }
 
 // 取込を受け入れる／保留する。どちらも「状態を書き換え → 結果を表示 → 次へボタンを引き直す」で終わり、
@@ -188,7 +201,36 @@ export function initHiringFlow(): void {
       showStep('p5', 'bench')
     })
   })
-  $('p5-bench-back')?.addEventListener('click', () => showStep('p5', 'result'))
+  $('p5-bench-back')?.addEventListener('click', () => {
+    showStep('p5', 'result')
+    // 作業机で一時保存した直後にここへ戻ることがあるので、導線を出し直す
+    refreshDraftHint()
+  })
+
+  // 一時保存した作りかけの盤面を開く（draftStore.ts）。下書きは既存100名・候補10名・採否・
+  // 2段Δの基準を自分で持つので、採用前後の最適化（約1秒×2回）をやり直さずに作業机へ入れる。
+  $('p5-open-draft')?.addEventListener('click', () => {
+    const draft = readHiringDraft()
+    if (!draft) {
+      refreshDraftHint()
+      return
+    }
+    openHiringWorkbench(toHiringWorkbenchState(draft, getProfiles()))
+    showStep('p5', 'bench')
+  })
+  // トップページの「作りかけの採用案を開く」ボタン。結果ステップを経由せず直接作業機へ入る。
+  $('p5-resume-draft')?.addEventListener('click', () => {
+    const draft = readHiringDraft()
+    if (!draft) {
+      refreshDraftHint()
+      return
+    }
+    void withLoading('作りかけの採用案を復元しています…', async () => {
+      openHiringWorkbench(toHiringWorkbenchState(draft, getProfiles()))
+      showStep('p5', 'bench')
+      await go('p5')
+    })
+  })
 }
 
 /** リロード直後に #p5 の取込データと前提パラメータを戻す（ステップの復元は renderer.ts 側）。 */
