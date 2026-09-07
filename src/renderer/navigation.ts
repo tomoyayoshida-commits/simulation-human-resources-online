@@ -49,12 +49,17 @@ export function updateResumeButtons(): void {
 }
 
 /**
- * トップの「作りかけ再開」導線を出し入れする（draftStore 連携）。
- * 下書きがある時だけ出す（無い・壊れている場合も hidden のまま）。
+ * トップの「作りかけ再開」導線を出し入れする（draftStore 連携）。下書きがある時だけ出す。
+ * #p4 と #p5 で別関数にしてあるのは、片方のフローの更新がもう片方のボタンを巻き添えで
+ * 消さないようにするため（両方を一度に受ける関数だと、呼び出し側が自分に関係ない側へ
+ * false を渡してしまい、もう片方の下書きが見えなくなる）。
  */
-export function updateDraftResumeButtons(p4HasDraft: boolean, p5HasDraft: boolean): void {
-  $('p4-resume-draft')?.toggleAttribute('hidden', !p4HasDraft)
-  $('p5-resume-draft')?.toggleAttribute('hidden', !p5HasDraft)
+export function updateP4DraftResumeButton(hasDraft: boolean): void {
+  $('p4-resume-draft')?.toggleAttribute('hidden', !hasDraft)
+}
+
+export function updateP5DraftResumeButton(hasDraft: boolean): void {
+  $('p5-resume-draft')?.toggleAttribute('hidden', !hasDraft)
 }
 
 /** panelId の現在表示中のステップ。該当要素が無いパネルはそのステップを返さない。 */

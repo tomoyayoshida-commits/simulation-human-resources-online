@@ -7,7 +7,7 @@
 // （取込直後にいきなり結果画面へ切り替わると、取込内容を見直す余地がなくなるため）。
 
 import { p4Params, state } from './appState.ts'
-import { go, showStep, updateResumeButtons, updateDraftResumeButtons } from './navigation.ts'
+import { go, showStep, updateResumeButtons, updateP4DraftResumeButton } from './navigation.ts'
 import { saveSnapshot, type SessionSnapshot } from './session.ts'
 import { importEmployees } from './csv.ts'
 import { renderImportConditions, renderImportReport, setupDropzone } from './importPanel.ts'
@@ -50,14 +50,16 @@ export function refreshCompareGate(): void {
  * トップページのボタンも同時に出し入れする。
  * 下書きの有無が変わりうるのは「取込まわりの操作」と「作業机から戻ってきたとき」だけなので、
  * refreshCompareGate と bench→result の戻りからだけ呼ぶ（毎回 localStorage を読ませない）。
+ * 起動時は renderer.ts が直接呼ぶ（下書きは localStorage で sessionStorage スナップショットより
+ * 長生きするため、スナップショット依存の restoreCompareFrom 経由だけだと取りこぼす）。
  */
-function refreshDraftHint(): void {
+export function refreshDraftHint(): void {
   const draft = readCompareDraft()
   const hasDraft = draft !== null
   $('p4-draft-hint')?.toggleAttribute('hidden', !hasDraft)
   const timeEl = $('p4-draft-time')
   if (timeEl) timeEl.textContent = shortDateTime(draft?.savedAt)
-  updateDraftResumeButtons(hasDraft, false)
+  updateP4DraftResumeButton(hasDraft)
 }
 
 export function initCompareFlow(): void {

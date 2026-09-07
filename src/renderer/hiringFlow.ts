@@ -5,7 +5,7 @@
 
 import type { Employee, ValidationError } from './types.ts'
 import { p5Params, state } from './appState.ts'
-import { go, showStep, updateResumeButtons, updateDraftResumeButtons } from './navigation.ts'
+import { go, showStep, updateResumeButtons, updateP5DraftResumeButton } from './navigation.ts'
 import { saveSnapshot, type SessionSnapshot } from './session.ts'
 import { importEmployees, mergeEmployees, parseAssignmentColumn } from './csv.ts'
 import type { HiringImportIds } from './importPanel.ts'
@@ -53,14 +53,17 @@ export function refreshHiringGate(): void {
   saveSnapshot()
 }
 
-/** 採用前後比較ステップに出す「作りかけの採用案を開く」導線の出し分け（#p4 の同名関数と同じ役目）。 */
-function refreshDraftHint(): void {
+/**
+ * 採用前後比較ステップに出す「作りかけの採用案を開く」導線の出し分け（#p4 の同名関数と同じ役目）。
+ * 起動時は renderer.ts が直接呼ぶ（理由は compareFlow.ts の同名関数のコメント参照）。
+ */
+export function refreshDraftHint(): void {
   const draft = readHiringDraft()
   const hasDraft = draft !== null
   $('p5-draft-hint')?.toggleAttribute('hidden', !hasDraft)
   const timeEl = $('p5-draft-time')
   if (timeEl) timeEl.textContent = shortDateTime(draft?.savedAt)
-  updateDraftResumeButtons(false, hasDraft)
+  updateP5DraftResumeButton(hasDraft)
 }
 
 // 取込を受け入れる／保留する。どちらも「状態を書き換え → 結果を表示 → 次へボタンを引き直す」で終わり、

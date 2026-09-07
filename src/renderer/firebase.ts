@@ -1,7 +1,7 @@
 // 設計書: Firebaseの初期化のみを担う。計算・DOM操作は持たない（docs/web-firebase-plan.md Phase (c)）。
 import { initializeApp } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
-import { initializeFirestore, persistentLocalCache } from 'firebase/firestore'
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore'
 
 // Firebaseプロジェクト summer011 の専用Webアプリ(samurai-hr-placement)の設定値。
 // Web SDKのAPIキーはクライアント埋め込み前提の識別子でありシークレットではない。
@@ -29,4 +29,9 @@ export const auth = getAuth(firebaseApp)
 // persistentLocalCache は SDK が IndexedDB に持つキャッシュ。これがあると
 // 2回目以降の読み取りがサーバへ行かず、かつ sessionStorage を使わずに済む
 // （顔写真100名ぶんで約1.5MB。sessionStorage のクォータでは扱えない＝§2.4）。
-export const db = initializeFirestore(firebaseApp, { localCache: persistentLocalCache() })
+// tabManager 未指定だと単一タブ専用ロックになり、2つ目のタブが IndexedDB の排他
+// アクセスを取れず failed-precondition でメモリキャッシュへ落ちる（実機で確認）。
+// persistentMultipleTabManager で全タブが同じ永続キャッシュを共有する。
+export const db = initializeFirestore(firebaseApp, {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+})

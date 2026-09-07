@@ -15,8 +15,8 @@ import { importProfiles, matchProfilePhotos } from './csv.ts'
 import { state } from './appState.ts'
 import { go, initNavigation, renderBreadcrumb, setAfterNavigate, showStep, updateResumeButtons } from './navigation.ts'
 import { readSnapshot, saveSnapshot } from './session.ts'
-import { initCompareFlow, restoreCompareFrom } from './compareFlow.ts'
-import { initHiringFlow, restoreHiringFrom } from './hiringFlow.ts'
+import { initCompareFlow, refreshDraftHint as refreshCompareDraftHint, restoreCompareFrom } from './compareFlow.ts'
+import { initHiringFlow, refreshDraftHint as refreshHiringDraftHint, restoreHiringFrom } from './hiringFlow.ts'
 import { initCompareModeToggle } from './compareTasks.ts'
 import { initWorkbenchPanel } from './workbenchPanel.ts'
 import { initHiringWorkbenchPanel } from './hiringWorkbenchPanel.ts'
@@ -270,6 +270,13 @@ function main(): void {
   initCompareFlow()
   initHiringFlow()
   restoreSession() // 必要なら復元した画面のbreadcrumbまで描画する
+
+  // 作りかけ(localStorage)はタブを閉じても残るが、その存在通知は従来 restoreSession()
+  // → restoreCompareFrom() 経由でしか更新されず、sessionStorage スナップショットが無い起動
+  //（タブを閉じて開き直した・別タブで開いた）ではトップの「作りかけを開く」ボタンが出なかった。
+  // スナップショットの有無に関わらずここで必ず引き直す。
+  refreshCompareDraftHint()
+  refreshHiringDraftHint()
 }
 
 // ---- 認証ガード ----
