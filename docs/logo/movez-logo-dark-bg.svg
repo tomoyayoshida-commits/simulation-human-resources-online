@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 140" width="500" height="140">
+  <defs>
+    <style>
+      .word { font-family: 'Poppins', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; font-weight: 800; font-size: 120px; }
+      .purple { fill: #8B2FE8; }
+      .white  { fill: #FFFFFF; }
+      .green  { fill: #22C55E; }
+    </style>
+  </defs>
+  <!-- 暗背景用：ov は白のまま -->
+  <text x="10" y="105" class="word">
+    <tspan class="purple">M</tspan><tspan class="white">ov</tspan><tspan class="green">ez</tspan>
+  </text>
+</svg>

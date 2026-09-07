@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 180" width="600" height="180">
+  <defs>
+    <style>
+      .word { font-family: 'Poppins', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; font-weight: 800; font-size: 120px; }
+      .glyph { stroke: #000000; stroke-width: 8; stroke-linejoin: round; paint-order: stroke fill; }
+      .purple { fill: #8B2FE8; }
+      .white  { fill: #FFFFFF; }
+      .green  { fill: #22C55E; }
+    </style>
+  </defs>
+  <!-- "o"の上で弾むボールと、末尾の矢印で「動き」をウィットに表現 -->
+  <circle cx="103" cy="18" r="11" fill="#22C55E" stroke="#000000" stroke-width="5" />
+  <text x="20" y="120" class="word">
+    <tspan class="glyph purple">M</tspan><tspan class="glyph white">ov</tspan><tspan class="glyph green">ez</tspan>
+  </text>
+  <path d="M 505 95 L 545 78 L 505 61 L 517 78 Z" fill="#22C55E" stroke="#000000" stroke-width="5" stroke-linejoin="round" />
+</svg>

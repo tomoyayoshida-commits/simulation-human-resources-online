@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>操作フロー — 人材配置シミュレーター（Movez）</title>
+<style>
+  :root{
+    --bg:#f7f7f5; --fg:#1c1c1a; --muted:#6b6b66; --line:#c9c9c2; --card:#ffffff;
+    --a:#c8553d; --b:#3d7ea6; --c:#4f8a5b; --warn:#b0472f; --soft:#eeeee9;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#16161a; --fg:#e9e9e4; --muted:#9b9b93; --line:#3a3a40; --card:#1f1f24;
+           --a:#e08469; --b:#7fb6d8; --c:#83bd90; --warn:#e2856b; --soft:#26262c; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:28px 22px 60px;background:var(--bg);color:var(--fg);
+       font-family:system-ui,-apple-system,"Segoe UI","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
+       font-size:14px;line-height:1.7}
+  h1{font-size:21px;margin:0 0 4px}
+  h2{font-size:16px;margin:38px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+  .lead{color:var(--muted);margin:0 0 18px;font-size:13px}
+  .scroll{overflow-x:auto;padding-bottom:8px}
+  .map{position:relative;width:1400px;height:1200px;font-size:11.5px;line-height:1.55}
+  .wires{position:absolute;inset:0;z-index:0}
+  .box{position:absolute;z-index:1;background:var(--card);border:1px solid var(--line);
+       border-radius:8px;padding:8px 10px}
+  .box h3{margin:0 0 5px;font-size:12.5px;letter-spacing:.02em}
+  .box .id{color:var(--muted);font-weight:400;font-size:10.5px;margin-left:5px}
+  .box ul{margin:0;padding-left:15px}
+  .box li{margin:1px 0}
+  .box p{margin:4px 0 0}
+  .lane-p4{border-left:4px solid var(--b)}
+  .lane-p5{border-left:4px solid var(--c)}
+  .lane-out{border-left:4px solid var(--a)}
+  .note{background:var(--soft);border-style:dashed}
+  .chip{display:inline-block;background:var(--soft);border:1px dashed var(--line);
+        border-radius:999px;padding:0 7px;margin-bottom:4px;color:var(--muted);font-size:10.5px}
+  .guard{margin-top:5px;padding:4px 7px;border-left:3px solid var(--warn);background:var(--soft);
+         color:var(--fg);font-size:10.5px}
+  .guard b{color:var(--warn)}
+  svg text{fill:var(--muted);font-family:inherit;font-size:11px}
+  svg text.strong{fill:var(--fg)}
+  .legend{display:flex;gap:20px;flex-wrap:wrap;color:var(--muted);font-size:12px;margin:10px 0 16px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend i{display:inline-block;width:26px;height:0;border-top:2px solid var(--fg)}
+  .legend i.dash{border-top-style:dashed}
+  .legend i.back{border-top:1px solid var(--muted)}
+  table{border-collapse:collapse;width:100%;font-size:12.5px;margin-top:6px}
+  th,td{border:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+  th{background:var(--soft);font-weight:600;white-space:nowrap}
+  td.w{width:34%}
+  code{background:var(--soft);padding:1px 4px;border-radius:3px;font-size:12px}
+</style>
+</head>
+<body>
+
+<h1>操作フロー — 人材配置シミュレーター（Movez）</h1>
+<p class="lead">画面は5つ（トップ／配置案の検討／採用判断／人材登録／保存した配置案）。<br>
+「配置案の検討」と「採用判断」は同じ形で、<b>データ取込 → 比較 → 作業机</b> の3ステップを進み、作業机の保存から出力画面へ合流します。</p>
+
+<div class="legend">
+  <span><i></i>主動線（進む）</span>
+  <span><i class="back"></i>戻る（「← 前の画面へ戻る」・パンくず）</span>
+  <span><i class="dash"></i>別ルート（トップからの直行・トップバー）</span>
+  <span style="color:var(--warn)">縦線付きの囲み＝進めない条件（分岐のゲート）</span>
+</div>
+
+<div class="scroll">
+<div class="map">
+
+<svg class="wires" viewBox="0 0 1400 1200" width="1400" height="1200" aria-hidden="true">
+  <defs>
+    <!-- マーカー内の currentColor は参照元の線ではなく marker 自身の color を見る（SVG1.1）ので、
+         線と同じ灰色を直接指定する -->
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8a8a82"/>
+    </marker>
+    <marker id="ahs" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8a8a82"/>
+    </marker>
+  </defs>
+  <g fill="none" stroke="currentColor" color="#8a8a82">
+    <!-- 認証 -->
+    <path d="M290,48 L332,48" stroke-width="1.8" marker-end="url(#ah)"/>
+    <path d="M480,80 L480,126" stroke-width="1.8" marker-end="url(#ah)"/>
+    <!-- トップ → 各フローの取込 -->
+    <path d="M430,212 L430,230 L260,230 L260,246" stroke-width="1.8" marker-end="url(#ah)"/>
+    <path d="M550,212 L550,230 L720,230 L720,246" stroke-width="1.8" marker-end="url(#ah)"/>
+    <!-- トップ → #p4 の途中へ直行（前回の続き／作りかけ） -->
+    <path d="M348,170 L25,170 L25,530 L52,530" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#ahs)"/>
+    <path d="M25,530 L25,745 L52,745" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#ahs)"/>
+    <!-- トップ → #p5 の途中へ直行 -->
+    <path d="M622,170 L945,170 L945,530 L928,530" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#ahs)"/>
+    <path d="M945,530 L945,745 L928,745" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#ahs)"/>
+    <!-- #p4 ステップ間 -->
+    <path d="M290,415 L290,451" stroke-width="1.8" marker-end="url(#ah)"/>
+    <path d="M290,605 L290,641" stroke-width="1.8" marker-end="url(#ah)"/>
+    <path d="M230,451 L230,419" stroke-width="1" marker-end="url(#ahs)"/>
+    <path d="M230,641 L230,609" stroke-width="1" marker-end="url(#ahs)"/>
+    <!-- #p5 ステップ間 -->
+    <path d="M750,415 L750,451" stroke-width="1.8" marker-end="url(#ah)"/>
+    <path d="M750,605 L750,641" stroke-width="1.8" marker-end="url(#ah)"/>
+    <path d="M690,451 L690,419" stroke-width="1" marker-end="url(#ahs)"/>
+    <path d="M690,641 L690,609" stroke-width="1" marker-end="url(#ahs)"/>
+    <!-- 作業机 → 出力 -->
+    <path d="M260,884 L260,915 L610,915 L610,936" stroke-width="1.8" marker-end="url(#ah)"/>
+    <path d="M720,884 L720,915 L614,915" stroke-width="1.8"/>
+    <!-- トップバー → #p6 / #p7 -->
+    <path d="M1170,222 L1170,256" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#ahs)"/>
+    <path d="M1360,176 L1382,176 L1382,1055 L928,1055" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#ahs)"/>
+  </g>
+  <text x="488" y="108">ログイン成功</text>
+  <text x="345" y="223" text-anchor="middle" class="strong">配置案の検討を始める ▶</text>
+  <text x="635" y="223" text-anchor="middle" class="strong">採用判断を始める ▶</text>
+  <text x="200" y="162" text-anchor="middle">トップから直行（前回の続き／作りかけ）</text>
+  <text x="785" y="162" text-anchor="middle">トップから直行（前回の続き／作りかけ）</text>
+  <text x="300" y="437" class="strong">配置方針を比較する ▶</text>
+  <text x="300" y="627" class="strong">選んだ配置案を調整する ▶</text>
+  <text x="222" y="437" text-anchor="end">戻る</text>
+  <text x="222" y="627" text-anchor="end">戻る</text>
+  <text x="760" y="437" class="strong">採用前後比較を見る ▶</text>
+  <text x="760" y="627" class="strong">採用する10名と配置を決める ▶</text>
+  <text x="682" y="437" text-anchor="end">戻る</text>
+  <text x="682" y="627" text-anchor="end">戻る</text>
+  <text x="610" y="906" text-anchor="middle" class="strong">「この案を保存」→ 出力画面へ直行</text>
+  <text x="1300" y="1046" text-anchor="end">トップバー「保存配置」</text>
+</svg>
+
+<!-- 認証 -->
+<div class="box" style="left:40px;top:20px;width:250px;height:56px">
+  <h3>起動</h3>
+  <p style="color:var(--muted);margin:0">認証状態を復元中（スピナーのみ表示）</p>
+</div>
+<div class="box" style="left:332px;top:20px;width:288px;height:56px">
+  <h3>ログイン画面</h3>
+  <p style="margin:0">Googleでログイン／許可外・失敗はここに留まりエラー表示</p>
+</div>
+
+<!-- トップ -->
+<div class="box" style="left:348px;top:130px;width:274px;height:82px">
+  <h3>トップ<span class="id">#p0</span></h3>
+  <ul>
+    <li>入口2つ＋「保存した配置案を見る・出力する」</li>
+    <li>ログアウト</li>
+  </ul>
+</div>
+
+<!-- #p4 -->
+<div class="box lane-p4" style="left:60px;top:250px;width:400px;height:165px">
+  <h3>配置案の検討：データ取込<span class="id">#p4-import</span></h3>
+  <ul>
+    <li>社員データCSVをドラッグ&amp;ドロップ／ファイル選択 → 100名の検証</li>
+    <li>詳細（先頭5名プレビュー）・入力検証レポート・配置の前提条件</li>
+    <li>計算オプション（前提パラメータ編集／標準に戻す）</li>
+    <li>ファイルを変更／取り込みを解除（＝未取込に戻す）</li>
+  </ul>
+  <div class="guard"><b>エラー1件でも</b>あると「配置方針を比較する」ボタンごと消える → 該当行を直して再取込</div>
+</div>
+
+<div class="box lane-p4" style="left:60px;top:455px;width:400px;height:150px">
+  <span class="chip">◀ トップ「前回の続き」はここへ着地</span>
+  <h3>4課題横断比較<span class="id">#p4-result</span></h3>
+  <ul>
+    <li>4課題（全社売上／A利益／B売上／C売上）× 最適化「売上・利益」＝<b>8通り</b></li>
+    <li>表示切替：利益で見る／売上で見る</li>
+    <li>カード下「この配置案を選ぶ」＝<b>選択だけ</b>（実行不能なカードには出ない）</li>
+  </ul>
+  <div class="guard"><b>1つ選ぶまで</b>下部の「調整する」は押せない</div>
+</div>
+
+<div class="box lane-p4" style="left:60px;top:645px;width:400px;height:235px">
+  <span class="chip">◀ トップ「作りかけの配置を開く」はここへ着地</span>
+  <h3>作業机（100名）<span class="id">#p4-bench</span></h3>
+  <ul>
+    <li>ドラッグ&amp;ドロップで異動（カードを選んで列をクリックでも可）</li>
+    <li>🔒 個人ロック／並び順（社員番号・貢献度・型別・人件費）／顔写真ON・OFF</li>
+    <li>元に戻す・リセット（出発点＝選んだ最適解へ）</li>
+    <li>この人数配分のまま最適に組み直す<span style="color:var(--warn)">（固定した社員がいると押せない）</span></li>
+    <li>一時保存／一時保存を開く（このブラウザだけ）</li>
+    <li><b>この案を保存</b> → 名前を付けて確定保存（同名は拒否）</li>
+  </ul>
+  <div class="guard">制約違反があっても<b>保存はできる</b>。止まるのは出力側</div>
+</div>
+
+<!-- #p5 -->
+<div class="box lane-p5" style="left:520px;top:250px;width:400px;height:165px">
+  <h3>採用判断：データ取込<span class="id">#p5-import</span></h3>
+  <ul>
+    <li>左＝採用前100名／右＝追加採用10名の2ファイル</li>
+    <li>採用の前提条件（適正人数は100名基準で据え置き）・オプション</li>
+  </ul>
+  <div class="guard"><b>左が先</b>（右だけ先に入れると保留）／既存と社員番号が重複する候補は保留<br>
+    <b>分岐：</b>左CSVに「配置先事業部」列あり → 現行配置が出発点（既存100名は既定で固定）／
+    無ければ 採用前の最適解が出発点（固定は既定で解除）</div>
+</div>
+
+<div class="box lane-p5" style="left:520px;top:455px;width:400px;height:150px">
+  <span class="chip">◀ トップ「前回の続き」はここへ着地</span>
+  <h3>採用前後比較<span class="id">#p5-result</span></h3>
+  <ul>
+    <li>目的（4課題 × 売上・利益＝8通り）を選ぶ</li>
+    <li>選び直すと<b>採用前・採用後の両方を解き直す</b></li>
+    <li>採用ROI（追加人件費コスト／売上増分／利益増分）</li>
+  </ul>
+</div>
+
+<div class="box lane-p5" style="left:520px;top:645px;width:400px;height:235px">
+  <span class="chip">◀ トップ「作りかけの採用案を開く」はここへ着地</span>
+  <h3>作業机（A/B/C＋採用候補プール）<span class="id">#p5-bench</span></h3>
+  <ul>
+    <li>4列目「採用候補」に<b>残した候補は採用しない</b>（＝見送り）</li>
+    <li>「既存100名を固定する」チェック（現行配置が出発点なら既定ON）</li>
+    <li>既存社員は採用候補列に入れられない（理由を表示）</li>
+    <li>元に戻す／リセット／組み直し／一時保存／<b>この案を保存</b>（#p4 と同じ）</li>
+  </ul>
+  <div class="guard">採用前100名で制約を満たす配置が無いと<b>作業机を開けない</b></div>
+</div>
+
+<!-- #p7 -->
+<div class="box lane-out" style="left:300px;top:940px;width:620px;height:230px">
+  <h3>保存した配置案 → 出力<span class="id">#p7（一覧 → 出力の2ステップ）</span></h3>
+  <ul>
+    <li><b>一覧：</b>名前・種別（配置100名／採用判断100＋N名）・課題・全社売上・全社利益・調整名数・状態・保存日時・保存者 → 名前をクリックで出力へ</li>
+    <li><b>出力3種：</b>データCSV（100名ちょうどの案は取り込み直して再計算できる）／告知用PDF（社員番号・氏名・配属先）／エグゼクティブサマリPDF（数字と根拠のみ・個人名なし）</li>
+    <li>PDFはブラウザの印刷ダイアログから「PDFに保存」</li>
+  </ul>
+  <div class="guard"><b>制約違反の案は3つとも押せない</b>（何がどれだけ足りないかを表示）→ 作業机で直して保存し直す。
+    保存済みの案は<b>追記のみ・書き換え不可</b></div>
+  <p style="color:var(--muted)">入口：トップバー「保存配置」／トップ下部のボタン／作業机で保存した直後（自動でここへ）</p>
+</div>
+
+<!-- 右カラム -->
+<div class="box note" style="left:980px;top:130px;width:380px;height:92px">
+  <h3>トップバー（全画面共通）</h3>
+  <ul>
+    <li>ロゴ＝トップへ／「人材登録」＝#p6／「保存配置」＝#p7</li>
+    <li>パンくずで手前のステップへ直接戻れる</li>
+  </ul>
+</div>
+
+<div class="box" style="left:980px;top:260px;width:380px;height:250px">
+  <h3>人材登録<span class="id">#p6</span></h3>
+  <ul>
+    <li>① 名簿CSV（<code>社員番号,氏名,写真ファイル名</code>／写真列は省略可）</li>
+    <li>② 顔写真をまとめて投入（128pxへ自動縮小・1枚10MBまで）</li>
+    <li>突合の警告（写真が無い・名簿に無い等）は出るが<b>保存は止めない</b></li>
+    <li>「マスタに保存する」→ 登録済み一覧に反映</li>
+    <li>一覧で ✎ 氏名・写真の差し替え／✕ 削除／チェックして一括削除</li>
+  </ul>
+  <p style="color:var(--muted)">入口：トップバー／#p4・#p5 の比較画面・作業机にある「人材登録」ボタン。
+    登録内容は<b>次に作業机を開いたとき</b>にカードへ出る</p>
+</div>
+
+<div class="box note" style="left:980px;top:550px;width:380px;height:200px">
+  <h3>リロードしたとき</h3>
+  <ul>
+    <li>取込データ・前提パラメータ・到達点は復元されるが、<b>画面はトップに戻る</b>（勝手に前回位置へ飛ばさない）</li>
+    <li>作業机の手動編集は復元対象外 → 復元は比較結果まで</li>
+    <li>#p7 にいた場合は一覧まで戻して読み直す</li>
+    <li>トップの「前回の続き」「作りかけを開く」は、戻せるものがあるときだけ出る</li>
+  </ul>
+</div>
+
+<div class="box note" style="left:980px;top:790px;width:380px;height:220px">
+  <h3>「一時保存」と「この案を保存」の違い</h3>
+  <ul>
+    <li><b>一時保存</b>＝作りかけの盤面をこのブラウザに置くだけ。タブを閉じても残り、#p4 と #p5 で別々。他の人には見えない</li>
+    <li><b>この案を保存</b>＝サーバへ1件追記。全員が #p7 で見られ、保存者と日時が残る。更新・削除はできない</li>
+    <li>一時保存を開くと「元に戻す」の履歴は引き継がれない</li>
+  </ul>
+</div>
+
+</div>
+</div>
+
+<h2>画面ごとの操作と分岐（一覧）</h2>
+
+<table>
+  <tr><th>画面</th><th class="w">操作</th><th>次に起きること／分岐条件</th></tr>
+
+  <tr><td rowspan="3">トップ #p0</td>
+      <td>配置案の検討を始める ▶</td><td>必ず #p4 のデータ取込から。前回どこまで進んでいても取込に着地する</td></tr>
+  <tr><td>↳ 前回の続き</td><td>取込済みで、かつ前回比較まで進んでいたときだけ表示。計算し直して比較結果へ</td></tr>
+  <tr><td>↳ 作りかけの配置／採用案を開く</td><td>一時保存があるときだけ表示。比較を経由せず作業机へ直行</td></tr>
+
+  <tr><td rowspan="4">#p4 データ取込</td>
+      <td>CSVを投入</td><td>100名・値域・社員番号を検証。エラー0件なら「配置方針を比較する」が有効に</td></tr>
+  <tr><td>ファイルを変更</td><td>取込済みデータは残したままファイル選択だけ開き直す</td></tr>
+  <tr><td>取り込みを解除</td><td>未取込に戻る（前回の到達点も破棄）</td></tr>
+  <tr><td>配置方針を比較する ▶</td><td>4課題を計算して比較画面へ。<b>エラーが1件でもあるとボタン自体が出ない</b></td></tr>
+
+  <tr><td rowspan="3">#p4 4課題横断比較</td>
+      <td>カードの「最適化：売上／利益」</td><td>そのカードだけ指標を切り替えて解き直す（4課題×2＝8通り）</td></tr>
+  <tr><td>この配置案を選ぶ</td><td>選択されるだけで画面は動かない。実行不能なカードには出ない</td></tr>
+  <tr><td>選んだ配置案の人員配置を調整する ▶</td><td>選んだカードの配置を出発点に作業机を開く。<b>未選択だと押せない</b></td></tr>
+
+  <tr><td rowspan="6">#p4／#p5 作業机</td>
+      <td>カードをドラッグ&amp;ドロップ</td><td>その社員を移す。全社売上・充足率・Δがその場で更新。違反時は「次にできること」を表示</td></tr>
+  <tr><td>🔒（カード内）</td><td>その社員を動かせなくする</td></tr>
+  <tr><td>この人数配分のまま最適に組み直す</td><td>人数配分を保ったまま割当だけ解き直す。<b>固定した社員がいると押せない</b>（全員を置き直すため）</td></tr>
+  <tr><td>元に戻す／リセット</td><td>直前の1手を取り消す／出発点の配置へ戻す</td></tr>
+  <tr><td>一時保存／一時保存を開く</td><td>盤面をこのブラウザに置く／戻す。下書きが無いときは「開く」が押せない</td></tr>
+  <tr><td>この案を保存</td><td>名前を入力 → 保存。同名があると拒否。成功すると #p7 の出力画面へ直行（制約違反でも保存はできる）</td></tr>
+
+  <tr><td rowspan="3">#p5 データ取込</td>
+      <td>採用前100名を投入</td><td>「配置先事業部」列があれば<b>現行配置が出発点</b>（既存100名は既定で固定）。無ければ採用前の最適解が出発点</td></tr>
+  <tr><td>追加10名を投入</td><td>左が未取込だと保留。既存の社員番号と重複しても保留</td></tr>
+  <tr><td>採用前後比較を見る ▶</td><td>選んだ目的で採用前・採用後を解いて比較画面へ</td></tr>
+
+  <tr><td>#p5 採用前後比較</td>
+      <td>目的（8通り）を選び直す</td><td>採用前・採用後の両方を解き直して並べ替える。ROI表も更新</td></tr>
+
+  <tr><td rowspan="2">#p7 保存した配置案</td>
+      <td>一覧から1件を開く</td><td>出力画面へ。保存直後だけ3つの出力の違いを説明する案内が出る</td></tr>
+  <tr><td>CSV／告知用PDF／サマリPDF</td><td><b>制約違反の案は3つとも押せない</b>。不足の内訳を表示し、作業机で直して保存し直す運用</td></tr>
+
+  <tr><td>#p6 人材登録</td>
+      <td>名簿CSV＋顔写真 → マスタに保存する</td><td>突合の警告があっても保存できる（計算には影響しないため）。反映は次に作業机を開いたとき</td></tr>
+</table>
+
+<h2>この図の読み方（設計上の決めごと）</h2>
+<ul>
+  <li><b>入口は必ず利用者が選ぶ。</b>リロード後も前回位置へ自動で飛ばさず、トップで「始める（取込から）」「前回の続き」「作りかけを開く」を選ばせる。</li>
+  <li><b>選択と実行を分ける。</b>比較画面のカードは選ぶだけ、画面が動くのは下部の実行ボタンだけ。</li>
+  <li><b>止めるのは出力のときだけ。</b>制約違反でも記録としては保存でき、CSV・PDFの出力で止める。</li>
+  <li><b>保存した配置案は追記のみ。</b>直したい場合は作業机で直して別名で保存し直す。</li>
+</ul>
+
+</body>
+</html>

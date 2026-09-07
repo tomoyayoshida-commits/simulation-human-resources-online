@@ -31,6 +31,7 @@ import { taskLabel, UNIT_IDS, UNIT_LABEL } from './constants.ts'
 import { createDragController } from './workbenchDnd.ts'
 import { deltaText, escapeAttr, escapeHtml, oku, pill, shortDateTime, signed } from './format.ts'
 import {
+  buildAbilityBarsHtml,
   buildAlertHtml,
   buildCardFaceHtml,
   buildConstraintNoteHtml,
@@ -44,6 +45,7 @@ import {
   buildSortOptionsHtml,
   buildUnitColumnHtml,
   DRAG_BADGE_HTML,
+  type AbilityShade,
   type SaveFormIds,
 } from './workbenchView.ts'
 import { $, setHtml } from './dom.ts'
@@ -81,6 +83,12 @@ export interface WorkbenchViewData {
    * 俯瞰したいときに従来の密度へ戻せるようにしてある。
    */
   showPhotos?: boolean
+  /**
+   * 能力バーを出すか（docs/ability-bars-plan.md §3.3）。既定は true。
+   * 貢献度は重み付き合成値で初見では検算できないため、既定ONで内訳が見える状態にしておく。
+   * 出すとカード1枚が高くなり列に同時に見える枚数が減るので、俯瞰したいときはOFFにできる。
+   */
+  showAbilities?: boolean
   /**
    * 保存時の命名フォームの状態（docs/export-plan.md §4.8）。
    * `null` なら閉じている。文字列ならその値を初期値にして開いている。
@@ -128,7 +136,13 @@ function buildHeaderHtml(
     ${buildNextStepHtml(result.feasible, evaluation.minHeadcountViolations)}`
 }
 
-function buildCardHtml(c: WorkbenchCard, selectedEmployeeId: string | null, showPhotos: boolean): string {
+function buildCardHtml(
+  c: WorkbenchCard,
+  selectedEmployeeId: string | null,
+  showPhotos: boolean,
+  /** 能力バーの濃淡（docs/ability-bars-plan.md §3）。null なら能力バー自体を出さない */
+  abilityShade: AbilityShade | null,
+): string {
   const others = UNIT_IDS.filter((u) => u !== c.unit)
   const otherText = others.map((u) => `${u} ${c.contributions[u].toFixed(2)}`).join(' ／ ')
   const selected = c.employee.id === selectedEmployeeId
@@ -142,6 +156,7 @@ function buildCardHtml(c: WorkbenchCard, selectedEmployeeId: string | null, show
         <span class="wb-card-type">${c.type}</span>
         <div class="wb-card-main">${c.contributions[c.unit].toFixed(2)}</div>
         <div class="wb-card-others">${otherText}</div>
+        ${abilityShade ? buildAbilityBarsHtml(c.employee, abilityShade) : ''}
       </div>
     </div>`
 }
@@ -151,6 +166,7 @@ function buildActionsHtml(
   evaluation: WhatIfEvaluation,
   sortKey: WorkbenchSortKey,
   showPhotos: boolean,
+  showAbilities: boolean,
   savingTitle: string | null,
   saveError: string | null,
   /** 一時保存の状態（draftStore.ts）。savedAt が null なら下書き無し */
@@ -178,6 +194,7 @@ function buildActionsHtml(
       <div class="wb-actions-left">
         <label class="wb-sort-label">並び順：<select id="wb-sort" class="wb-sort">${sortOptionsHtml}</select></label>
         <label class="wb-photo-label"><input type="checkbox" id="wb-show-photos"${showPhotos ? ' checked' : ''}>顔写真</label>
+        <label class="wb-photo-label" title="カードに4能力値のバーを出す。濃い部分がこの事業部での寄与"><input type="checkbox" id="wb-show-abilities"${showAbilities ? ' checked' : ''}>能力値</label>
       </div>
       <div class="wb-actions-right">
         <button type="button" class="btn secondary" data-wb-action="undo"${state.history.length === 0 ? ' disabled' : ''}>元に戻す</button>
@@ -203,6 +220,8 @@ export function buildWorkbenchHtml(data: WorkbenchViewData): string {
   // 既定はON（§8-5）。この機能の目的が「誰かを分かるようにする」ことなので、
   // 既定でOFFだと機能に気づかれないまま終わる。
   const showPhotos = data.showPhotos ?? true
+  // 既定はON（docs/ability-bars-plan.md §3.3）。顔写真と同じ理由で、既定OFFだと気づかれない。
+  const showAbilities = data.showAbilities ?? true
   const evaluation = evaluate(state)
   // カードの組み立て（100名×3事業部の貢献度）と並び替えは事業部に依存しないので、
   // 列ごとに作り直さず1回で済ませる（従来は3列それぞれで buildWorkbenchCards を呼び直していた）。
@@ -217,7 +236,10 @@ export function buildWorkbenchHtml(data: WorkbenchViewData): string {
       minHeadcount: state.params.minHeadcount[u],
       cardsHtml: sortedCards
         .filter((c) => c.unit === u)
-        .map((c) => buildCardHtml(c, selectedEmployeeId, showPhotos))
+        // 濃淡の重みは定数ではなく現在の前提パラメータから取る（オプションで変更可能・§1）
+        .map((c) =>
+          buildCardHtml(c, selectedEmployeeId, showPhotos, showAbilities ? { unit: u, weights: state.params.weights[u] } : null),
+        )
         .join(''),
     }),
   ).join('')
@@ -225,7 +247,7 @@ export function buildWorkbenchHtml(data: WorkbenchViewData): string {
     buildAlertHtml(alertText, ALERT_DISMISS_ATTR) +
     buildHeaderHtml(state, evaluation) +
     `<div class="wb-board">${columnsHtml}</div>` +
-    buildActionsHtml(state, evaluation, sortKey, showPhotos, data.savingTitle ?? null, data.saveError ?? null, {
+    buildActionsHtml(state, evaluation, sortKey, showPhotos, showAbilities, data.savingTitle ?? null, data.saveError ?? null, {
       savedAt: data.draftSavedAt ?? null,
       note: data.draftNote ?? null,
     }) +
@@ -244,6 +266,8 @@ const view: {
   alertKind: 'revenue' | 'headcount' | null
   /** 顔写真サムネイルの表示（§4.6）。作業机を開き直しても保つ（毎回切り直させない） */
   showPhotos: boolean
+  /** 能力バーの表示（ability-bars-plan.md §3.3）。showPhotos と同じく開き直しても保つ */
+  showAbilities: boolean
   /** 保存時の命名フォーム（export-plan.md §4.8）。null なら閉じている */
   savingTitle: string | null
   /** 保存フォーム直下に出す保存失敗の理由（同名衝突・通信失敗）。null なら非表示 */
@@ -263,6 +287,7 @@ const view: {
   alertText: null,
   alertKind: null,
   showPhotos: true,
+  showAbilities: true,
   savingTitle: null,
   saveError: null,
   draftSavedAt: null,
@@ -284,7 +309,7 @@ function clearAlertIfResolved(evaluation: WhatIfEvaluation): void {
 
 function render(): void {
   if (!view.state) return
-  setHtml('wb-root', buildWorkbenchHtml({ state: view.state, sortKey: view.sortKey, selectedEmployeeId: view.selectedEmployeeId, alertText: view.alertText, showPhotos: view.showPhotos, savingTitle: view.savingTitle, saveError: view.saveError, draftSavedAt: view.draftSavedAt, draftNote: view.draftNote }))
+  setHtml('wb-root', buildWorkbenchHtml({ state: view.state, sortKey: view.sortKey, selectedEmployeeId: view.selectedEmployeeId, alertText: view.alertText, showPhotos: view.showPhotos, showAbilities: view.showAbilities, savingTitle: view.savingTitle, saveError: view.saveError, draftSavedAt: view.draftSavedAt, draftNote: view.draftNote }))
 }
 
 /** #p4 のカードから遷移してきた初期状態で作業机を開く（機能15・§4.1）。 */
@@ -478,6 +503,11 @@ function handleChange(e: Event): void {
   const target = e.target
   if (target instanceof HTMLInputElement && target.id === 'wb-show-photos') {
     view.showPhotos = target.checked
+    render()
+    return
+  }
+  if (target instanceof HTMLInputElement && target.id === 'wb-show-abilities') {
+    view.showAbilities = target.checked
     render()
     return
   }

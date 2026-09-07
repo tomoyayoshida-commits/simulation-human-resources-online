@@ -4,7 +4,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { buildWorkbenchHtml } from '../src/renderer/workbenchPanel.ts'
-import { computeSimulationResult } from '../src/renderer/calcEngine.ts'
+import { computeSimulationResult, contribution } from '../src/renderer/calcEngine.ts'
 import { DEFAULT_PARAMS } from '../src/renderer/constants.ts'
 import type { WorkbenchState } from '../src/renderer/workbench.ts'
 import type { Employee, UnitId } from '../src/renderer/types.ts'
@@ -172,4 +172,63 @@ test('buildWorkbenchHtml: 最低人数を割った事業部に警告表示が出
   const html = buildWorkbenchHtml({ state: violating, sortKey: 'id', selectedEmployeeId: null, alertText: null })
   assert.ok(html.includes('最低人数割れ'))
   assert.ok(html.includes('⚠ 最低30名'))
+})
+
+// ---- 能力バー（docs/ability-bars-plan.md §5 受入基準）----
+
+/** 能力バーの (バー全長, 濃い部分の割合) を出現順に拾う。1枚のカードにつき4組。 */
+function abilityBars(html: string): { fill: number; part: number | null }[] {
+  return [...html.matchAll(/wb-abil-fill" style="width:([\d.]+)%;">(?:<b class="wb-abil-part" style="width:([\d.]+)%)?/g)].map(
+    (m) => ({ fill: Number(m[1]), part: m[2] === undefined ? null : Number(m[2]) }),
+  )
+}
+
+test('buildWorkbenchHtml: 既定で能力バーが出て、幅が能力値と重みに一致する（受入基準1〜3）', () => {
+  const html = buildWorkbenchHtml({ state: makeState(), sortKey: 'id', selectedEmployeeId: null, alertText: null })
+  const bars = abilityBars(html).slice(0, 4)
+  // fixture は全員 営70/管65/開60/育55、先頭カードはA事業部（重み .45/.35/.10/.10）
+  assert.deepEqual(
+    bars,
+    [
+      { fill: 70, part: 45 },
+      { fill: 65, part: 35 },
+      { fill: 60, part: 10 },
+      { fill: 55, part: 10 },
+    ],
+  )
+})
+
+// 案③の要：濃い部分の絶対長を4本足すと貢献度になる（重みの合計が1.00のため）。
+// この対応が崩れると「バーを見れば貢献度が分かる」という説明そのものが嘘になるので、
+// 幅の一致（上のテスト）とは別に、合計側からも押さえる。
+test('buildWorkbenchHtml: 濃い部分の長さの合計が貢献度と一致する（§3.1）', () => {
+  const state = makeState()
+  const html = buildWorkbenchHtml({ state, sortKey: 'id', selectedEmployeeId: null, alertText: null })
+  const bars = abilityBars(html).slice(0, 4)
+  const sum = bars.reduce((s, b) => s + (b.fill * (b.part ?? 0)) / 100, 0)
+  assert.equal(sum, contribution(state.roster[0], 'A', state.params))
+})
+
+test('buildWorkbenchHtml: 濃淡は DEFAULT_PARAMS ではなく state.params.weights を見る（受入基準3）', () => {
+  const params = {
+    ...DEFAULT_PARAMS,
+    weights: { ...DEFAULT_PARAMS.weights, A: { sales: 0.7, mgmt: 0.1, dev: 0.1, training: 0.1 } },
+  }
+  const state = makeState({ params })
+  const html = buildWorkbenchHtml({ state, sortKey: 'id', selectedEmployeeId: null, alertText: null })
+  const bars = abilityBars(html).slice(0, 4)
+  assert.deepEqual(bars.map((b) => b.part), [70, 10, 10, 10])
+  const sum = bars.reduce((s, b) => s + (b.fill * (b.part ?? 0)) / 100, 0)
+  assert.equal(sum, contribution(state.roster[0], 'A', params))
+})
+
+test('buildWorkbenchHtml: showAbilities:false でバーが1本も出ない（受入基準5）', () => {
+  const html = buildWorkbenchHtml({
+    state: makeState(),
+    sortKey: 'id',
+    selectedEmployeeId: null,
+    alertText: null,
+    showAbilities: false,
+  })
+  assert.ok(!html.includes('wb-abil'))
 })

@@ -48,7 +48,7 @@ function errorReason(e: ValidationError): string {
   const expected = String(e.expected)
   const actual = escapeHtml(e.actual)
   if (e.column === '(件数)') {
-    return `取込件数が${escapeHtml(e.expected)}に一致しません（実際は${actual}件）。ファイルの行数（ヘッダー除く）を確認してください。`
+    return `取込件数が受け入れ範囲（${escapeHtml(e.expected)}）から外れています（実際は${actual}件）。ファイルの行数（ヘッダー除く）を確認してください。`
   }
   if (e.column === '社員番号') {
     if (e.actual === '(空)') return `${where}の社員番号が空です。社員番号は社員を一意に識別するキーとして使われるため必須です。`
@@ -184,7 +184,7 @@ export function renderImportReport(employees: Employee[] | null, errors: Validat
   setHtml(
     'validation-summary',
     `
-      <div class="stat"><div class="k">取込件数</div><div class="v">${count} / 100</div></div>
+      <div class="stat"><div class="k">取込件数</div><div class="v">${count}</div></div>
       <div class="stat"><div class="k">エラー件数</div><div class="v" style="color:${errors.length > 0 ? 'var(--critical)' : 'inherit'};">${errors.length}</div></div>
       <div class="stat"><div class="k">判定</div><div class="v">${ok ? pill('good', '取込OK') : pill('crit', '取込を保留')}</div></div>`,
   )

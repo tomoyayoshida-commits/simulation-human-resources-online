@@ -12,7 +12,7 @@ body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;backgrou
 .topbar[hidden]{display:none;}
 /* 中身を .wrap（max-width:1040 / 左右padding:24）と同じ土台に載せる＝トップバー右端と本文右端が一致 */
 .topbar-inner{max-width:1040px;margin:0 auto;padding:0 24px;display:flex;align-items:center;gap:4px;}
-.topbar .brand-icon{height:60px;width:auto;object-fit:contain;flex-shrink:0;padding:10px 18px 10px 0;border-right:1px solid var(--border);cursor:pointer;}
+.topbar .brand-icon{height:60px;width:auto;object-fit:contain;flex-shrink:0;padding:10px 18px 10px 0;border-right:1px solid var(--border);}
 .detail-summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--text-secondary);}
 .detail-summary::marker{color:var(--text-muted);}
 .wb-detail{margin:4px 0 10px;}
@@ -266,21 +266,6 @@ tr.whatif-moved{background:#fef3dc;}
 .wb-card-photo{width:56px;height:56px;flex:0 0 56px;border-radius:8px;object-fit:cover;background:var(--border);user-select:none;}
 .wb-card-photo-none{display:flex;align-items:center;justify-content:center;color:#fff;font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;opacity:.75;}
 .wb-card-name{font-weight:400;color:var(--text-secondary);margin-left:4px;}
-/* 能力バー（docs/ability-bars-plan.md §3.1）。トラック全体が能力値100に対応し、.wb-abil-fill の幅が
-   能力値、その中の .wb-abil-part の幅が事業部の重み。重みの合計が1.00なので、濃い部分の絶対長を
-   4本足すと貢献度（=.wb-card-main の数字）に一致する。この対応が案③の要なので、
-   トラック幅・fill幅・part幅のどれかに余白や最小幅を入れると成り立たなくなる。
-   顔写真と同様カード1枚が高くなるため、#wb-show-abilities / #hwb-show-abilities でOFFにできる。 */
-.wb-abil{margin-top:3px;display:flex;flex-direction:column;gap:2px;}
-.wb-abil-row{display:flex;align-items:center;gap:4px;font-size:9.5px;color:var(--text-muted);font-variant-numeric:tabular-nums;}
-.wb-abil-key{flex:0 0 12px;}
-.wb-abil-value{flex:0 0 16px;text-align:right;}
-.wb-abil-track{flex:1;height:5px;background:var(--grid);border-radius:3px;overflow:hidden;}
-.wb-abil-fill{display:block;height:100%;background:var(--baseline);border-radius:3px;position:relative;}
-.wb-abil-part{position:absolute;left:0;top:0;height:100%;display:block;border-radius:3px 0 0 3px;}
-/* 未採用の候補（#p5 プール列）は所属が無く重みが定まらないので濃淡を付けない（§3.2）。
-   濃淡なしのバーが「寄与ゼロ」に見えないよう、淡色一色ではなく中間色で塗る */
-.wb-abil-plain .wb-abil-fill{background:var(--baseline);opacity:.75;}
 .wb-actions{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin:14px 0 6px;}
 .wb-actions-left,.wb-actions-right{display:flex;align-items:center;flex-wrap:wrap;gap:8px;}
 .wb-sort-label{font-size:12px;color:var(--text-secondary);margin-right:4px;}

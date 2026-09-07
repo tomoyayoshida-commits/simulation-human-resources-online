@@ -27,7 +27,7 @@ import { normalizePhoto } from './photo.ts'
 import { $ } from './dom.ts'
 import { escapeHtml } from './format.ts'
 import { completeRedirectSignIn, signInWithGoogle, signOutUser, watchAuthState } from './auth.ts'
-import { deleteProfile, getProfiles, loadProfiles, saveProfiles } from './profileStore.ts'
+import { deleteProfile, deleteProfiles, getProfiles, loadProfiles, saveProfiles } from './profileStore.ts'
 
 // ---- セッション復元 ----
 // リロード直後の取込データ・前提パラメータ・到達点を戻す。作業机(bench)の手動編集は対象外のため
@@ -74,8 +74,11 @@ const profileState: { rows: ProfileRow[] | null; photos: LoadedPhoto[] } = { row
  */
 let profileEditing: ProfileEditing | null = null
 
+/** 一括削除のためチェックが付いている社員番号（②の一覧限定・#p6を出るたびクリアはしない）。 */
+const profileSelected = new Set<string>()
+
 function renderRegistered(): void {
-  renderRegisteredProfiles(getProfiles(), profileEditing)
+  renderRegisteredProfiles(getProfiles(), profileEditing, profileSelected)
 }
 
 /** 警告文で列挙する名前の上限。全件出すと100件のリストで画面が埋まる。 */
@@ -209,15 +212,24 @@ function initProfileAdmin(): void {
     void deleteProfile(id)
       .then(() => {
         if (profileEditing?.id === id) profileEditing = null
+        profileSelected.delete(id)
         renderRegistered()
       })
       .catch((err: unknown) => window.alert(`削除に失敗しました。${err instanceof Error ? err.message : String(err)}`))
   })
 
-  // 編集フォームの写真差し替え。登録時と同じく選んだ時点で128pxへ縮小する（§4.5）
+  // 編集フォームの写真差し替え／登録済み一覧のチェックボックス（一括削除の選択）
   $('profile-registered')?.addEventListener('change', (e) => {
     const input = e.target
-    if (!(input instanceof HTMLInputElement) || input.id !== 'profile-edit-photo') return
+    if (!(input instanceof HTMLInputElement)) return
+    const checkId = input.dataset.profileCheck
+    if (checkId) {
+      if (input.checked) profileSelected.add(checkId)
+      else profileSelected.delete(checkId)
+      renderRegistered()
+      return
+    }
+    if (input.id !== 'profile-edit-photo') return
     const file = input.files?.[0]
     if (!file || !profileEditing) return
     const id = profileEditing.id
@@ -229,10 +241,42 @@ function initProfileAdmin(): void {
       .catch((err: unknown) => window.alert(`写真を読み込めませんでした。${err instanceof Error ? err.message : String(err)}`))
   })
 
+  // 全選択：登録済み全員（編集中の1名は除く）を選択／解除する
+  $('profile-select-all')?.addEventListener('change', (e) => {
+    const checked = (e.target as HTMLInputElement).checked
+    profileSelected.clear()
+    if (checked) {
+      for (const id of Object.keys(getProfiles())) {
+        if (id !== profileEditing?.id) profileSelected.add(id)
+      }
+    }
+    renderRegistered()
+  })
+
+  // 選択したものを一括削除する
+  $('profile-bulk-delete')?.addEventListener('click', () => {
+    const ids = Array.from(profileSelected)
+    if (ids.length === 0) return
+    if (!window.confirm(`選択した${ids.length}件のプロフィールを削除します。よろしいですか？`)) return
+    const btn = $('profile-bulk-delete') as HTMLButtonElement | null
+    if (btn) btn.disabled = true
+    void deleteProfiles(ids)
+      .then(() => {
+        if (profileEditing && ids.includes(profileEditing.id)) profileEditing = null
+        profileSelected.clear()
+        renderRegistered()
+      })
+      .catch((err: unknown) => {
+        window.alert(`削除に失敗しました。${err instanceof Error ? err.message : String(err)}`)
+        renderRegistered()
+      })
+  })
+
   // #p6 に入るたびに最新のマスタを出す（他の人が別ブラウザで登録した分を拾う）
   document.querySelectorAll<HTMLElement>('[data-go="p6"]').forEach((el) => {
     el.addEventListener('click', () => {
       profileEditing = null
+      profileSelected.clear()
       void loadProfiles(true).then(() => renderRegistered())
     })
   })

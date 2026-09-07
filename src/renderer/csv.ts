@@ -123,10 +123,11 @@ function resolveColumns(header: string[]): {
 /**
  * CSVテキストを取り込み、Employee[] とエラーを返す（設計書§7・§8）。
  * 構造・カラム・件数・範囲のすべてを検査し、1件でもエラーがあれば employees は null。
+ * maxCount は受け入れる行数の上限（1件以上・maxCount以下。2026-09-07 合意）。
  */
 export function importEmployees(
   text: string,
-  expectedCount: number,
+  maxCount: number,
 ): { employees: Employee[] | null; errors: ValidationError[] } {
   const cleaned = stripBom(text)
   const table = parseCsv(cleaned)
@@ -173,7 +174,7 @@ export function importEmployees(
   }
 
   // 範囲・件数チェック（§7）
-  const validationErrors = validateEmployees(rows, expectedCount)
+  const validationErrors = validateEmployees(rows, maxCount)
 
   const allErrors = [...structuralErrors, ...validationErrors]
   if (allErrors.length > 0) {

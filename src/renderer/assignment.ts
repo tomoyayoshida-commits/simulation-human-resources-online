@@ -21,6 +21,79 @@ interface Edge {
   rev: number
 }
 
+/**
+ * Dijkstra の取り出し用二分ヒープ（遅延削除）。キーは (dist, ノード番号) の辞書式。
+ *
+ * 従来の O(V^2) 線形探索は「dist 最小、同値ならノード番号最小」を選んでいた。
+ * 同じ順序をヒープの比較関数に持たせているため、取り出し順も辺の緩和順も一致し、
+ * 増加路の選択（＝割当結果）は変わらない（結果はビット一致）。
+ * 100名では V^2 が小さく差が出なかったが、200名では 1 候補あたり V^2×V ≒ 830万回の
+ * 走査になり支配的だったため置き換える。
+ */
+class NodeHeap {
+  private ds: number[] = []
+  private ns: number[] = []
+  /** 直前の pop() が取り出した dist（遅延削除の判定に使う） */
+  poppedDist = 0
+
+  get size(): number {
+    return this.ns.length
+  }
+
+  clear(): void {
+    this.ds.length = 0
+    this.ns.length = 0
+  }
+
+  private less(i: number, j: number): boolean {
+    return this.ds[i] < this.ds[j] || (this.ds[i] === this.ds[j] && this.ns[i] < this.ns[j])
+  }
+
+  private swap(i: number, j: number): void {
+    const d = this.ds[i]
+    this.ds[i] = this.ds[j]
+    this.ds[j] = d
+    const v = this.ns[i]
+    this.ns[i] = this.ns[j]
+    this.ns[j] = v
+  }
+
+  push(d: number, v: number): void {
+    this.ds.push(d)
+    this.ns.push(v)
+    let i = this.ns.length - 1
+    while (i > 0) {
+      const p = (i - 1) >> 1
+      if (!this.less(i, p)) break
+      this.swap(i, p)
+      i = p
+    }
+  }
+
+  pop(): number {
+    const top = this.ns[0]
+    this.poppedDist = this.ds[0]
+    const lastD = this.ds.pop() as number
+    const lastN = this.ns.pop() as number
+    const size = this.ns.length
+    if (size > 0) {
+      this.ds[0] = lastD
+      this.ns[0] = lastN
+      let i = 0
+      for (;;) {
+        const l = i * 2 + 1
+        if (l >= size) break
+        const r = l + 1
+        const c = r < size && this.less(r, l) ? r : l
+        if (!this.less(c, i)) break
+        this.swap(c, i)
+        i = c
+      }
+    }
+    return top
+  }
+}
+
 class MinCostFlow {
   private adj: Edge[][]
 
@@ -65,23 +138,20 @@ class MinCostFlow {
     const prevV = new Array<number>(n)
     const prevE = new Array<number>(n)
     const done = new Array<boolean>(n)
+    const heap = new NodeHeap()
 
     for (;;) {
       dist.fill(Infinity)
       done.fill(false)
       dist[source] = 0
+      heap.clear()
+      heap.push(0, source)
 
-      // O(V^2) Dijkstra（V が小さいため十分高速）
+      // ヒープ Dijkstra（取り出し順は線形探索版と同一。NodeHeap のコメント参照）
       for (;;) {
-        let u = -1
-        let best = Infinity
-        for (let i = 0; i < n; i++) {
-          if (!done[i] && dist[i] < best) {
-            best = dist[i]
-            u = i
-          }
-        }
-        if (u === -1) break
+        if (heap.size === 0) break
+        const u = heap.pop()
+        if (done[u] || heap.poppedDist > dist[u]) continue
         done[u] = true
         const du = dist[u]
         const hu = h[u]
@@ -96,6 +166,7 @@ class MinCostFlow {
             dist[e.to] = nd
             prevV[e.to] = u
             prevE[e.to] = i
+            heap.push(nd, e.to)
           }
         }
       }

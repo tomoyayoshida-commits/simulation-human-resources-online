@@ -89,3 +89,17 @@ export async function deleteProfile(id: string): Promise<void> {
   delete next[id]
   cache = next
 }
+
+/** 複数名を一括削除する（登録済み一覧の一括削除）。deleteProfile と同じくバッチ上限に備えて分割する。 */
+export async function deleteProfiles(ids: string[]): Promise<void> {
+  for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+    const batch = writeBatch(db)
+    for (const id of ids.slice(i, i + BATCH_SIZE)) {
+      batch.delete(doc(db, COLLECTION, id))
+    }
+    await batch.commit()
+  }
+  const next = { ...cache }
+  for (const id of ids) delete next[id]
+  cache = next
+}

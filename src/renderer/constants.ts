@@ -87,6 +87,42 @@ export const DEFAULT_PARAMS: SimParams = {
   costMultiplier: COST_MULTIPLIER,
 }
 
+/**
+ * 適正人数・最低人数の基準になる名簿人数。§6の A40/B35/C25・A30/B20/C10 は
+ * 「100名のときの値」であって絶対値ではない、というのが standardParamsFor の前提。
+ */
+export const BASE_HEADCOUNT = 100
+
+/** 取込の上限件数（2026-09-07 合意で「ちょうどN件」から「1件以上・上限以下」へ変更）。 */
+export const MAX_EMPLOYEE_COUNT = 200
+export const MAX_HIRING_COUNT = 20
+
+/**
+ * 名簿人数に合わせて適正人数・最低人数を比例配分した「標準の前提パラメータ」を返す（2026-09-07 合意）。
+ *
+ * 比例配分にしないと、200名を100名基準の適正人数で流したとき全事業部が常時2倍の充足率になり、
+ * 過剰補正0.8に張り付いて配分の良し悪しが見えなくなる（候補数も3321→10011に増える）。
+ *
+ * totalCount=100 では round(40×1)=40 のように現行値と完全に一致するため、既存の結果は動かない。
+ * 適正人数は充足率の分母なので0にできず、下限1で丸める。
+ *
+ * 採用判断(#p5)では**採用前の人数**を渡す。§7-4「採用後110名でも適正人数は100名基準で据え置き」を
+ * 人数によらず成り立たせるため、採用ぶんは基準に含めない。
+ */
+export function standardParamsFor(totalCount: number): SimParams {
+  const ratio = totalCount / BASE_HEADCOUNT
+  const scale = (v: Record<UnitId, number>, floor: number): Record<UnitId, number> => ({
+    A: Math.max(floor, Math.round(v.A * ratio)),
+    B: Math.max(floor, Math.round(v.B * ratio)),
+    C: Math.max(floor, Math.round(v.C * ratio)),
+  })
+  return {
+    ...DEFAULT_PARAMS,
+    optimalHeadcount: scale(OPTIMAL_HEADCOUNT, 1),
+    minHeadcount: scale(MIN_HEADCOUNT, 0),
+  }
+}
+
 // 人件費(1〜20)は百万円単位、売上は億円単位のため、コスト計算時に百万円→億円へ換算する。
 // 実データ検証で判明：この換算なしだとコスト合計が売上の2桁上になり、利益が常に大幅な赤字になる
 // （例：人件費合計727.4×3=2182.2 vs 全社売上60前後）。÷100すれば桁が揃い、利益が現実的な値になる。

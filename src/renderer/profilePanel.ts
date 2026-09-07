@@ -51,7 +51,7 @@ function faceHtml(photo: string): string {
     : '<span class="profile-face profile-face-none">写真なし</span>'
 }
 
-function profileCardHtml(p: EmployeeProfile, deletable: boolean): string {
+function profileCardHtml(p: EmployeeProfile, deletable: boolean, selected: Set<string>): string {
   // 削除できる＝登録済み一覧。そこでだけ1名ずつの編集に入れる（①37注記/②45）
   const actions = deletable
     ? `<div class="profile-actions">
@@ -59,8 +59,12 @@ function profileCardHtml(p: EmployeeProfile, deletable: boolean): string {
         <button type="button" class="profile-del" data-profile-del="${escapeAttr(p.id)}" aria-label="${escapeAttr(p.id)}を削除">✕</button>
       </div>`
     : ''
+  const checkbox = deletable
+    ? `<input type="checkbox" class="profile-check" data-profile-check="${escapeAttr(p.id)}" ${selected.has(p.id) ? 'checked' : ''} aria-label="${escapeAttr(p.id)}を選択">`
+    : ''
   return `
     <div class="profile-item">
+      ${checkbox}
       ${faceHtml(p.photo)}
       <div class="profile-meta">
         <div class="profile-id">${escapeHtml(p.id)}</div>
@@ -128,7 +132,7 @@ export function renderProfileDraft(draft: ProfileDraft | null): void {
           .map((w) => `<li>${escapeHtml(w)}</li>`)
           .join('')}</ul></div>`,
   )
-  setHtml('profile-preview', draft.profiles.map((p) => profileCardHtml(p, false)).join(''))
+  setHtml('profile-preview', draft.profiles.map((p) => profileCardHtml(p, false, new Set())).join(''))
   previewCard?.removeAttribute('hidden')
   if (saveBtn) saveBtn.disabled = draft.profiles.length === 0
 }
@@ -139,13 +143,28 @@ export interface ProfileEditing {
   photo: string | null
 }
 
-/** マスタに登録済みの一覧（1名だけの差し替え・削除の起点）。 */
-export function renderRegisteredProfiles(profiles: ProfileMap, editing: ProfileEditing | null = null): void {
+/** マスタに登録済みの一覧（1名だけの差し替え・削除・複数選択での一括削除の起点）。 */
+export function renderRegisteredProfiles(
+  profiles: ProfileMap,
+  editing: ProfileEditing | null = null,
+  selected: Set<string> = new Set(),
+): void {
   const list = Object.values(profiles).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
   setHtml(
     'profile-registered',
     list.length === 0
       ? '<p class="note">まだ登録がありません。上の①②から登録してください。</p>'
-      : list.map((p) => (p.id === editing?.id ? profileEditHtml(p, editing.photo) : profileCardHtml(p, true))).join(''),
+      : list.map((p) => (p.id === editing?.id ? profileEditHtml(p, editing.photo) : profileCardHtml(p, true, selected))).join(''),
   )
+  const countEl = $('profile-select-count')
+  if (countEl) countEl.textContent = `${selected.size}件選択中`
+  const delBtn = $('profile-bulk-delete') as HTMLButtonElement | null
+  if (delBtn) delBtn.disabled = selected.size === 0
+  const allBtn = $('profile-select-all') as HTMLInputElement | null
+  if (allBtn) allBtn.checked = list.length > 0 && selected.size === list.length
+  const bar = $('profile-bulk-bar')
+  if (bar) {
+    if (list.length === 0) bar.setAttribute('hidden', '')
+    else bar.removeAttribute('hidden')
+  }
 }

@@ -10,7 +10,27 @@ import {
   classifyType,
   computeSimulationResult,
 } from '../src/renderer/calcEngine.ts'
+import { BASE_HEADCOUNT, DEFAULT_PARAMS, UNIT_IDS, standardParamsFor } from '../src/renderer/constants.ts'
 import type { Employee, UnitId } from '../src/renderer/types.ts'
+
+// 適正人数・最低人数の人数比スケール（2026-09-07 合意・constants.standardParamsFor）
+test('standardParamsFor: 100名では DEFAULT_PARAMS と完全に一致する（既存結果を動かさない）', () => {
+  assert.deepEqual(standardParamsFor(BASE_HEADCOUNT), DEFAULT_PARAMS)
+})
+
+test('standardParamsFor: 200名で適正・最低人数が2倍になる', () => {
+  const p = standardParamsFor(200)
+  assert.deepEqual(p.optimalHeadcount, { A: 80, B: 70, C: 50 })
+  assert.deepEqual(p.minHeadcount, { A: 60, B: 40, C: 20 })
+  // 売上モデル側（基準売上・全社売上下限）は人数で変えない
+  assert.deepEqual(p.baseRevenue, DEFAULT_PARAMS.baseRevenue)
+  assert.equal(p.prevYearRevenue, DEFAULT_PARAMS.prevYearRevenue)
+})
+
+test('standardParamsFor: 適正人数は充足率の分母なので1を下回らない', () => {
+  const p = standardParamsFor(1)
+  for (const u of UNIT_IDS) assert.ok(p.optimalHeadcount[u] >= 1, `${u} の適正人数が0以下`)
+})
 
 test('contribution: 手計算値と一致', () => {
   const e: Employee = { id: 'X', sales: 80, mgmt: 60, dev: 40, training: 20, cost: 10 }

@@ -1,4 +1,4 @@
-// 採用判断(#p5)の配線：採用前100名＋追加10名の取込 → 採用前後比較 → 採用判断の作業机（機能15b）。
+// 採用判断(#p5)の配線：採用前の社員データ＋追加採用データの取込 → 採用前後比較 → 採用判断の作業机（機能15b）。
 //
 // #p4 の取込データは再利用しない独立画面のため、取込欄も状態も専用に持つ（appState.ts）。
 // 取込UIは importPanel.ts、比較表示は compareHiring.ts、作業机は hiringWorkbenchPanel.ts が持つ。
@@ -8,6 +8,7 @@ import { p5Params, state } from './appState.ts'
 import { go, showStep, updateResumeButtons, updateP5DraftResumeButton } from './navigation.ts'
 import { saveSnapshot, type SessionSnapshot } from './session.ts'
 import { importEmployees, mergeEmployees, parseAssignmentColumn } from './csv.ts'
+import { BASE_HEADCOUNT, MAX_EMPLOYEE_COUNT, MAX_HIRING_COUNT } from './constants.ts'
 import type { HiringImportIds } from './importPanel.ts'
 import { renderHiringImportError, renderHiringImportOk, renderImportConditions, setupDropzone } from './importPanel.ts'
 import { currentHiringTarget, initHiringTargetToggle, renderCompareHiring, renderHiringTargetToggle } from './compareHiring.ts'
@@ -20,7 +21,7 @@ import { withLoading } from './loading.ts'
 import { shortDateTime } from './format.ts'
 import { $ } from './dom.ts'
 
-// 左（採用前100名）・右（追加採用10名）の2つの独立した取込欄
+// 左（採用前・最大200名）・右（追加採用・最大20名）の2つの独立した取込欄
 const hiringErr100: HiringImportIds = {
   summary: 'hiring-validation-summary-100',
   table: 'hiring-validation-errors-100',
@@ -93,11 +94,15 @@ export function initHiringFlow(): void {
   renderHiringTargetToggle()
   p5Params.init(refreshHiringGate)
   setupDropzone('dropzone-hiring-100', 'file-hiring-100', (text) => {
-    const { employees: base100, errors } = importEmployees(text, 100)
+    const { employees: base100, errors } = importEmployees(text, MAX_EMPLOYEE_COUNT)
     if (!base100) {
       state.hiringBaseAssignment = null
+      p5Params.setStandardHeadcount(BASE_HEADCOUNT)
       return rejectHiring('hiringBase100', hiringErr100, errors, errorMessage(errors))
     }
+    // 適正人数の基準は**採用前**の人数。採用ぶんを含めないことで、§7-4「採用後110名でも
+    // 適正人数は据え置き」という判断を人数によらず保つ（constants.standardParamsFor）。
+    p5Params.setStandardHeadcount(base100.length)
     // 機能15b §5.1: 「配置先事業部」列があれば現行配置を起点にする（分岐1）。
     // 列が無ければ null＝分岐2。列はあるが欠け・不正があれば補完せず分岐2へ落とし、理由を出す。
     const { assignment, errors: assignErrors } = parseAssignmentColumn(text, base100)
@@ -113,11 +118,11 @@ export function initHiringFlow(): void {
   setupDropzone('dropzone-10', 'file-10', (text) => {
     const base100 = state.hiringBase100
     if (!base100) {
-      return rejectHiring('hiringAdd10', hiringErr10, [], '取込を保留（先に左側の採用前100名データを取り込んでください）')
+      return rejectHiring('hiringAdd10', hiringErr10, [], '取込を保留（先に左側の採用前データを取り込んでください）')
     }
-    const { employees: add10, errors } = importEmployees(text, 10)
+    const { employees: add10, errors } = importEmployees(text, MAX_HIRING_COUNT)
     if (!add10) return rejectHiring('hiringAdd10', hiringErr10, errors, errorMessage(errors))
-    // 追加10名だけで検証が通っても、既存100名と社員番号が衝突すれば取り込めない
+    // 追加採用ぶんだけで検証が通っても、採用前の社員番号と衝突すれば取り込めない
     const merged = mergeEmployees(base100, add10)
     if (!merged.employees) {
       return rejectHiring('hiringAdd10', hiringErr10, merged.errors, '取込を保留（既存社員IDと重複）')
@@ -238,6 +243,8 @@ export function initHiringFlow(): void {
 
 /** リロード直後に #p5 の取込データと前提パラメータを戻す（ステップの復元は renderer.ts 側）。 */
 export function restoreHiringFrom(snap: SessionSnapshot): void {
+  // 標準値（変更マークの基準）を先に採用前の人数へ合わせてから、保存されていた値を載せる
+  p5Params.setStandardHeadcount(snap.hiringBase100?.length ?? BASE_HEADCOUNT)
   if (snap.p5Params) p5Params.setParams(snap.p5Params)
   if (snap.hiringBase100) {
     state.hiringBase100 = snap.hiringBase100

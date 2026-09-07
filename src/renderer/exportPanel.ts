@@ -57,18 +57,20 @@ export function buildRunListHtml(runs: RunSummary[]): string {
       <thead><tr><th>名前</th><th>種別</th><th>課題</th><th class="num">全社売上</th><th class="num">全社利益</th><th class="num">調整</th><th>状態</th><th>保存日時</th><th>保存者</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>
-    <p class="note">「種別」は保存元の画面です。配置案の検討は100名、採用判断は既存100名＋採用した候補の人数で計算されているため、全社売上をそのまま見比べることはできません。</p>`
+    <p class="note">「種別」は保存元の画面です。採用判断は採用前の名簿＋採用した候補の人数で計算されているため、配置案と全社売上をそのまま見比べることはできません。</p>`
 }
 
 /**
- * 一覧の「種別」列（①34/②42）。100名の配置案と110名の採用案が同じ表に並ぶと、
- * 人数の前提が違うことに気づかないまま全社売上を見比べてしまうため列で示す。
+ * 一覧の「種別」列（①34/②42）。配置案と採用案が同じ表に並ぶと、人数の前提が違うことに
+ * 気づかないまま全社売上を見比べてしまうため列で示す。
  * 採用人数は RunSummary.hiredIds から出せる（保存形式は変えない・手順書 §2.2）。
+ * 名簿人数そのものは RunSummary に持っていないので出さない（取込上限が200名になり
+ * 「配置＝100名」と決め打ちできなくなったため。保存形式を変えずに書ける範囲に留める）。
  */
 function runKindText(r: RunSummary): string {
-  if (r.kind !== 'hiring') return '配置（100名）'
+  if (r.kind !== 'hiring') return '配置'
   const hired = r.hiredIds?.length
-  return hired === undefined ? '採用判断' : `採用判断（100＋${hired}名）`
+  return hired === undefined ? '採用判断' : `採用判断（＋${hired}名）`
 }
 
 /** 保存直後だけ出す簡単なチュートリアル（3つの出力の違いを説明する）。一覧から開いたときは出さない。 */
@@ -76,7 +78,7 @@ function buildExportTutorialHtml(): string {
   return `
     <div class="hint" id="p7-tutorial">
       保存できました。このあと3つの出力から選べます：
-      <b>CSV</b>は全項目の明細（100名ちょうどの案なら取り込み直して再計算できます）、
+      <b>CSV</b>は全項目の明細（200名以下の案なら取り込み直して再計算できます）、
       <b>告知用PDF</b>は社員に配る新体制表、
       <b>エグゼクティブサマリPDF</b>は経営層向けの数字だけの1枚です。
       <button type="button" class="btn secondary" data-export="dismiss-tutorial" style="margin-left:10px;">閉じる</button>
@@ -129,7 +131,7 @@ export function buildExportHtml(run: SavedRun, justSaved = false): string {
     <div class="export-grid">
       <div class="export-card">
         <h3>データ（CSV）</h3>
-        <p>全項目を含む明細。100名ちょうどの案はそのまま取り込み直して再計算できます（採用後110名の案は取込の件数検証に合わないため読み戻せません）。</p>
+        <p>全項目を含む明細。200名以下の案はそのまま取り込み直して再計算できます（採用後の名簿も読み戻せます）。</p>
         <p class="note">社員番号・能力値4項目・人件費・配置先・貢献度・タイプ</p>
         <button type="button" class="btn" data-export="csv"${disabled}>CSVを保存</button>
       </div>

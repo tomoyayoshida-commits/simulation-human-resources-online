@@ -97,6 +97,28 @@ test('ロック中は「組み直す」が disabled（§5.6）', () => {
   assert.ok(unlocked && !unlocked[0].includes('disabled'))
 })
 
+// ---- 能力バー（docs/ability-bars-plan.md §3.2・§5 受入基準4）----
+
+test('既定で能力バーが出る。プールの候補は所属が無いので濃淡が付かない（受入基準4）', () => {
+  const html = view(makeState())
+  assert.ok(html.includes('wb-abil-fill'), '能力バーが出ていない')
+  // プールに候補が2名いるので濃淡なしのバーがある
+  assert.ok(html.includes('wb-abil-plain'))
+  // 事業部に配置済みの既存社員には濃淡が付く
+  assert.ok(html.includes('wb-abil-part'))
+})
+
+test('候補を全員採用するとプールが空になり、濃淡なしのバーが消える（§3.2）', () => {
+  const hired = withMoveTo(withMoveTo(makeState(), 'C1', 'A'), 'C2', 'B')
+  const html = view(hired)
+  assert.ok(html.includes('wb-abil-part'))
+  assert.ok(!html.includes('wb-abil-plain'))
+})
+
+test('showAbilities:false でバーが1本も出ない（受入基準5）', () => {
+  assert.ok(!view(makeState(), { showAbilities: false }).includes('wb-abil'))
+})
+
 test('制約違反があっても保存ボタンは disabled にしない（§5.9・機能16へ門を譲った）', () => {
   const s = makeState()
   const lowRoster = s.roster.map((e) => ({ ...e, sales: 1, mgmt: 1, dev: 1, training: 1 }))

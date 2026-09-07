@@ -8,7 +8,7 @@
 // 分岐が要る箇所は「呼び出し側が渡す引数」にしてある。この層で `kind === 'hiring'` のような
 // 分岐を持つと、共有部品のはずが両画面の仕様を抱え込んで元の重複より読みにくくなるため。
 
-import type { Employee, EmployeeProfile, UnitId } from './types.ts'
+import type { Employee, EmployeeProfile, UnitId, Weights } from './types.ts'
 import { UNIT_IDS, UNIT_LABEL, UNIT_VAR } from './constants.ts'
 import { clampPct, deltaText, escapeAttr, escapeHtml, oku1, pct, shortDateTime } from './format.ts'
 import type { WorkbenchSortKey } from './workbench.ts'
@@ -130,7 +130,61 @@ export function buildMoveChipsHtml(chips: MoveChip[]): string {
 export const CONTRIBUTION_NOTE_HTML =
   '<p class="wb-note">カードの大きい数字は<b>いまの所属事業部での貢献度</b>' +
   '（社員の能力値 × その事業部の重みの合計）。小さい数字は他の事業部へ移したときの貢献度です。' +
-  '事業部の売上は所属者の貢献度の合計から決まるので、貢献度の高い人ほど動かしたときの増減が大きくなります。</p>'
+  '事業部の売上は所属者の貢献度の合計から決まるので、貢献度の高い人ほど動かしたときの増減が大きくなります。</p>' +
+  '<p class="wb-note">4本のバーは<b>その社員の能力値</b>（営業力・管理力・開拓力・育成力／各0〜100）。' +
+  'バーの全長が能力値、<b>濃く塗られた部分がいまの所属事業部での重みぶん＝その能力の寄与</b>です。' +
+  '重みの合計は1.00なので、<b>濃い部分の長さを足すとカードの大きい数字（貢献度）になります</b>。' +
+  '同じ「型」でも濃い部分の付き方が違えば、動かしたときの増減も違います。' +
+  '所属の決まっていない採用候補は重みが定まらないため濃淡を付けません。</p>'
+
+/** 能力バーの並び順と見出し（docs/ability-bars-plan.md §3.1）。貢献度の式と同じ 営→管→開→育 順。 */
+const ABILITY_BARS: { key: keyof Weights; short: string; label: string }[] = [
+  { key: 'sales', short: '営', label: '営業力' },
+  { key: 'mgmt', short: '管', label: '管理力' },
+  { key: 'dev', short: '開', label: '開拓力' },
+  { key: 'training', short: '育', label: '育成力' },
+]
+
+/**
+ * 濃淡に使う所属と重み。プール（所属の無い採用候補）は重みが定まらないので null を渡す。
+ *
+ * 重みは定数ではなくオプションで変更できる（`SimParams.weights`・paramsOptions.ts）ため、
+ * 呼び出し側が `state.params.weights[unit]` を渡す。ここで `WEIGHTS` を読むと、重みを変えたときに
+ * 「濃い部分の合計＝貢献度」という対応が黙って崩れる（docs/ability-bars-plan.md §1）。
+ */
+export interface AbilityShade {
+  unit: UnitId
+  weights: Weights
+}
+
+/**
+ * カード内の能力バー4本（docs/ability-bars-plan.md §3.1）。
+ *
+ * バーの全長＝能力値(0-100)、内側の濃い部分の割合＝その事業部の重み。
+ * 重みの合計が1.00なので、濃い部分の絶対長を4本ぶん足すと貢献度（0-100）と一致する。
+ * 「貢献度は重み付き合成値なので初見では検算できない」という不信に、式を読ませずに答えるための形。
+ *
+ * 能力値は取込時に0〜100で検証済み（validation.ts）だが、表示側で幅を作る以上ここでも留める
+ * ——範囲外の値がそのまま width に入ると隣のバーへはみ出して読めなくなるため。
+ */
+export function buildAbilityBarsHtml(e: Employee, shade: AbilityShade | null): string {
+  const rows = ABILITY_BARS.map((a) => {
+    const value = e[a.key]
+    const fillPct = clampPct(value)
+    // 濃い部分は fill に対する割合＝重みそのもの。濃淡なし（プール）のときは出さない。
+    const innerHtml = shade
+      ? `<b class="wb-abil-part" style="width:${clampPct(shade.weights[a.key] * 100).toFixed(1)}%;` +
+        `background:${UNIT_VAR[shade.unit]};"></b>`
+      : ''
+    return (
+      `<span class="wb-abil-row" title="${a.label} ${value}">` +
+      `<span class="wb-abil-key">${a.short}</span>` +
+      `<span class="wb-abil-track"><span class="wb-abil-fill" style="width:${fillPct.toFixed(1)}%;">${innerHtml}</span></span>` +
+      `<span class="wb-abil-value">${value}</span></span>`
+    )
+  }).join('')
+  return `<div class="wb-abil${shade ? '' : ' wb-abil-plain'}">${rows}</div>`
+}
 
 /** 顔写真の枠に必要な最小限のカード情報。unit が null なのは未採用（プール）の候補。 */
 export interface CardFaceData {

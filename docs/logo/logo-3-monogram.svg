@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 180" width="560" height="180">
+  <defs>
+    <style>
+      .big   { font-family: 'Poppins', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; font-weight: 800; font-size: 150px; }
+      .rest  { font-family: 'Poppins', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; font-weight: 800; font-size: 92px; }
+      .glyph { stroke: #000000; stroke-linejoin: round; paint-order: stroke fill; }
+      .big.glyph  { stroke-width: 9; }
+      .rest.glyph { stroke-width: 7; }
+      .purple { fill: #8B2FE8; }
+      .white  { fill: #FFFFFF; }
+      .green  { fill: #22C55E; }
+    </style>
+  </defs>
+  <!-- Mだけ大きく強調し、残りをベースラインで揃えたモノグラム寄りの構成 -->
+  <text x="15" y="140" class="big glyph purple">M</text>
+  <text x="150" y="140" class="rest glyph white">ov</text>
+  <text x="330" y="140" class="rest glyph green">ez</text>
+</svg>

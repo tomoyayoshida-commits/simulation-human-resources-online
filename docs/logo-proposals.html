@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Movez ロゴ案</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,800;1,800&display=swap" rel="stylesheet">
+<style>
+  body {
+    font-family: 'Segoe UI', 'Hiragino Sans', sans-serif;
+    background: #f4f4f6;
+    margin: 0;
+    padding: 40px 24px;
+    color: #1a1a1a;
+  }
+  h1 { font-size: 22px; margin: 0 0 6px; }
+  p.lead { color: #555; margin: 0 0 32px; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(560px, 1fr));
+    gap: 28px;
+  }
+  .card {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .card h2 {
+    font-size: 15px;
+    margin: 0;
+    padding: 14px 18px;
+    border-bottom: 1px solid #eee;
+  }
+  .card p.desc {
+    font-size: 13px;
+    color: #666;
+    margin: 0;
+    padding: 10px 18px 0;
+  }
+  .swatches {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .swatch {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 10px;
+  }
+  .swatch.light { background: #ffffff; }
+  .swatch.dark  { background: #16161a; }
+  .swatch.brand { background: linear-gradient(135deg, #8B2FE8 0%, #22C55E 100%); }
+  .swatch svg { max-width: 100%; height: auto; width: 240px; }
+  .legend {
+    display: flex;
+    gap: 16px;
+    padding: 10px 18px 16px;
+    font-size: 12px;
+    color: #555;
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; border: 1px solid #000; display: inline-block; }
+</style>
+</head>
+<body>
+  <h1>Movez ロゴ案（4パターン）</h1>
+  <p class="lead">共通仕様：白文字＋黒アウトライン基調／M＝スポーティな紫（#8B2FE8）／ez＝さわやかな緑（#22C55E）／ov＝白のまま。
+    白・黒・ブランドカラー背景の3面で視認性を確認。SVGは docs/logo/ 内の各ファイル。</p>
+
+  <div class="grid">
+
+    <div class="card">
+      <h2>案1：クラシック（標準ワードマーク）</h2>
+      <p class="desc">太字を水平に並べたベーシックな構成。最も汎用性が高く、ファビコンやヘッダーロゴなど小さいサイズにも強い。</p>
+      <div class="swatches">
+        <div class="swatch light"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 160" width="520" height="160">
+          <defs><style>
+            .l1w { font-family: 'Poppins', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; font-weight: 800; font-size: 120px; }
+            .l1g { stroke: #000000; stroke-width: 8; stroke-linejoin: round; paint-order: stroke fill; }
+            .l1p { fill: #8B2FE8; } .l1u { fill: #FFFFFF; } .l1n { fill: #22C55E; }
+          </style></defs>
+          <text x="20" y="120" class="l1w"><tspan class="l1g l1p">M</tspan><tspan class="l1g l1u">ov</tspan><tspan class="l1g l1n">ez</tspan></text>
+        </svg></div>
+        <div class="swatch dark"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 160" width="520" height="160">
+          <defs><style>
+            .l1w2 { font-family: 'Poppins', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; font-weight: 800; font-size: 120px; }
+            .l1g2 { stroke: #000000; stroke-width: 8; stroke-linejoin: round; paint-order: stroke fill; }
+            .l1p2 { fill: #8B2FE8; } .l1u2 { fill: #FFFFFF; } .l1n2 { fill: #22C55E; }
+          </style></defs>
+          <text x="20" y="120" class="l1w2"><tspan class="l1g2 l1p2">M</tspan><tspan class="l1g2 l1u2">ov</tspan><tspan class="l1g2 l1n2">ez</tspan></text>
+        </svg></div>
+        <div class="swatch brand"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 160" width="520" height="160">
+          <defs><style>
+            .l1w3 { font-family: 'Poppins', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; font-weight: 800; font-size: 120px; }
+            .l1g3 { stroke: #000000; stroke-width: 8; stroke-linejoin: round; paint-order: stroke fill; }
+            .l1p3 { fill: #8B2FE8; } .l1u3 { fill: #FFFFFF; } .l1n3 { fill: #22C55E; }
+          </style></defs>
+          <text x="20" y="120" class="l1w3"><tspan class="l1g3 l1p3">M</tspan><tspan class="l1g3 l1u3">ov</tspan><tspan class="l1g3 l1n3">ez</tspan></text>
+        </svg></div>
+      </div>
+      <div class="legend">
+        <span><span class="dot" style="background:#8B2FE8"></span>M</span>
+        <span><span class="dot" style="background:#fff"></span>ov</span>
+        <span><span class="dot" style="background:#22C55E"></span>ez</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>案2：スラント（疾走感）</h2>
+      <p class="desc">文字全体を右肩上がりにスキューし、足元に速度線を添えてスポーティな躍動感を強調。</p>
+      <div class="swatches">
+        <div class="swatch light"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 180" width="240" height="77">
+          <defs><style>
+            .l2w { font-family: 'Poppins', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; font-weight: 800; font-size: 120px; font-style: italic; }
+            .l2g { stroke: #000000; stroke-width: 8; stroke-linejoin: round; paint-order: stroke fill; }
+            .l2p { fill: #8B2FE8; } .l2u { fill: #FFFFFF; } .l2n { fill: #22C55E; }
+          </style></defs>
+          <g transform="skewX(-10)"><text x="40" y="130" class="l2w"><tspan class="l2g l2p">M</tspan><tspan class="l2g l2u">ov</tspan><tspan class="l2g l2n">ez</tspan></text></g>
+          <g stroke="#000000" stroke-width="6" stroke-linecap="round" opacity="0.55"><line x1="10" y1="155" x2="55" y2="155" /><line x1="0" y1="167" x2="35" y2="167" /></g>
+        </svg></div>
+        <div class="swatch dark"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 180" width="240" height="77">
+          <defs><style>
+            .l2w2 { font-family: 'Poppins', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; font-weight: 800; font-size: 120px; font-style: italic; }
+            .l2g2 { stroke: #000000; stroke-width: 8; stroke-linejoin: round; paint-order: stroke fill; }
+            .l2p2 { fill: #8B2FE8; } .l2u2 { fill: #FFFFFF; } .l2n2 { fill: #22C55E; }
+          </style></defs>
+          <g transform="skewX(-10)"><text x="40" y="130" class="l2w2"><tspan class="l2g2 l2p2">M</tspan><tspan class="l2g2 l2u2">ov</tspan><tspan class="l2g2 l2n2">ez</tspan></text></g>
+          <g stroke="#000000" stroke-width="6" stroke-linecap="round" opacity="0.55"><line x1="10" y1="155" x2="55" y2="155" /><line x1="0" y1="167" x2="35" y2="167" /></g>
+        </svg></div>
+        <div class="swatch brand"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 180" width="240" height="77">
+          <defs><style>
+            .l2w3 { font-family: 'Poppins', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; font-weight: 800; font-size: 120px; font-style: italic; }
+            .l2g3 { stroke: #000000; stroke-width: 8; stroke-linejoin: round; paint-order: stroke fill; }
+            .l2p3 { fill: #8B2FE8; } .l2u3 { fill: #FFFFFF; } .l2n3 { fill: #22C55E; }
+          </style></defs>
+          <g transform="skewX(-10)"><text x="40" y="130" class="l2w3"><tspan class="l2g3 l2p3">M</tspan><tspan class="l2g3 l2u3">ov</tspan><tspan class="l2g3 l2n3">ez</tspan></text></g>
+          <g stroke="#000000" stroke-width="6" stroke-linecap="round" opacity="0.55"><line x1="10" y1="155" x2="55" y2="155" /><line x1="0" y1="167" x2="35" y2="167" /></g>
+        </svg></div>
+      </div>
+      <div class="legend">
+        <span><span class="dot" style="background:#8B2FE8"></span>M</span>
+        <span><span class="dot" style="background:#fff"></span>ov</span>
+        <span><span class="dot" style="background:#22C55E"></span>ez</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>案3：Mモノグラム強調</h2>
+      <p class="desc">頭文字Mだけ大きくしてロゴマーク寄りに。単体でアイコン的に使いたい場合に強い（アプリアイコン兼用も視野）。</p>
+      <div class="swatches">
+        <div class="swatch light"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 180" width="240" height="77">
+          <defs><style>
+            .l3b { font-family: 'Poppins', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; font-weight: 800; font-size: 150px; }
+            .l3r { font-family: 'Poppins', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; font-weight: 800; font-size: 92px; }
+            .l3g { stroke: #000000; stroke-linejoin: round; paint-order: stroke fill; }
+            .l3g.l3b { stroke-width: 9; } .l3g.l3r { stroke-width: 7; }
+            .l3p { fill: #8B2FE8; } .l3u { fill: #FFFFFF; } .l3n { fill: #22C55E; }
+          </style></defs>
+          <text x="15" y="140" class="l3b l3g l3p">M</text><text x="150" y="140" class="l3r l3g l3u">ov</text><text x="330" y="140" class="l3r l3g l3n">ez</text>
+        </svg></div>
+        <div class="swatch dark"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 180" width="240" height="77">
+          <defs><style>
+            .l3b2 { font-family: 'Poppins', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; font-weight: 800; font-size: 150px; }
+            .l3r2 { font-family: 'Poppins', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; font-weight: 800; font-size: 92px; }
+            .l3g2 { stroke: #000000; stroke-linejoin: round; paint-order: stroke fill; }
+            .l3g2.l3b2 { stroke-width: 9; } .l3g2.l3r2 { stroke-width: 7; }
+            .l3p2 { fill: #8B2FE8; } .l3u2 { fill: #FFFFFF; } .l3n2 { fill: #22C55E; }
+          </style></defs>
+          <text x="15" y="140" class="l3b2 l3g2 l3p2">M</text><text x="150" y="140" class="l3r2 l3g2 l3u2">ov</text><text x="330" y="140" class="l3r2 l3g2 l3n2">ez</text>
+        </svg></div>
+        <div class="swatch brand"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 180" width="240" height="77">
+          <defs><style>
+            .l3b3 { font-family: 'Poppins', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; font-weight: 800; font-size: 150px; }
+            .l3r3 { font-family: 'Poppins', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; font-weight: 800; font-size: 92px; }
+            .l3g3 { stroke: #000000; stroke-linejoin: round; paint-order: stroke fill; }
+            .l3g3.l3b3 { stroke-width: 9; } .l3g3.l3r3 { stroke-width: 7; }
+            .l3p3 { fill: #8B2FE8; } .l3u3 { fill: #FFFFFF; } .l3n3 { fill: #22C55E; }
+          </style></defs>
+          <text x="15" y="140" class="l3b3 l3g3 l3p3">M</text><text x="150" y="140" class="l3r3 l3g3 l3u3">ov</text><text x="330" y="140" class="l3r3 l3g3 l3n3">ez</text>
+        </svg></div>
+      </div>
+      <div class="legend">
+        <span><span class="dot" style="background:#8B2FE8"></span>M（大）</span>
+        <span><span class="dot" style="background:#fff"></span>ov</span>
+        <span><span class="dot" style="background:#22C55E"></span>ez</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>案4：ウィット（弾む球＋矢印）</h2>
+      <p class="desc">「o」の上で弾む球と、末尾の矢印で「動く／進む」を遊び心とともに表現。最もキャラクター性が強い案。</p>
+      <div class="swatches">
+        <div class="swatch light"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 180" width="240" height="72">
+          <defs><style>
+            .l4w { font-family: 'Poppins', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; font-weight: 800; font-size: 120px; }
+            .l4g { stroke: #000000; stroke-width: 8; stroke-linejoin: round; paint-order: stroke fill; }
+            .l4p { fill: #8B2FE8; } .l4u { fill: #FFFFFF; } .l4n { fill: #22C55E; }
+          </style></defs>
+          <circle cx="103" cy="18" r="11" fill="#22C55E" stroke="#000000" stroke-width="5" />
+          <text x="20" y="120" class="l4w"><tspan class="l4g l4p">M</tspan><tspan class="l4g l4u">ov</tspan><tspan class="l4g l4n">ez</tspan></text>
+          <path d="M 505 95 L 545 78 L 505 61 L 517 78 Z" fill="#22C55E" stroke="#000000" stroke-width="5" stroke-linejoin="round" />
+        </svg></div>
+        <div class="swatch dark"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 180" width="240" height="72">
+          <defs><style>
+            .l4w2 { font-family: 'Poppins', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; font-weight: 800; font-size: 120px; }
+            .l4g2 { stroke: #000000; stroke-width: 8; stroke-linejoin: round; paint-order: stroke fill; }
+            .l4p2 { fill: #8B2FE8; } .l4u2 { fill: #FFFFFF; } .l4n2 { fill: #22C55E; }
+          </style></defs>
+          <circle cx="103" cy="18" r="11" fill="#22C55E" stroke="#000000" stroke-width="5" />
+          <text x="20" y="120" class="l4w2"><tspan class="l4g2 l4p2">M</tspan><tspan class="l4g2 l4u2">ov</tspan><tspan class="l4g2 l4n2">ez</tspan></text>
+          <path d="M 505 95 L 545 78 L 505 61 L 517 78 Z" fill="#22C55E" stroke="#000000" stroke-width="5" stroke-linejoin="round" />
+        </svg></div>
+        <div class="swatch brand"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 180" width="240" height="72">
+          <defs><style>
+            .l4w3 { font-family: 'Poppins', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; font-weight: 800; font-size: 120px; }
+            .l4g3 { stroke: #000000; stroke-width: 8; stroke-linejoin: round; paint-order: stroke fill; }
+            .l4p3 { fill: #8B2FE8; } .l4u3 { fill: #FFFFFF; } .l4n3 { fill: #22C55E; }
+          </style></defs>
+          <circle cx="103" cy="18" r="11" fill="#22C55E" stroke="#000000" stroke-width="5" />
+          <text x="20" y="120" class="l4w3"><tspan class="l4g3 l4p3">M</tspan><tspan class="l4g3 l4u3">ov</tspan><tspan class="l4g3 l4n3">ez</tspan></text>
+          <path d="M 505 95 L 545 78 L 505 61 L 517 78 Z" fill="#22C55E" stroke="#000000" stroke-width="5" stroke-linejoin="round" />
+        </svg></div>
+      </div>
+      <div class="legend">
+        <span><span class="dot" style="background:#8B2FE8"></span>M</span>
+        <span><span class="dot" style="background:#fff"></span>ov</span>
+        <span><span class="dot" style="background:#22C55E"></span>ez</span>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

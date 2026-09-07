@@ -303,9 +303,20 @@ export function runOptimization(
   // 上界の並べ替えは（利益が目的の事業部を除き）人数配分に依存しないので、ここで1回だけ作る
   const orders = buildValueOrders(bases, task, m)
 
+  // buildValues の出力は eff（3事業部の実効補正係数）だけで決まる。eff は補正表の
+  // 段階値の積なので事業部あたり高々8通りしか無く、候補数（200名で3321〜10011）に対して
+  // 実際に現れる組は2桁に収まる。候補ごとに作り直すと 候補数×人数 個のオブジェクトが
+  // 同時に生きてしまい、200名で heapTotal が 540MB〜1GB に達してブラウザで落ちる。
+  // 同じ eff なら同じ配列を共有するだけなので、値も加算順も変わらない（結果はビット一致）。
+  const valuesCache = new Map<string, Record<string, Record<UnitId, number>>>()
   const prepared = candidates.map((counts) => {
     const eff = effectiveFactors(counts, params)
-    const values = buildValues(bases, task, eff, params, m)
+    const cacheKey = `${eff.A},${eff.B},${eff.C}`
+    let values = valuesCache.get(cacheKey)
+    if (values === undefined) {
+      values = buildValues(bases, task, eff, params, m)
+      valuesCache.set(cacheKey, values)
+    }
     const ub = upperBoundRawTotal(bases, values, counts, orders) + shiftConstant(task, eff, params)
     return { counts, values, ub }
   })

@@ -3,7 +3,7 @@
 // #p4/#p5 それぞれ独立した前提を持てるよう、DOM ID接頭辞ごとにインスタンスを作る。
 
 import type { SimParams, UnitId } from './types.ts'
-import { DEFAULT_PARAMS, UNIT_IDS } from './constants.ts'
+import { BASE_HEADCOUNT, DEFAULT_PARAMS, UNIT_IDS, standardParamsFor } from './constants.ts'
 import { validateParams } from './whatif.ts'
 import { $ } from './dom.ts'
 import { escapeHtml } from './format.ts'
@@ -52,6 +52,13 @@ export interface ParamsOptionsPanel {
   init: (onChange: () => void) => void
   /** セッション復元用：外部から前提パラメータを差し替えて再描画する。init前後どちらでも呼べる。 */
   setParams: (p: SimParams) => void
+  /**
+   * 取り込んだ名簿人数に合わせて「標準値」を引き直す（constants.standardParamsFor）。
+   * 100名以外の名簿でも適正人数・最低人数が人数比で置かれるようにするための入口。
+   * 利用者が手で直した欄は残し、標準値のままの欄だけ追随させる。
+   * setParams と併用するときは、こちらを先に呼ぶ（標準値を決めてから値を載せる）。
+   */
+  setStandardHeadcount: (totalCount: number) => void
 }
 
 /**
@@ -60,6 +67,10 @@ export interface ParamsOptionsPanel {
  */
 export function createParamsOptionsPanel(idPrefix: string): ParamsOptionsPanel {
   let params: SimParams = cloneParams(DEFAULT_PARAMS)
+  // 「標準値」（変更マーク・title・リセットの基準）。名簿人数で適正人数・最低人数が変わるため
+  // DEFAULT_PARAMS 直参照はやめ、setStandardHeadcount で引き直せる変数にしてある。
+  // 100名なら standardParamsFor(100) は DEFAULT_PARAMS と同じ値になる。
+  let standard: SimParams = standardParamsFor(BASE_HEADCOUNT)
   // 値を1つ変えるたびにフォームを作り直すため、奥の層の開閉はここで覚えておかないと
   // 入力のたびに閉じてしまう（開いたまま続けて直せるようにする）。
   let advancedOpen = false
@@ -73,7 +84,7 @@ export function createParamsOptionsPanel(idPrefix: string): ParamsOptionsPanel {
       `<div class="bar-row"><span class="label">${label}</span>` +
       UNIT_IDS.map((u: UnitId) => {
         const v = params.weights[u][field]
-        return `<input type="number" step="${step}" ${dataWeightAttr}="${field}" ${dataUnitAttr}="${u}" value="${v}" class="${changedClass(v, DEFAULT_PARAMS.weights[u][field]).trim()}" title="標準値 ${DEFAULT_PARAMS.weights[u][field]}">`
+        return `<input type="number" step="${step}" ${dataWeightAttr}="${field}" ${dataUnitAttr}="${u}" value="${v}" class="${changedClass(v, standard.weights[u][field]).trim()}" title="標準値 ${standard.weights[u][field]}">`
       }).join('') +
       '</div>'
     )
@@ -96,7 +107,7 @@ export function createParamsOptionsPanel(idPrefix: string): ParamsOptionsPanel {
       `<div class="bar-row"><span class="label">${label}</span>` +
       UNIT_IDS.map(
         (u: UnitId) =>
-          `<input type="number" step="${step}" ${dataAttr}="${field}" ${dataUnitAttr}="${u}" value="${params[field][u]}" class="${changedClass(params[field][u], DEFAULT_PARAMS[field][u]).trim()}" title="標準値 ${DEFAULT_PARAMS[field][u]}">`,
+          `<input type="number" step="${step}" ${dataAttr}="${field}" ${dataUnitAttr}="${u}" value="${params[field][u]}" class="${changedClass(params[field][u], standard[field][u]).trim()}" title="標準値 ${standard[field][u]}">`,
       ).join('') +
       '</div>'
     )
@@ -105,7 +116,7 @@ export function createParamsOptionsPanel(idPrefix: string): ParamsOptionsPanel {
   function scalarRow(label: string, field: ScalarField, step: string): string {
     return `<div class="bar-row scalar">
         <span class="label">${label}</span>
-        <input type="number" step="${step}" ${dataScalarAttr}="${field}" value="${params[field]}" class="${changedClass(params[field], DEFAULT_PARAMS[field]).trim()}" title="標準値 ${DEFAULT_PARAMS[field]}">
+        <input type="number" step="${step}" ${dataScalarAttr}="${field}" value="${params[field]}" class="${changedClass(params[field], standard[field]).trim()}" title="標準値 ${standard[field]}">
       </div>`
   }
 
@@ -179,13 +190,28 @@ export function createParamsOptionsPanel(idPrefix: string): ParamsOptionsPanel {
         onChange()
       })
       $(`${idPrefix}-params-reset`)?.addEventListener('click', () => {
-        params = cloneParams(DEFAULT_PARAMS)
+        params = cloneParams(standard)
         renderForm()
         onChange()
       })
     },
     setParams(p: SimParams): void {
       params = cloneParams(p)
+      renderForm()
+    },
+    setStandardHeadcount(totalCount: number): void {
+      const next = standardParamsFor(totalCount)
+      // 標準値のままの欄だけ新しい標準値へ追随させる。手で直した欄を人数の変化で
+      // 上書きすると、利用者が置いた前提が黙って消えることになる。
+      for (const u of UNIT_IDS) {
+        if (params.optimalHeadcount[u] === standard.optimalHeadcount[u]) {
+          params.optimalHeadcount[u] = next.optimalHeadcount[u]
+        }
+        if (params.minHeadcount[u] === standard.minHeadcount[u]) {
+          params.minHeadcount[u] = next.minHeadcount[u]
+        }
+      }
+      standard = next
       renderForm()
     },
   }

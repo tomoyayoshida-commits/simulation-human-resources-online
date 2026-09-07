@@ -45,9 +45,24 @@ test('importEmployees: 範囲外（営業力108・人件費0）を検出', () =>
   assert.ok(errors.some((e) => e.row === 2 && e.column === '人件費'))
 })
 
-test('importEmployees: 件数不一致を検出', () => {
-  const { errors } = importEmployees(makeCsv(99), 100)
-  assert.ok(errors.some((e) => e.column === '(件数)'))
+// 2026-09-07 合意で件数は「ちょうどN件」から上限方式に変わった。
+// 上限以下は通し、超えたときだけ弾くこと（200名の名簿と課題原文の100名を両方通すため）。
+test('importEmployees: 上限を超える件数を検出', () => {
+  const { employees, errors } = importEmployees(makeCsv(201), 200)
+  assert.equal(employees, null)
+  assert.ok(errors.some((e) => e.column === '(件数)' && e.expected === '1〜200件'))
+})
+
+test('importEmployees: 上限未満の件数はエラーにしない（上限方式）', () => {
+  const { employees, errors } = importEmployees(makeCsv(99), 200)
+  assert.equal(errors.length, 0)
+  assert.equal(employees?.length, 99)
+})
+
+test('importEmployees: 上限ちょうど200名を取り込める', () => {
+  const { employees, errors } = importEmployees(makeCsv(200), 200)
+  assert.equal(errors.length, 0)
+  assert.equal(employees?.length, 200)
 })
 
 test('importEmployees: カラム不足を検出', () => {

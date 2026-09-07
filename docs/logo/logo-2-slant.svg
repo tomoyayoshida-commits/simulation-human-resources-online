@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 180" width="560" height="180">
+  <defs>
+    <style>
+      .word { font-family: 'Poppins', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; font-weight: 800; font-size: 120px; font-style: italic; }
+      .glyph { stroke: #000000; stroke-width: 8; stroke-linejoin: round; paint-order: stroke fill; }
+      .purple { fill: #8B2FE8; }
+      .white  { fill: #FFFFFF; }
+      .green  { fill: #22C55E; }
+    </style>
+  </defs>
+  <!-- スポーティな疾走感を出すため文字列全体を右肩上がりにスキュー、地面に速度線を添える -->
+  <g transform="skewX(-10)">
+    <text x="40" y="130" class="word">
+      <tspan class="glyph purple">M</tspan><tspan class="glyph white">ov</tspan><tspan class="glyph green">ez</tspan>
+    </text>
+  </g>
+  <g stroke="#000000" stroke-width="6" stroke-linecap="round" opacity="0.55">
+    <line x1="10" y1="155" x2="55" y2="155" />
+    <line x1="0" y1="167" x2="35" y2="167" />
+  </g>
+</svg>

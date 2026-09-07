@@ -8,7 +8,7 @@
 // UnitId ではなく HiringSlot（'A'|'B'|'C'|'pool'）を持つ。`data-unit` を使わないのは、
 // #p4 と同じ属性名にすると「事業部の列」という前提のコードを共有したときに pool が紛れ込むため。
 
-import type { UnitId } from './types.ts'
+import type { UnitId, Weights } from './types.ts'
 import type { WhatIfEvaluation } from './whatif.ts'
 import {
   addedCost,
@@ -41,6 +41,7 @@ import { taskLabel, UNIT_IDS, UNIT_LABEL } from './constants.ts'
 import { createDragController } from './workbenchDnd.ts'
 import { deltaText, escapeAttr, escapeHtml, oku, pill, shortDateTime, signed } from './format.ts'
 import {
+  buildAbilityBarsHtml,
   buildAlertHtml,
   buildCardFaceHtml,
   buildConstraintNoteHtml,
@@ -54,6 +55,7 @@ import {
   buildSortOptionsHtml,
   buildUnitColumnHtml as buildUnitColumn,
   DRAG_BADGE_HTML,
+  type AbilityShade,
   type SaveFormIds,
 } from './workbenchView.ts'
 import { $, setHtml } from './dom.ts'
@@ -81,6 +83,11 @@ export interface HiringWorkbenchViewData {
   /** 直近の操作で feasible→infeasible に変わったときの一過性の警告（§5.9）。null なら非表示。 */
   alertText: string | null
   showPhotos?: boolean
+  /**
+   * 能力バーを出すか（docs/ability-bars-plan.md §3.3）。既定は true。
+   * 貢献度は重み付き合成値で初見では検算できないため、既定ONで内訳が見える状態にしておく。
+   */
+  showAbilities?: boolean
   /** 保存時の命名フォームの状態。null なら閉じている（機能16 §4.8 と同じ作法）。 */
   savingTitle?: string | null
   /** 保存フォーム直下に出す保存失敗の理由（同名衝突・通信失敗）。`null`/未指定なら非表示。 */
@@ -157,6 +164,10 @@ function buildCardHtml(
   c: HiringCard,
   selectedEmployeeId: string | null,
   showPhotos: boolean,
+  /** 能力バーを出すか（docs/ability-bars-plan.md §3.3）。濃淡の重みは所属から決める */
+  showAbilities: boolean,
+  /** 濃淡に使う重み。プール（所属なし）は重みが定まらないので渡されない */
+  weights: Record<UnitId, Weights>,
   personallyLocked: boolean,
   lockedByBase: boolean,
 ): string {
@@ -172,6 +183,8 @@ function buildCardHtml(
   const cls = ['wb-card', selected ? 'selected' : '', showPhotos ? 'with-photo' : '', c.locked ? 'hwb-locked' : '', c.isCandidate ? 'hwb-candidate' : '']
     .filter(Boolean)
     .join(' ')
+  // 未採用の候補（c.unit === null）は所属が無く重みが定まらないので濃淡なしのバーにする（§3.2）
+  const shade: AbilityShade | null = c.unit ? { unit: c.unit, weights: weights[c.unit] } : null
   return `
     <div class="${cls}" draggable="${c.locked ? 'false' : 'true'}" data-emp="${escapeAttr(c.employee.id)}" tabindex="0">
       ${showPhotos ? buildCardFaceHtml(c) : ''}
@@ -179,6 +192,7 @@ function buildCardHtml(
         <div class="wb-card-id">${c.locked ? '<span class="hwb-lock-mark" title="既存社員は固定中">🔒</span>' : ''}${escapeHtml(c.employee.id)}${nameHtml}${lockBtnHtml}</div>
         <span class="wb-card-type">${c.type}</span>
         ${mainHtml}
+        ${showAbilities ? buildAbilityBarsHtml(c.employee, shade) : ''}
       </div>
     </div>`
 }
@@ -189,6 +203,7 @@ interface ColumnContext {
   sortedCards: HiringCard[]
   selectedEmployeeId: string | null
   showPhotos: boolean
+  showAbilities: boolean
 }
 
 /**
@@ -204,7 +219,16 @@ interface ColumnContext {
  */
 function cardHtml(c: HiringCard, ctx: ColumnContext): string {
   const personallyLocked = ctx.state.lockedIds?.includes(c.employee.id) ?? false
-  return buildCardHtml(c, ctx.selectedEmployeeId, ctx.showPhotos, personallyLocked, c.locked && !personallyLocked)
+  return buildCardHtml(
+    c,
+    ctx.selectedEmployeeId,
+    ctx.showPhotos,
+    ctx.showAbilities,
+    // 濃淡の重みは定数ではなく現在の前提パラメータから取る（オプションで変更可能・§1）
+    ctx.state.params.weights,
+    personallyLocked,
+    c.locked && !personallyLocked,
+  )
 }
 
 function buildPoolColumnHtml(ctx: ColumnContext): string {
@@ -274,6 +298,7 @@ function buildActionsHtml(
   evaluation: WhatIfEvaluation,
   sortKey: WorkbenchSortKey,
   showPhotos: boolean,
+  showAbilities: boolean,
   savingTitle: string | null,
   saveError: string | null,
   /** 一時保存の状態（draftStore.ts）。savedAt が null なら下書き無し */
@@ -295,6 +320,7 @@ function buildActionsHtml(
       <div class="wb-actions-left">
         <label class="wb-sort-label">並び順：<select id="hwb-sort" class="wb-sort">${sortOptionsHtml}</select></label>
         <label class="wb-photo-label"><input type="checkbox" id="hwb-show-photos"${showPhotos ? ' checked' : ''}>顔写真</label>
+        <label class="wb-photo-label" title="カードに4能力値のバーを出す。濃い部分がその事業部での寄与（未採用の候補は所属が無いので濃淡なし）"><input type="checkbox" id="hwb-show-abilities"${showAbilities ? ' checked' : ''}>能力値</label>
       </div>
       <div class="wb-actions-right">
         <button type="button" class="btn secondary" data-hwb-action="undo"${state.history.length === 0 ? ' disabled' : ''}>元に戻す</button>
@@ -318,6 +344,8 @@ function buildActionsHtml(
 export function buildHiringWorkbenchHtml(data: HiringWorkbenchViewData): string {
   const { state, sortKey, selectedEmployeeId, alertText } = data
   const showPhotos = data.showPhotos ?? true
+  // 既定はON（docs/ability-bars-plan.md §3.3）。顔写真と同じ理由で、既定OFFだと気づかれない。
+  const showAbilities = data.showAbilities ?? true
   const savingTitle = data.savingTitle ?? null
   const saveError = data.saveError ?? null
   const evaluation = evaluateHiring(state)
@@ -326,13 +354,13 @@ export function buildHiringWorkbenchHtml(data: HiringWorkbenchViewData): string 
   // HiringCard は unit が null を取りうるので、プールのカードは 'contribution' 指定でも
   // 貢献度で並べられない——そこは id 順に落とす（下の poolSafeSort）。
   const cards = poolSafeSort(buildHiringCards(state), sortKey)
-  const ctx: ColumnContext = { state, evaluation, sortedCards: cards, selectedEmployeeId, showPhotos }
+  const ctx: ColumnContext = { state, evaluation, sortedCards: cards, selectedEmployeeId, showPhotos, showAbilities }
   const columnsHtml = SLOTS.map((s) => (s === 'pool' ? buildPoolColumnHtml(ctx) : buildUnitColumnHtml(s, ctx))).join('')
   return (
     buildAlertHtml(alertText, ALERT_DISMISS_ATTR) +
     buildHeaderHtml(state, evaluation) +
     `<div class="hwb-board">${columnsHtml}</div>` +
-    buildActionsHtml(state, evaluation, sortKey, showPhotos, savingTitle, saveError, {
+    buildActionsHtml(state, evaluation, sortKey, showPhotos, showAbilities, savingTitle, saveError, {
       savedAt: data.draftSavedAt ?? null,
       note: data.draftNote ?? null,
     }) +
@@ -372,6 +400,8 @@ const view: {
   alertText: string | null
   alertKind: 'revenue' | 'headcount' | null
   showPhotos: boolean
+  /** 能力バーの表示（ability-bars-plan.md §3.3）。showPhotos と同じく開き直しても保つ */
+  showAbilities: boolean
   savingTitle: string | null
   saveError: string | null
   /**
@@ -388,6 +418,7 @@ const view: {
   alertText: null,
   alertKind: null,
   showPhotos: true,
+  showAbilities: true,
   savingTitle: null,
   saveError: null,
   draftSavedAt: null,
@@ -416,6 +447,7 @@ function render(): void {
       selectedEmployeeId: view.selectedEmployeeId,
       alertText: view.alertText,
       showPhotos: view.showPhotos,
+      showAbilities: view.showAbilities,
       savingTitle: view.savingTitle,
       saveError: view.saveError,
       draftSavedAt: view.draftSavedAt,
@@ -636,6 +668,11 @@ function handleChange(e: Event): void {
   const target = e.target
   if (target instanceof HTMLInputElement && target.id === 'hwb-show-photos') {
     view.showPhotos = target.checked
+    render()
+    return
+  }
+  if (target instanceof HTMLInputElement && target.id === 'hwb-show-abilities') {
+    view.showAbilities = target.checked
     render()
     return
   }

@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>モック：能力値の提示（貢献度だけでは読めない問題）</title>
+<style>
+:root{
+  color-scheme: light;
+  --surface-1:#fcfcfb; --page:#f9f9f7;
+  --text-primary:#0b0b0b; --text-secondary:#52514e; --text-muted:#898781;
+  --grid:#e1e0d9; --baseline:#c3c2b7; --border:rgba(11,11,11,0.10);
+  --a:#2a78d6; --b:#eb6834; --c:#1baf7a;
+  --good:#0ca30c; --warning:#fab219; --serious:#ec835a; --critical:#d03b3b;
+}
+*{box-sizing:border-box;}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--page);color:var(--text-primary);}
+.wrap{max-width:1100px;margin:0 auto;padding:28px 24px 80px;}
+h1{font-size:20px;margin:0 0 4px;}
+.subtitle{color:var(--text-secondary);font-size:13px;margin:0 0 8px;}
+.mock-banner{background:#eef4fc;border:1px solid #cfe0f4;border-radius:8px;padding:10px 14px;font-size:12px;color:var(--text-secondary);margin-bottom:26px;line-height:1.7;}
+.section-title{font-size:15px;font-weight:700;margin:38px 0 4px;padding-top:22px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;}
+.section-title:first-of-type{border-top:none;padding-top:0;margin-top:0;}
+.section-desc{font-size:12.5px;color:var(--text-secondary);margin:0 0 16px;line-height:1.8;}
+.tag{font-size:10.5px;font-weight:600;padding:2px 7px;border-radius:99px;background:var(--grid);color:var(--text-secondary);}
+.tag.now{background:#eceae2;}
+.tag.rec{background:#dff2df;color:#0a6b0a;}
+code{background:var(--grid);padding:1px 5px;border-radius:4px;font-size:11.5px;}
+
+/* ===== 実物からコピーした .wb-* （src/renderer/styles.css） ===== */
+.wb-board{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px;}
+.wb-column{background:var(--surface-1);border:2px solid var(--border);border-radius:10px;padding:10px;display:flex;flex-direction:column;}
+.wb-unit-head{margin-bottom:8px;}
+.wb-unit-title{font-size:12.5px;margin-bottom:4px;}
+.wb-unit-title b{font-size:13.5px;}
+.wb-unit-pct{color:var(--text-secondary);}
+.wb-unit-min{font-size:10px;color:var(--text-muted);}
+.meter-mini{height:6px;background:var(--grid);border-radius:3px;overflow:hidden;margin-bottom:4px;}
+.meter-mini-fill{height:100%;}
+.wb-unit-sub{font-size:11px;color:var(--text-secondary);}
+.wb-cards{display:flex;flex-direction:column;gap:6px;max-height:520px;overflow-y:auto;}
+.wb-card{background:var(--page);border:1px solid var(--border);border-radius:7px;padding:6px 8px;cursor:grab;font-size:11px;}
+.wb-card.selected{border-color:var(--a);background:#eef4fc;box-shadow:0 0 0 1px var(--a);}
+.wb-card-id{font-weight:600;font-variant-numeric:tabular-nums;}
+.wb-card-type{display:inline-block;font-size:10px;color:var(--text-muted);}
+.wb-card-main{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px;}
+.wb-card-others{font-size:10px;color:var(--text-muted);font-variant-numeric:tabular-nums;}
+.wb-card-name{font-weight:400;color:var(--text-secondary);margin-left:4px;}
+.wb-card.with-photo{display:flex;align-items:center;gap:8px;}
+.wb-card-body{min-width:0;flex:1;}
+.wb-card-photo{width:56px;height:56px;flex:0 0 56px;border-radius:8px;object-fit:cover;background:var(--border);user-select:none;}
+.wb-card-photo-none{display:flex;align-items:center;justify-content:center;color:#fff;font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;opacity:.75;}
+.wb-note{margin:6px 0 0;font-size:11.5px;line-height:1.7;color:var(--text-muted);}
+
+/* ===== ここから下がモックで足した部分 ===== */
+
+/* 案2/3: 能力バー。全長=能力値(0-100)、濃い部分=その事業部の重みぶん＝寄与 */
+.ab-bars{margin-top:4px;display:flex;flex-direction:column;gap:2px;}
+.ab-row{display:flex;align-items:center;gap:4px;font-size:9.5px;color:var(--text-muted);font-variant-numeric:tabular-nums;}
+.ab-k{flex:0 0 12px;}
+.ab-v{flex:0 0 16px;text-align:right;}
+.ab-track{flex:1;height:5px;background:var(--grid);border-radius:3px;overflow:hidden;}
+.ab-fill{display:block;height:100%;background:var(--baseline);border-radius:3px;position:relative;}
+.ab-fill b{position:absolute;left:0;top:0;height:100%;display:block;border-radius:3px 0 0 3px;}
+.ab-plain .ab-fill b{display:none;}
+
+/* 案1: 貢献度の内訳（式）。カードを選ぶと下に開く */
+.brk{margin-top:5px;padding-top:5px;border-top:1px dashed var(--border);font-size:10px;color:var(--text-secondary);font-variant-numeric:tabular-nums;}
+.brk-row{display:flex;justify-content:space-between;gap:6px;line-height:1.65;}
+.brk-row.total{border-top:1px solid var(--border);margin-top:3px;padding-top:3px;font-weight:700;color:var(--text-primary);}
+.brk-row .dim{color:var(--text-muted);}
+
+/* 並べて比較する箱 */
+.pair{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;align-items:start;margin-bottom:12px;}
+.demo{background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:12px;}
+.demo h4{font-size:12px;margin:0 0 8px;color:var(--text-secondary);font-weight:600;}
+.callout{background:#fef3dc;border:1px solid #f0d28a;border-radius:8px;padding:10px 14px;font-size:12.5px;color:#8a5a00;line-height:1.8;margin:12px 0;}
+.callout.ok{background:#eaf7ea;border-color:#bfe3bf;color:#0a6b0a;}
+
+/* 操作パネル */
+.controls{display:flex;flex-wrap:wrap;align-items:center;gap:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:8px;padding:9px 14px;font-size:12px;margin-bottom:14px;}
+.controls label{display:inline-flex;align-items:center;gap:5px;color:var(--text-secondary);cursor:pointer;}
+.controls .seg{display:inline-flex;border:1px solid var(--border);border-radius:6px;overflow:hidden;}
+.controls .seg button{border:none;background:var(--page);font-size:11.5px;padding:4px 11px;cursor:pointer;color:var(--text-secondary);}
+.controls .seg button.on{background:var(--a);color:#fff;font-weight:600;}
+.readout{font-size:11.5px;color:var(--text-muted);font-variant-numeric:tabular-nums;margin-left:auto;}
+
+/* 取込プレビュー */
+table.tbl{width:100%;border-collapse:collapse;font-size:11.5px;font-variant-numeric:tabular-nums;background:var(--surface-1);}
+table.tbl th,table.tbl td{border:1px solid var(--border);padding:4px 8px;text-align:left;}
+table.tbl th{background:var(--grid);font-size:11px;}
+table.tbl td.num,table.tbl th.num{text-align:right;}
+.tbl-scroll{max-height:230px;overflow-y:auto;border-radius:8px;}
+.search{font-size:12px;padding:5px 9px;border-radius:6px;border:1px solid var(--border);width:180px;}
+
+/* まとめ表 */
+table.sum{width:100%;border-collapse:collapse;font-size:12.5px;background:var(--surface-1);}
+table.sum th,table.sum td{border:1px solid var(--border);padding:8px 10px;text-align:left;vertical-align:top;line-height:1.7;}
+table.sum th{background:var(--grid);font-size:12px;}
+table.sum td.c{text-align:center;white-space:nowrap;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>モック：貢献度だけでなく能力値も提示する</h1>
+<p class="subtitle">#p4/#p5 作業机のカード表示・案の比較（ダミーデータ）</p>
+<div class="mock-banner">
+  <b>これは検討用のモックで、本体には未反映です。</b>
+  社員名・能力値は架空の値。重み・貢献度の式・CSS は実装（<code>constants.ts</code> / <code>calcEngine.ts</code> / <code>styles.css</code>）と同じものを使っているので、数字と見た目は本物と一致します。<br>
+  <b>確認した現状：</b>生の4能力値が画面に出るのは取込プレビューの<b>先頭5名だけ</b>（<code>importPanel.ts:168</code> の <code>.slice(0, 5)</code>）。作業机のカードに出るのは 社員ID／氏名／型／貢献度 のみ（<code>workbenchPanel.ts:131-147</code>）。4能力値が揃うのは CSV 出力（<code>csv.ts:440</code>）＝画面外。
+</div>
+
+<!-- ============ 1 ============ -->
+<div class="section-title"><span class="tag now">現状</span> いまカードに出ている情報</div>
+<p class="section-desc">
+  A事業部の列をそのまま再現したもの。大きい数字が「いまの所属での貢献度」、その下が他事業部に移したときの貢献度。
+  <b>能力値そのものはどこにも出ていない</b>ので、初見の人はこの数字を検算できない。
+</p>
+<div class="pair">
+  <div class="demo">
+    <h4>現状のカード</h4>
+    <div id="now-col"></div>
+  </div>
+  <div class="demo">
+    <h4>読み手に見えていないもの</h4>
+    <table class="tbl"><thead>
+      <tr><th>社員</th><th class="num">営業力</th><th class="num">管理力</th><th class="num">開拓力</th><th class="num">育成力</th><th class="num">人件費</th></tr>
+    </thead><tbody id="now-hidden"></tbody></table>
+    <p class="wb-note">この表の中身は CSV に出力すれば読めるが、画面上には存在しない。</p>
+  </div>
+</div>
+
+<!-- ============ 2 ============ -->
+<div class="section-title">なぜ信頼されにくいかの実演</div>
+<p class="section-desc">
+  同じ「営業型」ラベルで、A事業部での貢献度もほぼ同じ2人。カード上ではほとんど区別が付かない。
+</p>
+<div class="pair" id="demo-pair" style="grid-template-columns:repeat(auto-fit,minmax(200px,240px));"></div>
+<div class="callout">
+  <b>中身は別人です。</b> 型（<code>classifyType</code>）は「4能力値のうち最大に対応する型」で、同点は 営業→管理→開拓→育成 の優先順で潰れる。
+  だから <span id="demo-note"></span>
+  貢献度がほぼ同じなのは、A の重み（営.45／管.35）だと この2つの差が打ち消し合うため。<b>打ち消し合っている事実がカード上に無い</b>ことが、「なんとなく信用できない」の正体だと思います。
+</div>
+
+<!-- ============ 3 ============ -->
+<div class="section-title"><span class="tag">案1</span> 貢献度の内訳を式で出す（カードを選ぶと開く）</div>
+<p class="section-desc">
+  カードをクリックすると、その社員の実数で <code>能力値 × 重み = 寄与</code> の4行と合計を出す。
+  「その数字はどこから来たか」に直接答えるのはこの形だけ。既定の見た目は現状のまま＝密度を変えない。
+  <b>下のカードをクリックしてみてください。</b>
+</p>
+<div class="pair" id="opt1-pair" style="grid-template-columns:repeat(auto-fit,minmax(200px,240px));"></div>
+
+<!-- ============ 4 ============ -->
+<div class="section-title"><span class="tag">案2</span> 能力値をミニバー4本で常時表示</div>
+<p class="section-desc">
+  型ラベルの下に 0-100 のバーを4本置く。型が潰している情報（2位以下の能力）が一目で分かる。
+  ただし貢献度との関係は説明していないので、「バーが長いのに貢献度が低い人」が出ると別の疑問を生む。
+</p>
+<div class="pair" id="opt2-pair" style="grid-template-columns:repeat(auto-fit,minmax(200px,240px));"></div>
+
+<!-- ============ 5 ============ -->
+<div class="section-title"><span class="tag">案3</span> 能力バー＋寄与の塗り分け</div>
+<p class="section-desc">
+  バーの全長＝能力値、<b>濃い部分＝その事業部の重みぶん＝寄与</b>。重みの合計が 1.0 なので、
+  <b>濃い部分の長さを足すと、ちょうど貢献度になります</b>（バー全長 100 に対する割合として）。
+  能力値と貢献度の関係が、式を読まずに1枚で見える形。事業部を切り替えると、同じ人でも濃い部分の比率が変わります。
+</p>
+<div class="controls">
+  <span style="color:var(--text-secondary)">重みを適用する事業部：</span>
+  <span class="seg" id="unit-seg">
+    <button data-u="A" class="on">A（飽和）</button><button data-u="B">B（成長）</button><button data-u="C">C（新規）</button>
+  </span>
+  <span class="readout" id="weight-readout"></span>
+</div>
+<div class="pair" id="opt3-pair" style="grid-template-columns:repeat(auto-fit,minmax(200px,240px));"></div>
+<div class="callout ok" id="opt3-check"></div>
+
+<!-- ============ 6 ============ -->
+<div class="section-title"><span class="tag rec">案4</span> 併用（既定はバー、クリックで内訳）— 盤面まるごと</div>
+<p class="section-desc">
+  実際の3列盤面で、密度への影響を確認するためのもの。列の高さは実装と同じ <code>max-height:520px</code>。
+  トグルを切り替えると「同時に見えるカード枚数」が下に出ます。ここが「門戸を広く」と情報量のトレードオフの実体です。
+</p>
+<div class="controls">
+  <label><input type="checkbox" id="t-bars" checked> 能力バーを出す</label>
+  <label><input type="checkbox" id="t-shade" checked> 寄与を濃淡で塗り分ける</label>
+  <label><input type="checkbox" id="t-photo"> 顔写真（既存機能）</label>
+  <span class="readout" id="density"></span>
+</div>
+<div class="wb-board" id="board"></div>
+<p class="wb-note">カードの大きい数字は<b>いまの所属事業部での貢献度</b>（社員の能力値 × その事業部の重みの合計）。小さい数字は他の事業部へ移したときの貢献度です。</p>
+
+<!-- ============ 7 ============ -->
+<div class="section-title"><span class="tag">案5</span> 取込プレビューの5名制限を外す</div>
+<p class="section-desc">
+  現状は <code>.slice(0, 5)</code> で先頭5名のみ。ここを全件＋検索にすると、
+  「自分の知っている人の数字」を確認できるようになる。作業机に触る前の信頼づくりとしては、実はこれが一番安い。
+</p>
+<div class="controls">
+  <input type="text" class="search" id="tbl-search" placeholder="社員番号・氏名で絞り込み">
+  <span class="readout" id="tbl-count"></span>
+</div>
+<div class="tbl-scroll">
+  <table class="tbl"><thead>
+    <tr><th>社員ID</th><th>氏名</th><th class="num">営業力</th><th class="num">管理力</th><th class="num">開拓力</th><th class="num">育成力</th><th class="num">人件費</th><th>型</th></tr>
+  </thead><tbody id="tbl-body"></tbody></table>
+</div>
+
+<!-- ============ 8 ============ -->
+<div class="section-title">案の比較</div>
+<table class="sum">
+  <thead><tr><th style="width:15%">案</th><th style="width:30%">効くところ</th><th style="width:30%">弱いところ</th><th class="c">密度への影響</th><th class="c">触る範囲</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><b>案1</b> 内訳の式</td>
+      <td>「この数字はどこから来たか」に唯一直接答える。重みが設定依存であることも同時に伝わる</td>
+      <td>クリックしないと見えない＝存在に気づかれない可能性</td>
+      <td class="c">なし<br><span style="color:var(--text-muted);font-size:11px">（選択時のみ）</span></td>
+      <td class="c">表示層のみ</td>
+    </tr>
+    <tr>
+      <td><b>案2</b> 能力バー</td>
+      <td>型ラベルが潰している2位以下が見える。一覧のまま比較できる</td>
+      <td>貢献度との関係を説明しない。別の「なぜ？」を生む</td>
+      <td class="c">大<br><span style="color:var(--text-muted);font-size:11px">4行増</span></td>
+      <td class="c">表示層のみ</td>
+    </tr>
+    <tr>
+      <td><b>案3</b> バー＋濃淡</td>
+      <td>能力値と貢献度の関係が式なしで見える。濃い部分の合計＝貢献度が成り立つ</td>
+      <td>「濃淡＝重み」の読み方を一度は説明する必要がある</td>
+      <td class="c">大<br><span style="color:var(--text-muted);font-size:11px">4行増</span></td>
+      <td class="c">表示層のみ</td>
+    </tr>
+    <tr style="background:#f4faf4;">
+      <td><b>案4</b> 併用</td>
+      <td>俯瞰（バー）と検算（式）の両方。バーはトグルでOFFにでき、密度を戻せる</td>
+      <td>実装が案1+案3ぶん</td>
+      <td class="c">トグルで可変</td>
+      <td class="c">表示層のみ</td>
+    </tr>
+    <tr>
+      <td><b>案5</b> 取込全件</td>
+      <td>作業机に入る前に「自分の知っている人」で確認できる。最小の変更</td>
+      <td>作業机の中では相変わらず貢献度しか見えない</td>
+      <td class="c">なし<br><span style="color:var(--text-muted);font-size:11px">別画面</span></td>
+      <td class="c">1関数</td>
+    </tr>
+  </tbody>
+</table>
+<p class="wb-note" style="margin-top:10px">
+  いずれも <code>Employee</code> に既にある値を表示するだけで、<code>calcEngine</code> / <code>optimizer</code> / <code>assignment</code> には触りません（計算結果は1ビットも変わらない）。
+</p>
+
+</div>
+
+<script>
+// ===== 実装と同じ定数・式（constants.ts / calcEngine.ts） =====
+const W = {
+  A: { sales:0.45, mgmt:0.35, dev:0.10, training:0.10 },
+  B: { sales:0.35, mgmt:0.20, dev:0.30, training:0.15 },
+  C: { sales:0.20, mgmt:0.10, dev:0.50, training:0.20 },
+};
+const UNIT_IDS = ['A','B','C'];
+const UNIT_VAR = { A:'var(--a)', B:'var(--b)', C:'var(--c)' };
+const UNIT_LABEL = { A:'A事業部', B:'B事業部', C:'C事業部' };
+const ABIL = [
+  { k:'sales',    label:'営業力', short:'営' },
+  { k:'mgmt',     label:'管理力', short:'管' },
+  { k:'dev',      label:'開拓力', short:'開' },
+  { k:'training', label:'育成力', short:'育' },
+];
+const round2 = (n) => Math.round(n * 100) / 100;
+const contribution = (e, u) => round2(e.sales*W[u].sales + e.mgmt*W[u].mgmt + e.dev*W[u].dev + e.training*W[u].training);
+const classifyType = (e) => {
+  const c = [['営業型',e.sales],['管理型',e.mgmt],['開拓型',e.dev],['育成型',e.training]];
+  let best = c[0];
+  for (const x of c) if (x[1] > best[1]) best = x;   // 同点は先頭優先＝営業→管理→開拓→育成
+  return best[0];
+};
+
+// ===== ダミー社員（架空） =====
+const EMP = [
+  { id:'E-041', name:'山田 太郎', sales:88, mgmt:52, dev:34, training:27, cost:14, unit:'A' },
+  { id:'E-017', name:'佐藤 花子', sales:71, mgmt:69, dev:22, training:40, cost:11, unit:'A' },
+  { id:'E-008', name:'鈴木 一郎', sales:45, mgmt:90, dev:18, training:33, cost:16, unit:'A' },
+  { id:'E-063', name:'田中 美咲', sales:31, mgmt:24, dev:86, training:58, cost:9,  unit:'C' },
+  { id:'E-022', name:'高橋 健',   sales:77, mgmt:41, dev:55, training:30, cost:13, unit:'A' },
+  { id:'E-055', name:'渡辺 彩',   sales:39, mgmt:62, dev:48, training:71, cost:10, unit:'B' },
+  { id:'E-011', name:'伊藤 直樹', sales:66, mgmt:58, dev:29, training:35, cost:12, unit:'A' },
+  { id:'E-074', name:'中村 恵',   sales:24, mgmt:33, dev:79, training:66, cost:8,  unit:'C' },
+  { id:'E-030', name:'小林 亮',   sales:52, mgmt:47, dev:64, training:44, cost:11, unit:'B' },
+  { id:'E-091', name:'加藤 由美', sales:18, mgmt:29, dev:92, training:51, cost:12, unit:'C' },
+  { id:'E-006', name:'吉田 大輔', sales:83, mgmt:36, dev:21, training:19, cost:15, unit:'A' },
+  { id:'E-048', name:'山本 千秋', sales:44, mgmt:73, dev:38, training:60, cost:10, unit:'B' },
+  { id:'E-082', name:'松本 拓也', sales:35, mgmt:20, dev:74, training:42, cost:9,  unit:'C' },
+  { id:'E-019', name:'井上 香織', sales:59, mgmt:81, dev:26, training:47, cost:14, unit:'A' },
+  { id:'E-067', name:'木村 翔',   sales:47, mgmt:39, dev:68, training:55, cost:11, unit:'B' },
+  { id:'E-035', name:'林 真理',   sales:70, mgmt:44, dev:33, training:62, cost:12, unit:'B' },
+];
+
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// ---- 能力バー（案2/案3） ----
+// 全長 = 能力値(0-100)。濃い部分の割合 = その事業部の重み → 濃い部分の長さ = 寄与。
+function barsHtml(e, unit, shade) {
+  const rows = ABIL.map((a) => {
+    const v = e[a.k];
+    const inner = shade
+      ? `<b style="width:${(W[unit][a.k]*100).toFixed(1)}%;background:${UNIT_VAR[unit]};"></b>`
+      : '';
+    return `<div class="ab-row"><span class="ab-k">${a.short}</span>` +
+      `<span class="ab-track"><span class="ab-fill" style="width:${v}%;${shade?'':'background:'+UNIT_VAR[unit]+';opacity:.45;'}">${inner}</span></span>` +
+      `<span class="ab-v">${v}</span></div>`;
+  }).join('');
+  return `<div class="ab-bars${shade?'':' ab-plain'}">${rows}</div>`;
+}
+
+// ---- 貢献度の内訳（案1） ----
+function breakdownHtml(e, unit) {
+  const rows = ABIL.map((a) => {
+    const w = W[unit][a.k], part = e[a.k] * w;
+    return `<div class="brk-row"><span>${a.label} <b>${e[a.k]}</b> <span class="dim">× ${w.toFixed(2)}</span></span><span>${part.toFixed(2)}</span></div>`;
+  }).join('');
+  return `<div class="brk">` +
+    `<div class="brk-row dim" style="margin-bottom:2px;">${UNIT_LABEL[unit]}の重みで計算</div>` +
+    rows +
+    `<div class="brk-row total"><span>貢献度</span><span>${contribution(e, unit).toFixed(2)}</span></div>` +
+    `<div class="brk-row dim" style="margin-top:3px;">人件費 ${e.cost}</div>` +
+  `</div>`;
+}
+
+// ---- カード1枚 ----
+function cardHtml(e, unit, opts) {
+  const o = opts || {};
+  const others = UNIT_IDS.filter((u) => u !== unit)
+    .map((u) => `${u} ${contribution(e, u).toFixed(2)}`).join(' ／ ');
+  const photo = o.photo
+    ? `<span class="wb-card-photo wb-card-photo-none" style="background:${UNIT_VAR[unit]};">${esc(e.id.slice(-2))}</span>`
+    : '';
+  return `<div class="wb-card${o.selected?' selected':''}${o.photo?' with-photo':''}" data-emp="${esc(e.id)}"` +
+    `${o.photo?' style="display:flex;align-items:center;gap:8px;"':''}>` +
+    photo +
+    `<div class="wb-card-body"${o.photo?' style="min-width:0;flex:1;"':''}>` +
+      `<div class="wb-card-id">${esc(e.id)}<span class="wb-card-name">${esc(e.name)}</span></div>` +
+      `<span class="wb-card-type">${classifyType(e)}</span>` +
+      `<div class="wb-card-main">${contribution(e, unit).toFixed(2)}</div>` +
+      `<div class="wb-card-others">${others}</div>` +
+      (o.bars ? barsHtml(e, unit, o.shade) : '') +
+      (o.breakdown ? breakdownHtml(e, unit) : '') +
+    `</div></div>`;
+}
+
+const $ = (id) => document.getElementById(id);
+const wrapCards = (html) => `<div class="wb-cards" style="max-height:none;">${html}</div>`;
+
+// ===== 1: 現状 =====
+const NOW = EMP.slice(0, 4);
+$('now-col').innerHTML = wrapCards(NOW.map((e) => cardHtml(e, 'A', {})).join(''));
+$('now-hidden').innerHTML = NOW.map((e) =>
+  `<tr><td>${esc(e.id)}</td><td class="num">${e.sales}</td><td class="num">${e.mgmt}</td>` +
+  `<td class="num">${e.dev}</td><td class="num">${e.training}</td><td class="num">${e.cost}</td></tr>`).join('');
+
+// ===== 2: 実演（同じ型・ほぼ同じ貢献度） =====
+const PAIR = [EMP[0], EMP[1]];
+$('demo-pair').innerHTML = PAIR.map((e) =>
+  `<div class="demo"><h4>${esc(e.name)}</h4>${wrapCards(cardHtml(e, 'A', {}))}</div>`).join('');
+{
+  const [x, y] = PAIR;
+  $('demo-note').innerHTML =
+    `${esc(x.name)} は 営業${x.sales}／管理${x.mgmt}、${esc(y.name)} は 営業${y.sales}／管理${y.mgmt}。` +
+    `営業力の差は ${x.sales - y.sales} もあるのに、A事業部での貢献度の差は ` +
+    `<b>${(contribution(x,'A') - contribution(y,'A')).toFixed(2)}</b> しかありません。`;
+}
+
+// ===== 3: 案1（クリックで内訳） =====
+function renderOpt1(selectedId) {
+  $('opt1-pair').innerHTML = PAIR.map((e) =>
+    `<div class="demo"><h4>${esc(e.name)}</h4>` +
+    wrapCards(cardHtml(e, 'A', { breakdown: e.id === selectedId, selected: e.id === selectedId })) +
+    `</div>`).join('');
+}
+renderOpt1(PAIR[0].id);
+$('opt1-pair').addEventListener('click', (ev) => {
+  const card = ev.target.closest('.wb-card');
+  if (card) renderOpt1(card.dataset.emp);
+});
+
+// ===== 4: 案2 =====
+$('opt2-pair').innerHTML = PAIR.map((e) =>
+  `<div class="demo"><h4>${esc(e.name)}</h4>${wrapCards(cardHtml(e, 'A', { bars: true, shade: false }))}</div>`).join('');
+
+// ===== 5: 案3（事業部切替） =====
+let opt3Unit = 'A';
+function renderOpt3() {
+  const u = opt3Unit;
+  $('opt3-pair').innerHTML = PAIR.map((e) =>
+    `<div class="demo"><h4>${esc(e.name)}</h4>${wrapCards(cardHtml(e, u, { bars: true, shade: true }))}</div>`).join('');
+  $('weight-readout').textContent =
+    `${UNIT_LABEL[u]}の重み： 営 ${W[u].sales.toFixed(2)} ／ 管 ${W[u].mgmt.toFixed(2)} ／ 開 ${W[u].dev.toFixed(2)} ／ 育 ${W[u].training.toFixed(2)}（合計 1.00）`;
+  const e = PAIR[0];
+  const parts = ABIL.map((a) => (e[a.k] * W[u][a.k]).toFixed(2));
+  $('opt3-check').innerHTML =
+    `<b>検算：</b>${esc(e.name)} の濃い部分の長さ＝ ${parts.join(' ＋ ')} ＝ ` +
+    `<b>${contribution(e, u).toFixed(2)}</b>。これがそのままカードの大きい数字（${UNIT_LABEL[u]}での貢献度）です。` +
+    `重みの合計が 1.00 なので、この一致は事業部を切り替えても常に成り立ちます。`;
+}
+$('unit-seg').addEventListener('click', (ev) => {
+  const b = ev.target.closest('button');
+  if (!b) return;
+  opt3Unit = b.dataset.u;
+  [...$('unit-seg').children].forEach((x) => x.classList.toggle('on', x === b));
+  renderOpt3();
+});
+renderOpt3();
+
+// ===== 6: 盤面まるごと＋密度の実測 =====
+let boardSel = null;
+function renderBoard() {
+  const bars = $('t-bars').checked, shade = $('t-shade').checked, photo = $('t-photo').checked;
+  $('t-shade').disabled = !bars;
+  $('board').innerHTML = UNIT_IDS.map((u) => {
+    const members = EMP.filter((e) => e.unit === u);
+    const optimal = { A:40, B:35, C:25 }[u], min = { A:30, B:20, C:10 }[u];
+    const rate = members.length / optimal;
+    const cards = members.map((e) =>
+      cardHtml(e, u, { bars, shade, photo, breakdown: e.id === boardSel, selected: e.id === boardSel })).join('');
+    return `<div class="wb-column" data-unit="${u}">
+      <div class="wb-unit-head">
+        <div class="wb-unit-title"><b>${UNIT_LABEL[u]}</b> ${members.length}名 <span class="wb-unit-pct">${(rate*100).toFixed(1)}%</span> <span class="wb-unit-min">最低${min}名</span></div>
+        <div class="meter-mini"><div class="meter-mini-fill" style="width:${Math.min(100, rate*100).toFixed(1)}%;background:${UNIT_VAR[u]};"></div></div>
+        <div class="wb-unit-sub">（モックにつき人数は少なめ）</div>
+      </div>
+      <div class="wb-cards">${cards}</div>
+    </div>`;
+  }).join('');
+  measure();
+}
+function measure() {
+  const card = $('board').querySelector('.wb-card:not(.selected)');
+  if (!card) return;
+  const h = card.getBoundingClientRect().height + 6; // gap:6px
+  $('density').textContent =
+    `カード1枚の高さ ${h.toFixed(0)}px → 列（max-height:520px）に同時に見えるのは 約 ${Math.floor(520 / h)} 枚`;
+}
+$('board').addEventListener('click', (ev) => {
+  const card = ev.target.closest('.wb-card');
+  if (!card) return;
+  boardSel = (boardSel === card.dataset.emp) ? null : card.dataset.emp;
+  renderBoard();
+});
+['t-bars','t-shade','t-photo'].forEach((id) => $(id).addEventListener('change', renderBoard));
+renderBoard();
+
+// ===== 7: 取込プレビュー全件 =====
+function renderTable() {
+  const q = $('tbl-search').value.trim();
+  const rows = EMP.filter((e) => !q || e.id.includes(q) || e.name.includes(q));
+  $('tbl-body').innerHTML = rows.map((e) =>
+    `<tr><td>${esc(e.id)}</td><td>${esc(e.name)}</td><td class="num">${e.sales}</td><td class="num">${e.mgmt}</td>` +
+    `<td class="num">${e.dev}</td><td class="num">${e.training}</td><td class="num">${e.cost}</td><td>${classifyType(e)}</td></tr>`).join('');
+  $('tbl-count').textContent = `${rows.length} / ${EMP.length} 名を表示（現状は先頭5名のみ）`;
+}
+$('tbl-search').addEventListener('input', renderTable);
+renderTable();
+</script>
+</body>
+</html>

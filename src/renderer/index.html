@@ -10,7 +10,7 @@
      script-src: signInWithPopup がgapi(https://apis.google.com/js/api.js)を動的読込するため必要。 -->
 <meta http-equiv="Content-Security-Policy"
       content="default-src 'none'; script-src 'self' https://apis.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.googleusercontent.com; font-src 'self'; connect-src 'self' https://*.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; frame-src https://summer011.web.app https://accounts.google.com">
-<title>侍の人材配置</title>
+<title>Movez</title>
 <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
@@ -24,8 +24,7 @@
 <!-- 未ログイン・許可外アカウントの間はこの画面のみを表示する（auth.ts / renderer.ts の認証ガード） -->
 <div class="login-screen" id="login-screen" hidden>
   <div class="login-card">
-    <img class="brand-icon" src="./assets/samurai-fullmoon.png" alt="">
-    <h1>侍の人材配置</h1>
+    <img class="brand-icon" src="./assets/movez-logo.svg" alt="Movez">
     <p>社内メンバー専用のツールです。会社のGoogleアカウントでログインしてください。</p>
     <button class="btn" id="login-google">Googleでログイン</button>
     <p class="login-error" id="login-error" hidden></p>
@@ -35,8 +34,7 @@
 <div class="topbar" id="app-topbar" hidden>
   <!-- 中身は .wrap と同じ幅・同じ左右padding に揃える（保存配置ボタンの右端が本文右端＝#p0のログアウト右端と一致する） -->
   <div class="topbar-inner">
-    <img class="brand-icon" src="./assets/samurai-fullmoon.png" alt="">
-    <h1>侍の<br>人材配置</h1>
+    <img class="brand-icon" src="./assets/movez-logo.svg" alt="Movez" data-go="p0" role="button" tabindex="0">
     <nav class="breadcrumb" id="breadcrumb"></nav>
     <button class="btn secondary" data-go="p6">人材登録</button>
     <button class="btn secondary" data-go="p7">保存配置</button>
@@ -67,7 +65,7 @@
       <div class="home-card">
         <div class="num">2</div>
         <h3>採用の投資判断をする</h3>
-        <p>追加10名採用の前後比較とROIを確認し、採用可否の判断材料を得る。</p>
+        <p>追加採用の前後比較とROIを確認し、採用可否の判断材料を得る。</p>
         <button class="btn" data-go="p5" data-fresh>採用判断を始める ▶</button>
         <button class="btn secondary home-resume" id="p5-resume" hidden>↳ 前回の続き（採用前後比較）▶</button>
         <button class="btn secondary home-resume" id="p5-resume-draft" hidden>↳ 作りかけの採用案を開く ▶</button>
@@ -99,7 +97,7 @@
 
       <details class="card">
         <summary class="detail-summary">詳細（取込結果プレビュー）</summary>
-        <div class="section-title" style="margin-top:14px;">取込結果（先頭5名分プレビュー・全100名）</div>
+        <div class="section-title" style="margin-top:14px;">取込結果（先頭5名分プレビュー・受入は最大200名）</div>
         <table id="preview-100">
           <tr><th>社員ID</th><th class="num">営業力</th><th class="num">管理力</th><th class="num">開拓力</th><th class="num">育成力</th><th class="num">人件費</th></tr>
         </table>
@@ -107,7 +105,7 @@
 
       <div class="section-title">入力検証レポート</div>
       <div class="stat-row" id="validation-summary">
-        <div class="stat"><div class="k">取込件数</div><div class="v">0 / 100</div></div>
+        <div class="stat"><div class="k">取込件数</div><div class="v">0 / 上限200</div></div>
         <div class="stat"><div class="k">エラー件数</div><div class="v">0</div></div>
         <div class="stat"><div class="k">判定</div><div class="v"><span class="pill warn">未取込</span></div></div>
       </div>
@@ -203,10 +201,10 @@
   <section class="panel" id="p5">
     <div id="p5-import-step">
       <h2>採用判断：データ取込</h2>
-      <p class="subtitle">採用前（100名）・追加採用（10名）を取り込んで比較する</p>
+      <p class="subtitle">採用前・追加採用を取り込んで比較する</p>
       <div class="compare-grid pair">
         <div class="card">
-          <div class="section-title" style="margin-top:0;">採用前（100名）</div>
+          <div class="section-title" style="margin-top:0;">採用前</div>
           <div class="dropzone" id="dropzone-hiring-100">📄 社員データをドラッグ&ドロップ、または <span class="file-select-link">ファイルを選択</span></div>
           <input type="file" id="file-hiring-100" accept=".csv" hidden>
           <p class="note">対応形式：CSVファイル（.csv）</p>
@@ -222,8 +220,8 @@
           </div>
         </div>
         <div class="card">
-          <div class="section-title" style="margin-top:0;">追加採用（10名）</div>
-          <div class="dropzone" id="dropzone-10">📄 追加採用10名分データをドラッグ&ドロップ、または <span class="file-select-link">ファイルを選択</span></div>
+          <div class="section-title" style="margin-top:0;">追加採用</div>
+          <div class="dropzone" id="dropzone-10">📄 追加採用データをドラッグ&ドロップ、または <span class="file-select-link">ファイルを選択</span></div>
           <input type="file" id="file-10" accept=".csv" hidden>
           <p class="note">対応形式：CSVファイル（.csv・社員データと同一形式）</p>
           <div id="hiring-import-error-10" class="mt-12">
@@ -248,7 +246,7 @@
             <div class="v" id="p5-cond-min-revenue"></div>
           </div>
         </div>
-        <p class="note">採用後110名になっても、適正人数は100名基準のまま据え置きます（過剰人員の補正はそのぶん効きやすくなります）。</p>
+        <p class="note">採用しても、適正人数は<b>採用前の人数</b>を基準にしたまま据え置きます（過剰人員の補正はそのぶん効きやすくなります）。</p>
         <details>
           <summary class="detail-summary">詳しく見る（事業部別の適正人数・最低人数）</summary>
           <div class="stat-row" id="p5-cond-headcount-cards" style="margin-top:10px;">
@@ -293,7 +291,7 @@
       <div class="actions" style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
         <button class="btn secondary" id="p5-result-back">← 前の画面へ戻る</button>
         <!-- ②22: 機能名（作業机）ではなく、そこで何をするかを書く -->
-        <button class="btn" id="p5-open-bench">採用する10名と配置を1名ずつ決める ▶</button>
+        <button class="btn" id="p5-open-bench">採用する候補と配置を1名ずつ決める ▶</button>
       </div>
       <!-- #p4 と同じ一時保存の導線（draftStore.ts）。こちらの下書きは候補10名と採否も持つ -->
       <p class="note nav-hint" id="p5-draft-hint" hidden>一時保存した作りかけの採用案があります（<span id="p5-draft-time"></span>）。
@@ -359,6 +357,11 @@
     <div class="section-title">登録済み一覧</div>
     <!-- ①37注記/②45: 専用ページを作らず、この一覧のカードで1名ずつ直せる -->
     <p class="note">✎ で氏名の書き換えと顔写真の差し替えができます（1名ずつ・その場で更新）。✕ は削除です。</p>
+    <div class="actions" id="profile-bulk-bar" style="display:flex;gap:8px;align-items:center;margin-bottom:8px;" hidden>
+      <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" id="profile-select-all"> 全選択</label>
+      <span class="note" id="profile-select-count">0件選択中</span>
+      <button type="button" class="btn secondary btn-inline" id="profile-bulk-delete" disabled>選択したものを削除</button>
+    </div>
     <div id="profile-registered" class="profile-grid"></div>
   </section>
 

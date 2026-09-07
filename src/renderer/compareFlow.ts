@@ -10,6 +10,7 @@ import { p4Params, state } from './appState.ts'
 import { go, showStep, updateResumeButtons, updateP4DraftResumeButton } from './navigation.ts'
 import { saveSnapshot, type SessionSnapshot } from './session.ts'
 import { importEmployees } from './csv.ts'
+import { BASE_HEADCOUNT, MAX_EMPLOYEE_COUNT } from './constants.ts'
 import { renderImportConditions, renderImportReport, setupDropzone } from './importPanel.ts'
 import { currentCardResult, initWorkbenchLaunch, renderCompareTasks } from './compareTasks.ts'
 import { openWorkbench } from './workbenchPanel.ts'
@@ -66,8 +67,11 @@ export function initCompareFlow(): void {
   renderImportConditions()
   p4Params.init(refreshCompareGate)
   setupDropzone('dropzone-100', 'file-100', (text) => {
-    const { employees, errors } = importEmployees(text, 100)
+    const { employees, errors } = importEmployees(text, MAX_EMPLOYEE_COUNT)
     state.employees100 = employees
+    // 適正人数・最低人数の標準値は名簿人数に比例させる（constants.standardParamsFor）。
+    // 100名なら従来と同じ値になるので、取込が失敗したときも基準人数へ戻しておけばよい。
+    p4Params.setStandardHeadcount(employees?.length ?? BASE_HEADCOUNT)
     fileTouched = true
     importErrorCount = errors.length
     renderImportReport(employees, errors)
@@ -96,6 +100,7 @@ export function initCompareFlow(): void {
   // 「取り込みを解除」：取込結果をクリアして未取込状態に戻す（前回の到達点も一緒に捨てる）
   $('p4-file-clear')?.addEventListener('click', () => {
     state.employees100 = null
+    p4Params.setStandardHeadcount(BASE_HEADCOUNT)
     fileTouched = false
     importErrorCount = 0
     renderImportReport(null, [])
@@ -160,6 +165,8 @@ export function initCompareFlow(): void {
 
 /** リロード直後に #p4 の取込データと前提パラメータを戻す（ステップの復元は renderer.ts 側）。 */
 export function restoreCompareFrom(snap: SessionSnapshot): void {
+  // 標準値（変更マークの基準）を先に人数へ合わせてから、保存されていた値を載せる
+  p4Params.setStandardHeadcount(snap.employees100?.length ?? BASE_HEADCOUNT)
   if (snap.p4Params) p4Params.setParams(snap.p4Params)
   if (snap.employees100) {
     state.employees100 = snap.employees100

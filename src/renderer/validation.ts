@@ -21,23 +21,27 @@ const RANGES: RangeSpec[] = [
 
 /**
  * 正規フィールド名にマップ済みの行を検証する（設計書§7）。
- * - 行数が expectedCount と一致するか
+ * - 行数が 1〜maxCount に収まるか
  * - 各数値が範囲内か（数値変換不能もエラー）
  * row は1-based のデータ行番号（ヘッダ除く）。
+ *
+ * 2026-09-07 合意：件数は「ちょうどN件」ではなく上限方式にした。100名ちょうどしか
+ * 受け付けないと 200名の名簿が扱えず、逆に200名固定にすると課題原文の100名データが
+ * 通らなくなるため、両方を通せる上限方式にしている。
  */
 export function validateEmployees(
   rows: Record<string, string>[],
-  expectedCount: number,
+  maxCount: number,
 ): ValidationError[] {
   const errors: ValidationError[] = []
 
-  // 件数チェック
-  if (rows.length !== expectedCount) {
+  // 件数チェック（上限方式）
+  if (rows.length < 1 || rows.length > maxCount) {
     errors.push({
       row: 0,
       column: '(件数)',
       actual: rows.length,
-      expected: `${expectedCount}件`,
+      expected: `1〜${maxCount}件`,
     })
   }
 
