@@ -19,7 +19,7 @@ npm install       # 依存インストール
 npm run dev       # Vite dev サーバ起動（ブラウザで http://localhost:5173 を開く）
 npm run build     # tsc 型チェック → vite build（dist/ に静的サイトを生成）
 npm run preview   # dist/ を静的サイトとしてローカル配信（本番相当の確認）
-npm test          # node:test による単体テスト（167件・約37〜45秒）
+npm test          # node:test による単体テスト（197件・約23秒）
 npm run test:e2e  # Playwright移行待ちのため一時的に無効（旧Electron実機E2Eは撤去）
 npm run snapshot  # 実データ4課題の結果が変わっていないかを基準ファイルと照合
 npm run lint      # oxlint
@@ -42,14 +42,17 @@ src/
     calcEngine.ts                  貢献度〜利益の計算（§4）
     assignment.ts / optimizer.ts   割当（min-cost flow）・最適化（§5）
     reasonText.ts                  配置方針テキスト生成（§9）
+    appState.ts / navigation.ts / session.ts     アプリ状態・画面遷移・リロード復元
+    compareFlow.ts / hiringFlow.ts               #p4配置比較・#p5採用判断の画面配線
     importPanel.ts                 #p4/#p5 の取込UIと検証レポート（§10）
     compareTasks.ts / compareHiring.ts   4課題横断比較・採用前後比較のDOM更新（§10）
     whatif.ts                      What-if（機能14）の純粋関数群。作業机が再利用する
-    workbench.ts / workbenchPanel.ts              作業机（機能15・#p4）
+    workbench.ts / workbenchView.ts / workbenchDnd.ts / workbenchPanel.ts  作業机（機能15・#p4）
     hiringWorkbench.ts / hiringWorkbenchPanel.ts  採用判断の作業机（機能15b・#p5）
+    draftStore.ts                  作業机の配置案・採用案の一時保存（localStorage、確定保存とは別枠）
     runStore.ts / exportDocs.ts / exportPanel.ts  保存と3通りの出力（#p7）
     photo.ts / profileStore.ts / profilePanel.ts  人材プロフィール（#p6）
-    firebase.ts / auth.ts          Firebase初期化・Google認証
+    firebase.ts / auth.ts          Firebase初期化・Google認証（Firestoreは複数タブ同時利用に対応）
     paramsOptions.ts / loading.ts  前提パラメータ編集・ローディング演出
     （dashboard.ts / gauge.ts / whatifController.ts / whatifPanel.ts は v0.8.0 の画面再構成で撤去）
 ```
@@ -100,8 +103,20 @@ src/
   無ければ採用前の最適解を起点にする（分岐2）。列の取込は `csv.ts` の `parseAssignmentColumn` を新設（往復可能に）。
   出力は持たず、[この案を保存] から手順13 の `#p7` へ合流する。
   `hiringWorkbench.ts`（純粋関数）/ `hiringWorkbenchPanel.ts`（表示専用）。
+- [x] 手順15: UI全面調整 v0.9→v1.0（`docs/ui-overhaul-plan.md`）… ユーザビリティ・チェックリスト70項目の
+  未達36件をPhase 0〜8に割り付けて解消。導線の言葉づかい・制約条件と前提パラメータの常時提示・Δの基準明示・
+  個人単位の異動一覧と個人ロック・出力不可の内訳とPDF保存の注意点・告知用の新規採用可視化・
+  エグゼクティブサマリの変化中心の組み替え、および `#p5`（採用判断）の目的関数を`#p4`と同じ
+  (課題×指標)8通りに拡張。計算ロジック・定数・アルゴリズムは無変更。
+- [x] 手順16: 200名対応・作業机の使い勝手改善… 取込人数を「ちょうどN件」から**上限方式**
+  （社員最大200名・追加採用最大20名）へ変更し、適正人数・最低人数は`standardParamsFor`で名簿人数に
+  比例配分（詳細はCLAUDE.md §9・下記「決着済み」）。作業机カードに能力バー4本（営/管/開/育、所属事業部の
+  重みぶんを濃淡表示。`docs/ability-bars-plan.md`）を追加。人材プロフィール登録の一覧にチェックボックスでの
+  一括削除を追加。作業机の配置盤面を`draftStore.ts`でlocalStorageに一時保存でき、トップページ・結果ステップ
+  から「作りかけを開く」で再開できる（Firestoreの確定保存・リロード復元とは別枠）。
+  Firestoreの永続キャッシュを複数タブ同時利用に対応（`persistentMultipleTabManager`）。
 
-テストは `npm test`（Node 標準 `node:test` ＋型ストリップ、設計書§11 準拠）。13ファイル・全167件（約37〜45秒）。
+テストは `npm test`（Node 標準 `node:test` ＋型ストリップ、設計書§11 準拠）。13ファイル・全197件（約23秒）。
 単体テストは純粋関数までしか触れないため、取込UI〜状態〜描画の配線を確認する結線テストは
 旧Electron実機E2E（21項目）が担っていたが、Web化に伴い撤去。Playwright版への移行待ち
 （`npm run test:e2e` は現在無効。`docs/web-firebase-plan.md` 参照）。
@@ -153,3 +168,10 @@ src/
   空は `assignment` のキー衝突で配置が壊れる実害があり、従来は重複チェックすら素通りしていた。
   数式始まりは取込事故として報告する方針（HTMLに見えるIDは弾かず、表示側のエスケープで無害化する）。
   併せてCSVガードを可逆にし、`'` 始まりの値が往復で欠けないようにした。
+
+## 残っている作業
+
+- `docs/ui-overhaul-plan.md` Phase 6-4：告知用・エグゼクティブサマリのPDF保存が、Chrome以外のブラウザ・
+  別OSでも同じ体裁になるかの実機確認が未実施（`npm run build` は通過済み）。
+- 上記チェックリスト70項目の再判定（Phase 8まで実施済みの状態での通過数の数え直し）。
+- `datasets` と `firestoreSync.ts`（`docs/web-firebase-plan.md` Phase (d)の残り）は未着手。
