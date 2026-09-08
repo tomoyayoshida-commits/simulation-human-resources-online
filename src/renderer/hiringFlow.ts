@@ -10,7 +10,7 @@ import { saveSnapshot, type SessionSnapshot } from './session.ts'
 import { importEmployees, mergeEmployees, parseAssignmentColumn } from './csv.ts'
 import { BASE_HEADCOUNT, MAX_EMPLOYEE_COUNT, MAX_HIRING_COUNT } from './constants.ts'
 import type { HiringImportIds } from './importPanel.ts'
-import { renderHiringImportError, renderHiringImportOk, renderImportConditions, setupDropzone } from './importPanel.ts'
+import { renderHiringImportError, renderHiringImportOk, renderHiringImportUntouched, renderImportConditions, setupDropzone } from './importPanel.ts'
 import { currentHiringTarget, initHiringTargetToggle, renderCompareHiring, renderHiringTargetToggle } from './compareHiring.ts'
 import { openHiringWorkbench } from './hiringWorkbenchPanel.ts'
 import { readHiringDraft, toHiringWorkbenchState } from './draftStore.ts'
@@ -37,6 +37,8 @@ const hiringErr10: HiringImportIds = {
 
 // 左右それぞれの取込欄に残っているエラー件数。どちらかに残る間は「次へ」ボタンごと隠す（②18注記）。
 const importErrorCount: Record<HiringSlot, number> = { hiringBase100: 0, hiringAdd10: 0 }
+// #p4 の fileTouched と同じ役目：取込エラーで残った状態でも「変更」「取り込みを解除」を出したままにする。
+const fileTouched: Record<HiringSlot, boolean> = { hiringBase100: false, hiringAdd10: false }
 
 /** 取込状態・前提パラメータの変化を画面に反映する（#p4 の refreshCompareGate と同じ役目）。 */
 export function refreshHiringGate(): void {
@@ -49,6 +51,9 @@ export function refreshHiringGate(): void {
     // エラー時は押せないボタンを残さず消す。直すべき対象（エラー表）へ視線を向けるため。
     proceedBtn.toggleAttribute('hidden', importErrorCount.hiringBase100 + importErrorCount.hiringAdd10 > 0)
   }
+  // 取込エラー時こそやり直す手段が要るので、取込に失敗していても投入済みなら出したままにする（#p4 と同じ扱い）
+  $('p5-file-actions-100')?.toggleAttribute('hidden', !(state.hiringBase100 || fileTouched.hiringBase100))
+  $('p5-file-actions-10')?.toggleAttribute('hidden', !(state.hiringAdd10 || fileTouched.hiringAdd10))
   updateResumeButtons()
   refreshDraftHint()
   saveSnapshot()
@@ -94,6 +99,7 @@ export function initHiringFlow(): void {
   renderHiringTargetToggle()
   p5Params.init(refreshHiringGate)
   setupDropzone('dropzone-hiring-100', 'file-hiring-100', (text) => {
+    fileTouched.hiringBase100 = true
     const { employees: base100, errors } = importEmployees(text, MAX_EMPLOYEE_COUNT)
     if (!base100) {
       state.hiringBaseAssignment = null
@@ -116,6 +122,7 @@ export function initHiringFlow(): void {
   })
 
   setupDropzone('dropzone-10', 'file-10', (text) => {
+    fileTouched.hiringAdd10 = true
     const base100 = state.hiringBase100
     if (!base100) {
       return rejectHiring('hiringAdd10', hiringErr10, [], '取込を保留（先に左側の採用前データを取り込んでください）')
@@ -156,6 +163,28 @@ export function initHiringFlow(): void {
       showStep('p5', 'result')
       void go('p5')
     })
+  })
+  // 「ファイルを変更」：取込済みデータはそのままにファイル選択ダイアログだけ開き直す（#p4 と同じ）
+  $('p5-file-change-100')?.addEventListener('click', () => ($('file-hiring-100') as HTMLInputElement | null)?.click())
+  $('p5-file-change-10')?.addEventListener('click', () => ($('file-10') as HTMLInputElement | null)?.click())
+  // 「取り込みを解除」：その欄だけ取込結果をクリアして未取込状態に戻す
+  $('p5-file-clear-100')?.addEventListener('click', () => {
+    state.hiringBase100 = null
+    state.hiringBaseAssignment = null
+    p5Params.setStandardHeadcount(BASE_HEADCOUNT)
+    fileTouched.hiringBase100 = false
+    importErrorCount.hiringBase100 = 0
+    renderHiringImportUntouched(hiringErr100)
+    showStep('p5', 'import')
+    refreshHiringGate()
+  })
+  $('p5-file-clear-10')?.addEventListener('click', () => {
+    state.hiringAdd10 = null
+    fileTouched.hiringAdd10 = false
+    importErrorCount.hiringAdd10 = 0
+    renderHiringImportUntouched(hiringErr10)
+    showStep('p5', 'import')
+    refreshHiringGate()
   })
   $('p5-back')?.addEventListener('click', () => void go('p0'))
   $('p5-result-back')?.addEventListener('click', () => showStep('p5', 'import'))
@@ -249,6 +278,7 @@ export function restoreHiringFrom(snap: SessionSnapshot): void {
   if (snap.hiringBase100) {
     state.hiringBase100 = snap.hiringBase100
     state.hiringBaseAssignment = snap.hiringBaseAssignment ?? null
+    fileTouched.hiringBase100 = true
     renderHiringImportOk(
       hiringErr100,
       snap.hiringBase100.length,
@@ -257,6 +287,7 @@ export function restoreHiringFrom(snap: SessionSnapshot): void {
   }
   if (snap.hiringAdd10) {
     state.hiringAdd10 = snap.hiringAdd10
+    fileTouched.hiringAdd10 = true
     renderHiringImportOk(hiringErr10, snap.hiringAdd10.length)
   }
   refreshHiringGate()

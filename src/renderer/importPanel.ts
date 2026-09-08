@@ -159,6 +159,13 @@ export function renderHiringImportOk(ids: HiringImportIds, count: number, note =
   renderHiringImport(ids, 'good', `取込OK（${count}件）${note}`, [], '')
 }
 
+/** 「取り込みを解除」：初期状態（未取込）の表示へ戻す。 */
+export function renderHiringImportUntouched(ids: HiringImportIds): void {
+  setHtml(ids.summary, `<div class="stat"><div class="k">判定</div><div class="v">${pill('warn', '未取込')}</div></div>`)
+  setHtml(ids.table, '')
+  renderErrorReasons(ids.reasonDetail, ids.reasonList, [])
+}
+
 /** 入力検証レポート（#p4・機能13/D-2）。プレビュー・サマリー・エラー表・次へボタンの活性を更新する。 */
 export function renderImportReport(employees: Employee[] | null, errors: ValidationError[]): void {
   // プレビュー（先頭5名）
